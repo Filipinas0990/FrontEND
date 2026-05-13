@@ -1,0 +1,164 @@
+import { Link, useNavigate } from "@tanstack/react-router";
+import {
+  LayoutDashboard,
+  Building2,
+  FileBarChart,
+  Zap,
+  Settings,
+  Activity,
+  Play,
+  LogOut,
+  Users,
+  Loader2,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { getToken, getUser, clearAuth } from "@/lib/auth";
+import { getStatus, rodarAgora } from "@/lib/api";
+
+interface AppShellProps {
+  title: string;
+  children: ReactNode;
+  headerRight?: ReactNode;
+}
+
+export function AppShell({ title, children, headerRight }: AppShellProps) {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(() => getUser());
+
+  // Client-side auth guard
+  useEffect(() => {
+    if (!getToken()) {
+      navigate({ to: "/login" });
+    } else {
+      setUser(getUser());
+    }
+  }, [navigate]);
+
+  const handleLogout = () => {
+    clearAuth();
+    navigate({ to: "/login" });
+  };
+
+  const isAdminUser = user?.is_admin === true;
+  const initials = user?.nome
+    ? user.nome
+        .split(" ")
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+    : "??";
+
+  // Pipeline status polling
+  const { data: pipelineStatus } = useQuery({
+    queryKey: ["pipeline-status"],
+    queryFn: getStatus,
+    refetchInterval: (query) =>
+      query.state.data?.pipeline_rodando ? 5000 : 30000,
+    enabled: typeof window !== "undefined",
+  });
+
+  const { mutate: runPipeline, isPending: pipelineRunning } = useMutation({
+    mutationFn: rodarAgora,
+    onSuccess: (data) => {
+      if (data.status === "ja_rodando") {
+        toast.info("Pipeline já está em execução");
+      } else {
+        toast.success("Pipeline iniciado! Aguarde a conclusão.");
+      }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const isPipelineActive =
+    pipelineRunning || pipelineStatus?.pipeline_rodando === true;
+
+  const navItems = [
+    { icon: LayoutDashboard, label: "Painel Geral", to: "/" as const },
+    { icon: Building2, label: "Farmácias", to: "/farmacias" as const },
+    { icon: FileBarChart, label: "Relatórios", to: "/relatorios" as const },
+    ...(isAdminUser
+      ? [{ icon: Users, label: "Gestores", to: "/gestores" as const }]
+      : []),
+    { icon: Zap, label: "Automações", to: "/automacoes" as const },
+    { icon: Settings, label: "Configurações", to: "/configuracoes" as const },
+  ];
+
+  return (
+    <div className="flex min-h-screen bg-neutral-50 text-zinc-900 font-sans">
+      <aside className="w-64 border-r border-zinc-200 bg-white flex flex-col sticky top-0 h-screen">
+        <div className="p-6 flex items-center gap-3">
+          <div className="size-8 bg-brand rounded-lg grid place-items-center text-white">
+            <Activity className="size-4" strokeWidth={2.5} />
+          </div>
+          <span className="font-semibold tracking-tight text-zinc-900">PharmaFlow</span>
+        </div>
+
+        <nav className="flex-1 px-4 space-y-1">
+          {navItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              activeOptions={{ exact: item.to === "/" }}
+              className="flex items-center gap-2.5 py-2 px-2.5 text-sm font-medium rounded-md transition-colors text-zinc-600 hover:bg-zinc-50 data-[status=active]:text-brand data-[status=active]:bg-brand/5"
+            >
+              <item.icon className="size-4 shrink-0" />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-zinc-100">
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="size-8 rounded-full bg-brand/10 grid place-items-center text-brand text-xs font-semibold">
+              {initials}
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+              <span className="text-xs font-medium truncate">
+                {user?.nome ?? "Usuário"}
+              </span>
+              <span className="text-[10px] text-zinc-500">
+                {isAdminUser ? "Super Admin" : "Gestor"}
+              </span>
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sair"
+              className="text-zinc-400 hover:text-zinc-900 transition-colors"
+            >
+              <LogOut className="size-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-y-auto">
+        <header className="h-16 border-b border-zinc-200 bg-white px-8 flex items-center justify-between sticky top-0 z-10">
+          <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
+          <div className="flex items-center gap-4">
+            {headerRight ?? (
+              isAdminUser ? (
+                <button
+                  onClick={() => runPipeline()}
+                  disabled={isPipelineActive}
+                  className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 transition-opacity disabled:opacity-60"
+                >
+                  {isPipelineActive ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Play className="size-3.5" fill="currentColor" />
+                  )}
+                  {isPipelineActive ? "Rodando..." : "Rodar Agora"}
+                </button>
+              ) : null
+            )}
+          </div>
+        </header>
+        <div className="p-8 max-w-7xl mx-auto space-y-8">{children}</div>
+      </main>
+    </div>
+  );
+}
