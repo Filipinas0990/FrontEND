@@ -11,12 +11,77 @@ import {
   Users,
   Loader2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getToken, getUser, clearAuth } from "@/lib/auth";
 import { getStatus, rodarAgora } from "@/lib/api";
+
+const PIPELINE_MSGS = [
+  "Estamos conhecendo seu fundo... 🔍",
+  "Contando comprimido por comprimido... 💊",
+  "Perguntando pro Google onde sumiram as vendas... 🤔",
+  "Convencendo o Meta a gastar menos... 😅",
+  "Verificando se o estoque de paciência está ok... 🧘",
+  "Atualizando o karma das farmácias... ✨",
+  "Mandando um abraço em cada farmácia... 🤗",
+  "Calculando quantos reais cabem num dashboard... 💰",
+  "Sincronizando com o universo farmacêutico... 🌌",
+  "Pedindo permissão pros dados aparecerem... 🙏",
+  "Brigando com o banco de dados... 😤",
+  "Fazendo as contas sem precisar de calculadora... 🧮",
+];
+
+function PipelineOverlay() {
+  const [msgIdx, setMsgIdx] = useState(0);
+  const [fade, setFade] = useState(true);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    timerRef.current = setTimeout(() => {
+      setFade(false);
+      setTimeout(() => {
+        setMsgIdx((i) => (i + 1) % PIPELINE_MSGS.length);
+        setFade(true);
+      }, 400);
+    }, 2800);
+    return () => clearTimeout(timerRef.current);
+  }, [msgIdx]);
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-zinc-900/75 backdrop-blur-sm flex items-center justify-center">
+      <div className="bg-white rounded-2xl p-10 max-w-sm w-full mx-4 text-center shadow-2xl flex flex-col items-center gap-6">
+        {/* Spinner triplo */}
+        <div className="relative size-20">
+          <div className="absolute inset-0 rounded-full border-4 border-brand/20" />
+          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand animate-spin" />
+          <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-emerald-400 animate-spin [animation-duration:0.7s] [animation-direction:reverse]" />
+          <div className="absolute inset-4 rounded-full border-4 border-transparent border-t-brand/60 animate-spin [animation-duration:1.4s]" />
+        </div>
+
+        <div>
+          <h2 className="text-lg font-bold text-zinc-900">Automação em andamento</h2>
+          <p
+            className="text-sm text-zinc-500 mt-2 transition-opacity duration-400 min-h-[2.5rem]"
+            style={{ opacity: fade ? 1 : 0 }}
+          >
+            {PIPELINE_MSGS[msgIdx]}
+          </p>
+        </div>
+
+        {/* Barra indeterminada */}
+        <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+          <div className="h-full bg-brand rounded-full animate-[indeterminate_1.6s_ease-in-out_infinite]" />
+        </div>
+
+        <p className="text-[10px] text-zinc-400">
+          Não feche esta janela. Isso pode demorar alguns minutos.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 interface AppShellProps {
   title: string;
@@ -89,6 +154,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
 
   return (
     <div className="flex min-h-screen bg-neutral-50 text-zinc-900 font-sans">
+      {isPipelineActive && <PipelineOverlay />}
       <aside className="w-64 border-r border-zinc-200 bg-white flex flex-col sticky top-0 h-screen">
         <div className="p-6 flex items-center gap-3">
           <div className="size-8 bg-brand rounded-lg grid place-items-center text-white">

@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(ls \"c:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\")",
+      "Read(//c/Users/Grupo Symbol Digital/Desktop/**)",
+      "Bash(docker-compose ps *)",
+      "Bash(Get-Process python*)",
+      "Bash(Select-Object Name, Id)",
+      "PowerShell(Get-Process -Name \"uvicorn\",\"python\",\"python3\",\"fastapi\" -ErrorAction SilentlyContinue)"
     ]
   }
 }

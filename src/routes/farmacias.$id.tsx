@@ -25,17 +25,6 @@ function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
-function alertColor(nivel: string) {
-  if (nivel === "vermelho") return "text-red-600 bg-red-50 ring-red-600/10";
-  if (nivel === "amarelo") return "text-amber-600 bg-amber-50 ring-amber-600/10";
-  return "text-emerald-600 bg-emerald-50 ring-emerald-600/10";
-}
-
-function alertLabel(nivel: string) {
-  if (nivel === "vermelho") return "Alerta";
-  if (nivel === "amarelo") return "Atenção";
-  return "Ativa";
-}
 
 const chartTooltipStyle = {
   contentStyle: {
@@ -88,33 +77,13 @@ function FarmaciaDetailPage() {
     >
       {/* Current metrics cards */}
       {farmacia && (
-        <section className="grid grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 gap-4 max-w-xs">
           <MetricCard
             label="Receita Total"
             value={fmtBRL(farmacia.receita_total)}
             delta={`${farmacia.variacao_receita >= 0 ? "+" : ""}${farmacia.variacao_receita.toFixed(1)}% vs semana anterior`}
             positive={farmacia.variacao_receita >= 0}
           />
-          <MetricCard
-            label="Vendas Realizadas"
-            value={String(farmacia.vendas_realizadas)}
-            delta={`${farmacia.variacao_vendas >= 0 ? "+" : ""}${farmacia.variacao_vendas.toFixed(1)}% vs semana anterior`}
-            positive={farmacia.variacao_vendas >= 0}
-          />
-          <MetricCard
-            label="Taxa de Conversão"
-            value={`${farmacia.taxa_conversao.toFixed(1)}%`}
-            delta={`${farmacia.atendimentos_finalizados} atendimentos finalizados`}
-          />
-          <div className="bg-white p-5 rounded-xl ring-1 ring-black/5 shadow-sm flex flex-col justify-between">
-            <span className="text-xs text-zinc-500 font-medium">Status</span>
-            <div>
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-semibold ring-1 ${alertColor(farmacia.nivel_alerta)}`}>
-                {alertLabel(farmacia.nivel_alerta)}
-              </span>
-              <p className="text-[10px] text-zinc-400 mt-1.5">Score: {farmacia.score_criticidade.toFixed(1)}</p>
-            </div>
-          </div>
         </section>
       )}
 
