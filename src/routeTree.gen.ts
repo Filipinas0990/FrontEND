@@ -17,8 +17,8 @@ import { Route as FarmaciasRouteImport } from './routes/farmacias'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as AutomacoesRouteImport } from './routes/automacoes'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
 import { Route as FarmaciasIndexRouteImport } from './routes/farmacias.index'
+import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
 
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
@@ -60,14 +60,14 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FarmaciasIdRoute = FarmaciasIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => FarmaciasRoute,
-} as any)
 const FarmaciasIndexRoute = FarmaciasIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => FarmaciasRoute,
+} as any)
+const FarmaciasIdRoute = FarmaciasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
   getParentRoute: () => FarmaciasRoute,
 } as any)
 
@@ -75,37 +75,37 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/automacoes': typeof AutomacoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
-  '/farmacias': typeof FarmaciasRoute
-  '/farmacias/': typeof FarmaciasIndexRoute
-  '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
   '/relatorios': typeof RelatoriosRoute
   '/setup': typeof SetupRoute
+  '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias/': typeof FarmaciasIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/automacoes': typeof AutomacoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
-  '/farmacias': typeof FarmaciasIndexRoute
-  '/farmacias/$id': typeof FarmaciasIdRoute
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
   '/relatorios': typeof RelatoriosRoute
   '/setup': typeof SetupRoute
+  '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias': typeof FarmaciasIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/automacoes': typeof AutomacoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
-  '/farmacias': typeof FarmaciasRoute
-  '/farmacias/': typeof FarmaciasIndexRoute
-  '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
   '/relatorios': typeof RelatoriosRoute
   '/setup': typeof SetupRoute
+  '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias/': typeof FarmaciasIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -114,50 +114,37 @@ export interface FileRouteTypes {
     | '/automacoes'
     | '/configuracoes'
     | '/farmacias'
-    | '/farmacias/'
-    | '/farmacias/$id'
     | '/gestores'
     | '/login'
     | '/relatorios'
     | '/setup'
+    | '/farmacias/$id'
+    | '/farmacias/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/automacoes'
     | '/configuracoes'
-    | '/farmacias'
-    | '/farmacias/$id'
     | '/gestores'
     | '/login'
     | '/relatorios'
     | '/setup'
+    | '/farmacias/$id'
+    | '/farmacias'
   id:
     | '__root__'
     | '/'
     | '/automacoes'
     | '/configuracoes'
     | '/farmacias'
-    | '/farmacias/'
-    | '/farmacias/$id'
     | '/gestores'
     | '/login'
     | '/relatorios'
     | '/setup'
+    | '/farmacias/$id'
+    | '/farmacias/'
   fileRoutesById: FileRoutesById
 }
-
-export interface FarmaciasRouteChildren {
-  FarmaciasIndexRoute: typeof FarmaciasIndexRoute
-  FarmaciasIdRoute: typeof FarmaciasIdRoute
-}
-
-const FarmaciasRouteChildren: FarmaciasRouteChildren = {
-  FarmaciasIndexRoute: FarmaciasIndexRoute,
-  FarmaciasIdRoute: FarmaciasIdRoute,
-}
-
-const FarmaciasRouteWithChildren = FarmaciasRoute._addFileChildren(FarmaciasRouteChildren)
-
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AutomacoesRoute: typeof AutomacoesRoute
@@ -206,20 +193,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FarmaciasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/farmacias/': {
-      id: '/farmacias/'
-      path: '/'
-      fullPath: '/farmacias/'
-      preLoaderRoute: typeof FarmaciasIndexRouteImport
-      parentRoute: typeof FarmaciasRouteImport
-    }
-    '/farmacias/$id': {
-      id: '/farmacias/$id'
-      path: '/$id'
-      fullPath: '/farmacias/$id'
-      preLoaderRoute: typeof FarmaciasIdRouteImport
-      parentRoute: typeof FarmaciasRouteImport
-    }
     '/configuracoes': {
       id: '/configuracoes'
       path: '/configuracoes'
@@ -241,8 +214,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/farmacias/': {
+      id: '/farmacias/'
+      path: '/'
+      fullPath: '/farmacias/'
+      preLoaderRoute: typeof FarmaciasIndexRouteImport
+      parentRoute: typeof FarmaciasRoute
+    }
+    '/farmacias/$id': {
+      id: '/farmacias/$id'
+      path: '/$id'
+      fullPath: '/farmacias/$id'
+      preLoaderRoute: typeof FarmaciasIdRouteImport
+      parentRoute: typeof FarmaciasRoute
+    }
   }
 }
+
+interface FarmaciasRouteChildren {
+  FarmaciasIdRoute: typeof FarmaciasIdRoute
+  FarmaciasIndexRoute: typeof FarmaciasIndexRoute
+}
+
+const FarmaciasRouteChildren: FarmaciasRouteChildren = {
+  FarmaciasIdRoute: FarmaciasIdRoute,
+  FarmaciasIndexRoute: FarmaciasIndexRoute,
+}
+
+const FarmaciasRouteWithChildren = FarmaciasRoute._addFileChildren(
+  FarmaciasRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -257,10 +258,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
