@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Activity, ShoppingCart, Users, Search, BarChart2, MessageCircle } from "lucide-react";
+import { ArrowLeft, Activity, ShoppingCart, Users } from "lucide-react";
 import type React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -7,6 +7,9 @@ import {
   Line,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -87,9 +90,14 @@ function FarmaciaDetailPage() {
         </section>
       )}
 
-      {/* Canais de atendimento por cliente */}
+      {/* Gráfico de pizza — canais do objeto farmácia (GET /api/farmacias) */}
       {farmacia?.canais && farmacia.canais.length > 0 && (
-        <CanaisSection canais={farmacia.canais} total={farmacia.total_atendimentos} />
+        <ChartCard
+          title="Atendimentos por Canal"
+          icon={<Users className="size-4 text-zinc-400" />}
+        >
+          <CanaisPieChart canais={farmacia.canais} />
+        </ChartCard>
       )}
 
       {loadingEvo && (
@@ -179,52 +187,78 @@ function FarmaciaDetailPage() {
   );
 }
 
-const CANAL_STYLE: Record<string, { icon: React.ElementType; color: string; bar: string; bg: string }> = {
-  google: { icon: Search,        color: "text-blue-600",    bar: "bg-blue-500",    bg: "bg-blue-50" },
-  meta:   { icon: BarChart2,     color: "text-indigo-600",  bar: "bg-indigo-500",  bg: "bg-indigo-50" },
-  grupos: { icon: MessageCircle, color: "text-emerald-600", bar: "bg-emerald-500", bg: "bg-emerald-50" },
+const CANAL_COLORS: Record<string, string> = {
+  google:         "#3b82f6",
+  meta:           "#6366f1",
+  grupos:         "#10b981",
+  "base de contatos": "#f59e0b",
+  site:           "#8b5cf6",
+  "site novo":    "#ec4899",
 };
 
-function canalStyle(nome: string) {
-  const key = nome.toLowerCase().replace(/\s+/g, "");
-  for (const [k, v] of Object.entries(CANAL_STYLE)) {
+function canalColor(nome: string, idx: number): string {
+  const key = nome.toLowerCase();
+  for (const [k, v] of Object.entries(CANAL_COLORS)) {
     if (key.includes(k)) return v;
   }
-  return { icon: BarChart2, color: "text-zinc-500", bar: "bg-zinc-400", bg: "bg-zinc-50" };
+  const fallbacks = ["#64748b", "#0ea5e9", "#f97316", "#14b8a6", "#a855f7"];
+  return fallbacks[idx % fallbacks.length];
 }
 
-function CanaisSection({ canais, total }: { canais: { nome: string; atendimentos: number }[]; total: number }) {
-  const sorted = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
-  const cols = Math.min(sorted.length, 4);
+function CanaisPieChart({ canais }: { canais: { nome: string; atendimentos: number }[] }) {
+  const data = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
+  const total = data.reduce((s, c) => s + c.atendimentos, 0);
 
   return (
-    <section>
-      <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-        Atendimentos por Canal
-      </h3>
-      <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {sorted.map((c) => {
-          const s = canalStyle(c.nome);
+    <div className="flex items-center gap-6">
+      <ResponsiveContainer width={220} height={220}>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="atendimentos"
+            nameKey="nome"
+            cx="50%"
+            cy="50%"
+            innerRadius={55}
+            outerRadius={90}
+            paddingAngle={2}
+          >
+            {data.map((c, i) => (
+              <Cell key={c.nome} fill={canalColor(c.nome, i)} />
+            ))}
+          </Pie>
+          <Tooltip
+            {...chartTooltipStyle}
+            formatter={(v: number, name: string) => [
+              `${v.toLocaleString("pt-BR")} (${total > 0 ? Math.round((v / total) * 100) : 0}%)`,
+              name,
+            ]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+
+      {/* Legenda manual */}
+      <div className="flex flex-col gap-2 flex-1">
+        {data.map((c, i) => {
           const pct = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
-          const Icon = s.icon;
+          const color = canalColor(c.nome, i);
           return (
-            <div key={c.nome} className={`rounded-xl p-5 ring-1 ring-black/5 shadow-sm ${s.bg}`}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-zinc-600">{c.nome}</span>
-                <Icon className={`size-4 ${s.color}`} />
-              </div>
-              <div className={`text-2xl font-semibold tracking-tight ${s.color}`}>
+            <div key={c.nome} className="flex items-center gap-2">
+              <span className="size-2.5 rounded-full shrink-0" style={{ background: color }} />
+              <span className="text-xs text-zinc-600 flex-1">{c.nome}</span>
+              <span className="text-xs font-semibold text-zinc-900">
                 {c.atendimentos.toLocaleString("pt-BR")}
-              </div>
-              <div className="mt-3 h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${s.bar}`} style={{ width: `${pct}%` }} />
-              </div>
-              <p className="text-[10px] text-zinc-500 mt-1.5">{pct}% dos atendimentos</p>
+              </span>
+              <span className="text-[10px] text-zinc-400 w-8 text-right">{pct}%</span>
             </div>
           );
         })}
+        <div className="mt-1 pt-2 border-t border-zinc-100 flex items-center justify-between">
+          <span className="text-[10px] text-zinc-400">Total</span>
+          <span className="text-xs font-bold text-zinc-900">{total.toLocaleString("pt-BR")}</span>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
