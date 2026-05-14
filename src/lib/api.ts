@@ -59,6 +59,8 @@ export interface AuthUser {
 export interface CanalData {
   nome: string
   atendimentos: number
+  vendas?: number
+  receita_vendas?: number
 }
 
 export interface PainelData {

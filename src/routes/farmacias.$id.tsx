@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Users, Search, BarChart2, MessageCircle } from "lucide-react";
+import { ArrowLeft, Users, Search, BarChart2, MessageCircle, ShoppingCart, DollarSign, TrendingUp } from "lucide-react";
 import type React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -125,28 +125,75 @@ function canalStyle(nome: string) {
   return { icon: BarChart2, color: "text-zinc-500", bar: "bg-zinc-400", bg: "bg-zinc-50" };
 }
 
-function CanaisCards({ canais, total }: { canais: { nome: string; atendimentos: number }[]; total: number }) {
+function CanaisCards({ canais, total }: { canais: import("@/lib/api").CanalData[]; total: number }) {
   const sorted = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
   const cols = Math.min(sorted.length, 4);
+
   return (
     <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
       {sorted.map((c) => {
-        const s   = canalStyle(c.nome);
-        const pct = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
-        const Icon = s.icon;
+        const s          = canalStyle(c.nome);
+        const Icon       = s.icon;
+        const pctAtend   = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
+        const taxaConv   = c.vendas != null && c.atendimentos > 0
+          ? ((c.vendas / c.atendimentos) * 100).toFixed(1)
+          : null;
+
         return (
           <div key={c.nome} className={`rounded-xl p-5 ring-1 ring-black/5 shadow-sm ${s.bg}`}>
+            {/* Cabeçalho */}
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-zinc-600">{c.nome}</span>
               <Icon className={`size-4 ${s.color}`} />
             </div>
+
+            {/* Atendimentos — métrica principal */}
             <div className={`text-2xl font-semibold tracking-tight ${s.color}`}>
               {c.atendimentos.toLocaleString("pt-BR")}
             </div>
+            <p className="text-[10px] text-zinc-500 mt-0.5">atendimentos</p>
+
+            {/* Barra de participação */}
             <div className="mt-3 h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
-              <div className={`h-full rounded-full ${s.bar}`} style={{ width: `${pct}%` }} />
+              <div className={`h-full rounded-full ${s.bar}`} style={{ width: `${pctAtend}%` }} />
             </div>
-            <p className="text-[10px] text-zinc-500 mt-1.5">{pct}% dos atendimentos</p>
+            <p className="text-[10px] text-zinc-500 mt-1">{pctAtend}% do total</p>
+
+            {/* Novos campos: vendas + receita + conversão */}
+            {(c.vendas != null || c.receita_vendas != null) && (
+              <div className="mt-4 pt-3 border-t border-white/50 space-y-1.5">
+                {c.vendas != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                      <ShoppingCart className="size-3" /> Vendas
+                    </span>
+                    <span className="text-xs font-semibold text-zinc-800">
+                      {c.vendas.toLocaleString("pt-BR")}
+                    </span>
+                  </div>
+                )}
+                {c.receita_vendas != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                      <DollarSign className="size-3" /> Receita
+                    </span>
+                    <span className="text-xs font-semibold text-zinc-800">
+                      {c.receita_vendas.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                )}
+                {taxaConv != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                      <TrendingUp className="size-3" /> Conversão
+                    </span>
+                    <span className={`text-xs font-semibold ${s.color}`}>
+                      {taxaConv}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
