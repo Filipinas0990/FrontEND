@@ -9,11 +9,10 @@ import {
   Play,
   LogOut,
   Users,
-  Loader2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getToken, getUser, clearAuth } from "@/lib/auth";
 import { getStatus, rodarAgora } from "@/lib/api";
@@ -117,29 +116,54 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
         .toUpperCase()
     : "??";
 
-  // Pipeline status polling
+  const queryClient = useQueryClient();
+  // overlayVisible = fonte de verdade para mostrar o overlay
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  // Rastreia se já chegou a ver pipeline_rodando: true (para saber quando terminou)
+  const seenRunning = useRef(false);
+
   const { data: pipelineStatus } = useQuery({
     queryKey: ["pipeline-status"],
     queryFn: getStatus,
     refetchInterval: (query) =>
-      query.state.data?.pipeline_rodando ? 5000 : 30000,
+      query.state.data?.pipeline_rodando ? 3000 : 30000,
     enabled: typeof window !== "undefined",
   });
 
-  const { mutate: runPipeline, isPending: pipelineRunning } = useMutation({
+  // Fecha o overlay quando o backend confirmar que o pipeline terminou
+  useEffect(() => {
+    if (pipelineStatus?.pipeline_rodando) {
+      seenRunning.current = true;
+    } else if (seenRunning.current && pipelineStatus?.pipeline_rodando === false) {
+      seenRunning.current = false;
+      setOverlayVisible(false);
+      toast.success("Automação concluída! Dados atualizados.");
+      queryClient.invalidateQueries();
+    }
+  }, [pipelineStatus?.pipeline_rodando, queryClient]);
+
+  const { mutate: runPipeline } = useMutation({
     mutationFn: rodarAgora,
+    onMutate: () => {
+      // Mostra overlay IMEDIATAMENTE ao clicar
+      setOverlayVisible(true);
+      seenRunning.current = false;
+    },
     onSuccess: (data) => {
       if (data.status === "ja_rodando") {
         toast.info("Pipeline já está em execução");
-      } else {
-        toast.success("Pipeline iniciado! Aguarde a conclusão.");
+        seenRunning.current = true; // já estava rodando
       }
+      // Força poll imediato para pegar pipeline_rodando: true rápido
+      queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setOverlayVisible(false);
+    },
   });
 
-  const isPipelineActive =
-    pipelineRunning || pipelineStatus?.pipeline_rodando === true;
+  const isPipelineActive = overlayVisible || pipelineStatus?.pipeline_rodando === true;
 
   const navItems = [
     { icon: LayoutDashboard, label: "Painel Geral", to: "/" as const },
@@ -212,11 +236,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
                   disabled={isPipelineActive}
                   className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 transition-opacity disabled:opacity-60"
                 >
-                  {isPipelineActive ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
                     <Play className="size-3.5" fill="currentColor" />
-                  )}
                   {isPipelineActive ? "Rodando..." : "Rodar Agora"}
                 </button>
               ) : null
