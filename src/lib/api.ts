@@ -56,6 +56,11 @@ export interface AuthUser {
   is_admin: boolean
 }
 
+export interface CanalData {
+  nome: string
+  atendimentos: number
+}
+
 export interface PainelData {
   receita_total: number
   total_atendimentos: number
@@ -65,6 +70,8 @@ export interface PainelData {
   farmacias_atencao: number
   taxa_conversao_media: number
   ultima_atualizacao: string
+  // breakdown por canal de origem (opcional — retornado quando disponível)
+  canais?: CanalData[]
 }
 
 export interface Farmacia {
