@@ -70,8 +70,6 @@ export interface PainelData {
   farmacias_atencao: number
   taxa_conversao_media: number
   ultima_atualizacao: string
-  // breakdown por canal de origem (opcional — retornado quando disponível)
-  canais?: CanalData[]
 }
 
 export interface Farmacia {
@@ -93,6 +91,7 @@ export interface Farmacia {
   periodo_inicio: string
   periodo_fim: string
   data_coleta: string
+  canais?: CanalData[]
 }
 
 export interface FarmaciaEvolucao {

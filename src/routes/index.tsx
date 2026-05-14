@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import type React from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -9,9 +8,6 @@ import {
   ShoppingCart,
   AlertTriangle,
   Clock,
-  MessageCircle,
-  Search,
-  BarChart2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
@@ -139,11 +135,6 @@ function Index() {
             ))}
       </section>
 
-      {/* Canais de Atendimento */}
-      {painel?.canais && painel.canais.length > 0 && (
-        <CanaisSection canais={painel.canais} total={painel.total_atendimentos} />
-      )}
-
       {/* Alert badges */}
       {painel && (
         <section className="grid grid-cols-3 gap-4">
@@ -238,58 +229,6 @@ function Index() {
         )}
       </section>
     </AppShell>
-  );
-}
-
-const CANAL_META: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  google:  { icon: Search,         color: "text-blue-600",   bg: "bg-blue-50" },
-  meta:    { icon: BarChart2,       color: "text-indigo-600", bg: "bg-indigo-50" },
-  grupos:  { icon: MessageCircle,   color: "text-emerald-600",bg: "bg-emerald-50" },
-};
-
-function canalMeta(nome: string) {
-  const key = nome.toLowerCase().replace(/\s+/g, "");
-  for (const [k, v] of Object.entries(CANAL_META)) {
-    if (key.includes(k)) return v;
-  }
-  return { icon: BarChart2, color: "text-zinc-500", bg: "bg-zinc-50" };
-}
-
-function CanaisSection({ canais, total }: { canais: { nome: string; atendimentos: number }[]; total: number }) {
-  const sorted = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
-  const cols = sorted.length <= 3 ? sorted.length : 4;
-
-  return (
-    <section>
-      <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-        Atendimentos por Canal
-      </h3>
-      <div className={`grid gap-4`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {sorted.map((c) => {
-          const meta = canalMeta(c.nome);
-          const pct = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
-          const Icon = meta.icon;
-          return (
-            <div key={c.nome} className={`rounded-xl p-5 ring-1 ring-black/5 shadow-sm ${meta.bg}`}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-zinc-600">{c.nome}</span>
-                <Icon className={`size-4 ${meta.color}`} />
-              </div>
-              <div className={`text-2xl font-semibold tracking-tight ${meta.color}`}>
-                {c.atendimentos.toLocaleString("pt-BR")}
-              </div>
-              <div className="mt-3 h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${meta.color.replace("text-", "bg-")}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <p className="text-[10px] text-zinc-500 mt-1.5">{pct}% dos atendimentos</p>
-            </div>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
