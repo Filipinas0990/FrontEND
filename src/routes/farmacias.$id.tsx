@@ -90,14 +90,25 @@ function FarmaciaDetailPage() {
         </section>
       )}
 
-      {/* Gráfico de pizza — canais do objeto farmácia (GET /api/farmacias) */}
+      {/* Canais — cards + gráfico de pizza */}
       {farmacia?.canais && farmacia.canais.length > 0 && (
-        <ChartCard
-          title="Atendimentos por Canal"
-          icon={<Users className="size-4 text-zinc-400" />}
-        >
-          <CanaisPieChart canais={farmacia.canais} />
-        </ChartCard>
+        <section className="grid grid-cols-2 gap-6">
+          {/* Cards por canal */}
+          <div>
+            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+              Atendimentos por Canal
+            </h3>
+            <CanaisCards canais={farmacia.canais} total={farmacia.total_atendimentos} />
+          </div>
+
+          {/* Pizza */}
+          <ChartCard
+            title="Distribuição por Canal"
+            icon={<Users className="size-4 text-zinc-400" />}
+          >
+            <CanaisPieChart canais={farmacia.canais} />
+          </ChartCard>
+        </section>
       )}
 
       {loadingEvo && (
@@ -203,6 +214,33 @@ function canalColor(nome: string, idx: number): string {
   }
   const fallbacks = ["#64748b", "#0ea5e9", "#f97316", "#14b8a6", "#a855f7"];
   return fallbacks[idx % fallbacks.length];
+}
+
+function CanaisCards({ canais, total }: { canais: { nome: string; atendimentos: number }[]; total: number }) {
+  const sorted = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {sorted.map((c, i) => {
+        const color = canalColor(c.nome, i);
+        const pct   = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
+        return (
+          <div key={c.nome} className="bg-white rounded-xl p-4 ring-1 ring-black/5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-zinc-600 truncate">{c.nome}</span>
+              <span className="size-2.5 rounded-full shrink-0 ml-2" style={{ background: color }} />
+            </div>
+            <div className="text-xl font-semibold tracking-tight" style={{ color }}>
+              {c.atendimentos.toLocaleString("pt-BR")}
+            </div>
+            <div className="mt-2 h-1 w-full bg-zinc-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+            </div>
+            <p className="text-[10px] text-zinc-400 mt-1">{pct}% dos atendimentos</p>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function CanaisPieChart({ canais }: { canais: { nome: string; atendimentos: number }[] }) {
