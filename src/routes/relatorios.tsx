@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Download, FileText, Calendar, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { Download, FileText, Calendar, CheckCircle2, AlertCircle, XCircle, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { getRelatorios, downloadRelatorio, type Relatorio } from "@/lib/api";
+import { getRelatorios, downloadRelatorio, downloadRelatorioCSV, type Relatorio } from "@/lib/api";
 
 export const Route = createFileRoute("/relatorios")({
   component: RelatoriosPage,
@@ -101,12 +103,7 @@ function RelatoriosPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => downloadRelatorio(r.periodo_inicio)}
-                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand hover:underline"
-                    >
-                      <Download className="size-3" /> XLSX
-                    </button>
+                    <DownloadButtons periodoInicio={r.periodo_inicio} />
                   </td>
                 </tr>
               ))}
@@ -115,6 +112,49 @@ function RelatoriosPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function DownloadButtons({ periodoInicio }: { periodoInicio: string }) {
+  const [loadingXlsx, setLoadingXlsx] = useState(false);
+  const [loadingCsv, setLoadingCsv]   = useState(false);
+
+  async function handle(
+    fn: (p: string) => Promise<void>,
+    setLoading: (v: boolean) => void,
+    label: string,
+  ) {
+    setLoading(true);
+    try {
+      await fn(periodoInicio);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : `Erro ao baixar ${label}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="inline-flex items-center gap-3">
+      <button
+        onClick={() => handle(downloadRelatorio, setLoadingXlsx, "XLSX")}
+        disabled={loadingXlsx || loadingCsv}
+        className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand hover:underline disabled:opacity-50"
+      >
+        {loadingXlsx ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
+        XLSX
+      </button>
+      <span className="text-zinc-200">|</span>
+      <button
+        onClick={() => handle(downloadRelatorioCSV, setLoadingCsv, "CSV")}
+        disabled={loadingXlsx || loadingCsv}
+        className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:underline disabled:opacity-50"
+        title="Compatível com Power BI"
+      >
+        {loadingCsv ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
+        Power BI (CSV)
+      </button>
+    </div>
   );
 }
 

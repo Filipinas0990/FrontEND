@@ -249,22 +249,37 @@ export function getRelatorios(): Promise<Relatorio[]> {
   return req("/api/relatorios")
 }
 
-export function downloadRelatorio(periodoInicio: string) {
+async function _triggerDownload(url: string, filename: string): Promise<void> {
   const token = getToken()
-  const url = `${BASE_URL}/api/relatorios/${periodoInicio}/xlsx`
-  if (!token) {
-    window.open(url)
-    return
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, body.detail ?? "Erro ao baixar relatório")
   }
-  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then((r) => r.blob())
-    .then((blob) => {
-      const a = document.createElement("a")
-      a.href = URL.createObjectURL(blob)
-      a.download = `relatorio_${periodoInicio}.xlsx`
-      a.click()
-      URL.revokeObjectURL(a.href)
-    })
+  const blob = await res.blob()
+  const a = document.createElement("a")
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(a.href)
+}
+
+export function downloadRelatorio(periodoInicio: string): Promise<void> {
+  return _triggerDownload(
+    `${BASE_URL}/api/relatorios/${periodoInicio}/xlsx`,
+    `relatorio_${periodoInicio}.xlsx`,
+  )
+}
+
+export function downloadRelatorioCSV(periodoInicio: string): Promise<void> {
+  return _triggerDownload(
+    `${BASE_URL}/api/relatorios/${periodoInicio}/csv`,
+    `relatorio_${periodoInicio}.csv`,
+  )
 }
 
 // ── Pipeline ───────────────────────────────────────────────────────────────
