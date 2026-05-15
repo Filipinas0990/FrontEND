@@ -1,18 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Users, Search, BarChart2, MessageCircle, ShoppingCart, DollarSign, TrendingUp, Target } from "lucide-react";
+import {
+  ArrowLeft, Users, Search, BarChart2, MessageCircle,
+  ShoppingCart, DollarSign, TrendingUp, X, Maximize2,
+} from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  RadialBarChart, RadialBar, BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { getFarmacias, setFarmaciaMeta } from "@/lib/api";
+import { getFarmacias, type CanalData } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
 
 export const Route = createFileRoute("/farmacias/$id")({
@@ -24,22 +23,247 @@ function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
+// ── Cores e estilos por canal ──────────────────────────────────────────────
 
-const chartTooltipStyle = {
-  contentStyle: {
-    fontSize: "11px",
-    borderRadius: "8px",
-    border: "1px solid rgb(228 228 231)",
-    boxShadow: "0 1px 4px rgb(0 0 0 / .08)",
-  },
+const CANAL_COLORS: Record<string, string> = {
+  google: "#3b82f6",
+  meta: "#6366f1",
+  grupos: "#10b981",
+  "base de contatos": "#f59e0b",
+  site: "#8b5cf6",
+  "site novo": "#ec4899",
 };
+
+function canalHexColor(nome: string, idx: number): string {
+  const key = nome.toLowerCase();
+  for (const [k, v] of Object.entries(CANAL_COLORS)) {
+    if (key.includes(k)) return v;
+  }
+  const fallbacks = ["#64748b", "#0ea5e9", "#f97316", "#14b8a6", "#a855f7"];
+  return fallbacks[idx % fallbacks.length];
+}
+
+const CANAL_STYLE: Record<string, { icon: React.ElementType; color: string; bar: string; bg: string; ring: string }> = {
+  google:             { icon: Search,        color: "text-blue-600",    bar: "bg-blue-500",    bg: "bg-blue-50",    ring: "ring-blue-200"    },
+  meta:               { icon: BarChart2,     color: "text-indigo-600",  bar: "bg-indigo-500",  bg: "bg-indigo-50",  ring: "ring-indigo-200"  },
+  grupos:             { icon: MessageCircle, color: "text-emerald-600", bar: "bg-emerald-500", bg: "bg-emerald-50", ring: "ring-emerald-200" },
+  site:               { icon: BarChart2,     color: "text-violet-600",  bar: "bg-violet-500",  bg: "bg-violet-50",  ring: "ring-violet-200"  },
+  "base de contatos": { icon: BarChart2,     color: "text-zinc-600",    bar: "bg-zinc-400",    bg: "bg-zinc-100",   ring: "ring-zinc-300"    },
+};
+
+function canalStyle(nome: string) {
+  const key = nome.toLowerCase();
+  for (const [k, v] of Object.entries(CANAL_STYLE)) {
+    if (key.includes(k)) return v;
+  }
+  return { icon: BarChart2, color: "text-zinc-500", bar: "bg-zinc-400", bg: "bg-zinc-50", ring: "ring-zinc-200" };
+}
+
+// ── Modal de detalhe do canal ──────────────────────────────────────────────
+
+function CanalModal({
+  canal,
+  totalAtendimentos,
+  todos,
+  onClose,
+}: {
+  canal: CanalData;
+  totalAtendimentos: number;
+  todos: CanalData[];
+  onClose: () => void;
+}) {
+  const s = canalStyle(canal.nome);
+  const Icon = s.icon;
+  const color = canalHexColor(canal.nome, todos.indexOf(canal));
+
+  const pctAtend = totalAtendimentos > 0 ? (canal.atendimentos / totalAtendimentos) * 100 : 0;
+  const taxaConv = canal.vendas != null && canal.atendimentos > 0
+    ? (canal.vendas / canal.atendimentos) * 100
+    : null;
+
+  // Dado para o gráfico radial de participação
+  const radialData = [
+    { name: canal.nome, value: Math.round(pctAtend), fill: color },
+  ];
+
+  // Dado para o gráfico de barras comparativo (esse canal vs restante)
+  const barData = [
+    { nome: "Atendimentos", valor: canal.atendimentos, outros: totalAtendimentos - canal.atendimentos },
+    ...(canal.vendas != null
+      ? [{
+          nome: "Vendas",
+          valor: canal.vendas,
+          outros: todos.reduce((s, c) => s + (c.vendas ?? 0), 0) - canal.vendas,
+        }]
+      : []),
+  ];
+
+  // Comparativo de conversão entre canais
+  const convData = todos
+    .filter((c) => c.vendas != null && c.atendimentos > 0)
+    .map((c) => ({
+      nome: c.nome.length > 10 ? c.nome.slice(0, 10) + "…" : c.nome,
+      taxa: parseFloat(((c.vendas! / c.atendimentos) * 100).toFixed(1)),
+      destaque: c.nome === canal.nome,
+    }))
+    .sort((a, b) => b.taxa - a.taxa);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className={`${s.bg} rounded-t-2xl p-6 flex items-start justify-between`}>
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-white/70 grid place-items-center shadow-sm">
+              <Icon className={`size-5 ${s.color}`} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900">{canal.nome}</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Detalhes do canal</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="size-8 rounded-full bg-white/60 hover:bg-white grid place-items-center transition-colors"
+          >
+            <X className="size-4 text-zinc-500" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* KPIs principais */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <KpiBox label="Atendimentos" value={canal.atendimentos.toLocaleString("pt-BR")} color={s.color} />
+            <KpiBox label="Participação" value={`${pctAtend.toFixed(1)}%`} color={s.color} />
+            {canal.vendas != null && (
+              <KpiBox label="Vendas" value={canal.vendas.toLocaleString("pt-BR")} color={s.color} />
+            )}
+            {taxaConv != null && (
+              <KpiBox label="Conversão" value={`${taxaConv.toFixed(1)}%`} color={s.color} highlight />
+            )}
+          </div>
+
+          {canal.receita_vendas != null && (
+            <div className={`${s.bg} rounded-xl p-4 flex items-center justify-between`}>
+              <div className="flex items-center gap-2 text-sm text-zinc-600">
+                <DollarSign className="size-4" /> Receita gerada por este canal
+              </div>
+              <span className="text-xl font-bold text-zinc-900">{fmtBRL(canal.receita_vendas)}</span>
+            </div>
+          )}
+
+          {/* Gráfico radial — participação */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-zinc-50 rounded-xl p-4">
+              <p className="text-xs font-semibold text-zinc-500 mb-2 uppercase tracking-wider">Participação no total</p>
+              <div className="flex items-center gap-4">
+                <ResponsiveContainer width={110} height={110}>
+                  <RadialBarChart
+                    innerRadius={30}
+                    outerRadius={52}
+                    data={radialData}
+                    startAngle={90}
+                    endAngle={90 - 360 * (pctAtend / 100)}
+                  >
+                    <RadialBar dataKey="value" cornerRadius={6} background={{ fill: "#e4e4e7" }} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+                <div>
+                  <p className="text-3xl font-extrabold" style={{ color }}>{pctAtend.toFixed(0)}%</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">dos atendimentos</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {canal.atendimentos.toLocaleString("pt-BR")} de {totalAtendimentos.toLocaleString("pt-BR")}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Barra de progresso visual */}
+            <div className="bg-zinc-50 rounded-xl p-4 flex flex-col justify-center gap-3">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">vs outros canais</p>
+              {barData.map((d) => {
+                const total = d.valor + d.outros;
+                const pct = total > 0 ? (d.valor / total) * 100 : 0;
+                return (
+                  <div key={d.nome}>
+                    <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                      <span>{d.nome}</span>
+                      <span className="font-semibold" style={{ color }}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-2 w-full bg-zinc-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Gráfico de conversão comparativo entre canais */}
+          {convData.length > 1 && (
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 mb-3 uppercase tracking-wider">Taxa de conversão — todos os canais</p>
+              <ResponsiveContainer width="100%" height={convData.length * 38 + 16}>
+                <BarChart
+                  data={convData}
+                  layout="vertical"
+                  margin={{ top: 0, right: 48, left: 0, bottom: 0 }}
+                  barCategoryGap="25%"
+                >
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f4f4f5" />
+                  <XAxis type="number" hide domain={[0, "auto"]} />
+                  <YAxis
+                    type="category"
+                    dataKey="nome"
+                    width={100}
+                    tick={{ fontSize: 12, fill: "#52525b" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => [`${v}%`, "Conversão"]}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e4e4e7" }}
+                    cursor={{ fill: "#f4f4f5" }}
+                  />
+                  <Bar dataKey="taxa" radius={[0, 6, 6, 0]} maxBarSize={24}>
+                    {convData.map((d, i) => (
+                      <Cell key={i} fill={d.destaque ? color : "#d4d4d8"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiBox({ label, value, color, highlight }: { label: string; value: string; color: string; highlight?: boolean }) {
+  return (
+    <div className={`rounded-xl p-4 text-center ${highlight ? "bg-brand/5 ring-1 ring-brand/20" : "bg-zinc-50"}`}>
+      <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">{label}</p>
+      <p className={`text-xl font-extrabold ${highlight ? "text-brand" : color}`}>{value}</p>
+    </div>
+  );
+}
+
+// ── Página principal ───────────────────────────────────────────────────────
 
 function FarmaciaDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const farmaciaId = Number(id);
   const admin = isAdmin();
-  const qc = useQueryClient();
+
+  const [canalAberto, setCanalAberto] = useState<CanalData | null>(null);
 
   const { data: farmacias = [] } = useQuery({
     queryKey: ["farmacias"],
@@ -47,27 +271,6 @@ function FarmaciaDetailPage() {
     staleTime: 60_000,
   });
   const farmacia = farmacias.find((f) => f.id === farmaciaId);
-
-  const [metaVendas, setMetaVendas] = useState("");
-  const [metaReceita, setMetaReceita] = useState("");
-
-  const metaMut = useMutation({
-    mutationFn: (data: { meta_vendas: number | null; meta_receita: number | null }) =>
-      setFarmaciaMeta(farmaciaId, data),
-    onSuccess: () => {
-      toast.success("Meta atualizada com sucesso!");
-      qc.invalidateQueries({ queryKey: ["farmacias"] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const handleMetaSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    metaMut.mutate({
-      meta_vendas: metaVendas ? Number(metaVendas) : null,
-      meta_receita: metaReceita ? Number(metaReceita) : null,
-    });
-  };
 
   return (
     <AppShell
@@ -81,7 +284,7 @@ function FarmaciaDetailPage() {
         </button>
       }
     >
-      {/* Current metrics cards */}
+      {/* Receita total */}
       {farmacia && (
         <section className="grid grid-cols-1 gap-4 max-w-xs">
           <MetricCard
@@ -140,13 +343,17 @@ function FarmaciaDetailPage() {
         </section>
       )}
 
-      {/* Canais — cards + gráfico de pizza */}
+      {/* Canais — cards clicáveis */}
       {farmacia?.canais && farmacia.canais.length > 0 && (
         <section className="space-y-4">
           <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-            Atendimentos por Canal
+            Atendimentos por Canal — <span className="normal-case font-normal text-zinc-400">clique em um canal para ver detalhes</span>
           </h3>
-          <CanaisCards canais={farmacia.canais} total={farmacia.total_atendimentos} />
+          <CanaisCards
+            canais={farmacia.canais}
+            total={farmacia.total_atendimentos}
+            onSelect={setCanalAberto}
+          />
           <ChartCard
             title="Distribuição por Canal"
             icon={<Users className="size-4 text-zinc-400" />}
@@ -156,134 +363,67 @@ function FarmaciaDetailPage() {
         </section>
       )}
 
-      {/* Definir meta (admin only) */}
-      {admin && farmacia && (
-        <section className="space-y-4">
-          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Configurar Meta</h3>
-          <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-zinc-100 flex items-center gap-2">
-              <Target className="size-4 text-brand" />
-              <h4 className="text-sm font-semibold text-zinc-900">Definir metas para esta farmácia</h4>
-            </div>
-            <form onSubmit={handleMetaSave} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Meta de Vendas</label>
-                  <p className="text-[10px] text-zinc-400 mb-1">
-                    Atual: {farmacia.meta_vendas != null ? farmacia.meta_vendas : "Sem meta"}
-                  </p>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={metaVendas}
-                    onChange={(e) => setMetaVendas(e.target.value)}
-                    placeholder={farmacia.meta_vendas != null ? String(farmacia.meta_vendas) : "Ex: 600"}
-                    className="form-input w-full"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Meta de Receita (R$)</label>
-                  <p className="text-[10px] text-zinc-400 mb-1">
-                    Atual: {farmacia.meta_receita != null ? fmtBRL(farmacia.meta_receita) : "Sem meta"}
-                  </p>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={metaReceita}
-                    onChange={(e) => setMetaReceita(e.target.value)}
-                    placeholder={farmacia.meta_receita != null ? String(farmacia.meta_receita) : "Ex: 45000"}
-                    className="form-input w-full"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={metaMut.isPending || (!metaVendas && !metaReceita)}
-                  className="px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                >
-                  {metaMut.isPending ? "Salvando..." : "Salvar Meta"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </section>
+      {/* Modal do canal selecionado */}
+      {canalAberto && farmacia?.canais && (
+        <CanalModal
+          canal={canalAberto}
+          totalAtendimentos={farmacia.total_atendimentos}
+          todos={farmacia.canais}
+          onClose={() => setCanalAberto(null)}
+        />
       )}
     </AppShell>
   );
 }
 
-const CANAL_COLORS: Record<string, string> = {
-  google:         "#3b82f6",
-  meta:           "#6366f1",
-  grupos:         "#10b981",
-  "base de contatos": "#f59e0b",
-  site:           "#8b5cf6",
-  "site novo":    "#ec4899",
-};
+// ── Cards de canais ────────────────────────────────────────────────────────
 
-function canalColor(nome: string, idx: number): string {
-  const key = nome.toLowerCase();
-  for (const [k, v] of Object.entries(CANAL_COLORS)) {
-    if (key.includes(k)) return v;
-  }
-  const fallbacks = ["#64748b", "#0ea5e9", "#f97316", "#14b8a6", "#a855f7"];
-  return fallbacks[idx % fallbacks.length];
-}
-
-const CANAL_STYLE: Record<string, { icon: React.ElementType; color: string; bar: string; bg: string }> = {
-  google:           { icon: Search,        color: "text-blue-600",    bar: "bg-blue-500",    bg: "bg-blue-50"    },
-  meta:             { icon: BarChart2,     color: "text-indigo-600",  bar: "bg-indigo-500",  bg: "bg-indigo-50"  },
-  grupos:           { icon: MessageCircle, color: "text-emerald-600", bar: "bg-emerald-500", bg: "bg-emerald-50" },
-  site:             { icon: BarChart2,     color: "text-violet-600",  bar: "bg-violet-500",  bg: "bg-violet-50"  },
-  "base de contatos": { icon: BarChart2,   color: "text-zinc-600",    bar: "bg-zinc-400",    bg: "bg-zinc-100"   },
-};
-
-function canalStyle(nome: string) {
-  const key = nome.toLowerCase();
-  for (const [k, v] of Object.entries(CANAL_STYLE)) {
-    if (key.includes(k)) return v;
-  }
-  return { icon: BarChart2, color: "text-zinc-500", bar: "bg-zinc-400", bg: "bg-zinc-50" };
-}
-
-function CanaisCards({ canais, total }: { canais: import("@/lib/api").CanalData[]; total: number }) {
+function CanaisCards({
+  canais,
+  total,
+  onSelect,
+}: {
+  canais: CanalData[];
+  total: number;
+  onSelect: (c: CanalData) => void;
+}) {
   const sorted = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
   const cols = Math.min(sorted.length, 4);
 
   return (
     <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
       {sorted.map((c) => {
-        const s          = canalStyle(c.nome);
-        const Icon       = s.icon;
-        const pctAtend   = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
-        const taxaConv   = c.vendas != null && c.atendimentos > 0
+        const s        = canalStyle(c.nome);
+        const Icon     = s.icon;
+        const pctAtend = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
+        const taxaConv = c.vendas != null && c.atendimentos > 0
           ? ((c.vendas / c.atendimentos) * 100).toFixed(1)
           : null;
 
         return (
-          <div key={c.nome} className={`rounded-xl p-5 ring-1 ring-black/5 shadow-sm ${s.bg}`}>
-            {/* Cabeçalho */}
+          <div
+            key={c.nome}
+            onClick={() => onSelect(c)}
+            className={`rounded-xl p-5 ring-1 ring-black/5 shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-[0.99] transition-all ${s.bg}`}
+          >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-zinc-600">{c.nome}</span>
-              <Icon className={`size-4 ${s.color}`} />
+              <div className="flex items-center gap-1.5">
+                <Maximize2 className="size-3 text-zinc-400 opacity-60" />
+                <Icon className={`size-4 ${s.color}`} />
+              </div>
             </div>
 
-            {/* Atendimentos — métrica principal */}
             <div className={`text-2xl font-semibold tracking-tight ${s.color}`}>
               {c.atendimentos.toLocaleString("pt-BR")}
             </div>
             <p className="text-[10px] text-zinc-500 mt-0.5">atendimentos</p>
 
-            {/* Barra de participação */}
             <div className="mt-3 h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
               <div className={`h-full rounded-full ${s.bar}`} style={{ width: `${pctAtend}%` }} />
             </div>
             <p className="text-[10px] text-zinc-500 mt-1">{pctAtend}% do total</p>
 
-            {/* Novos campos: vendas + receita + conversão */}
             {(c.vendas != null || c.receita_vendas != null) && (
               <div className="mt-4 pt-3 border-t border-white/50 space-y-1.5">
                 {c.vendas != null && (
@@ -291,9 +431,7 @@ function CanaisCards({ canais, total }: { canais: import("@/lib/api").CanalData[
                     <span className="flex items-center gap-1 text-[10px] text-zinc-500">
                       <ShoppingCart className="size-3" /> Vendas
                     </span>
-                    <span className="text-xs font-semibold text-zinc-800">
-                      {c.vendas.toLocaleString("pt-BR")}
-                    </span>
+                    <span className="text-xs font-semibold text-zinc-800">{c.vendas.toLocaleString("pt-BR")}</span>
                   </div>
                 )}
                 {c.receita_vendas != null && (
@@ -311,9 +449,7 @@ function CanaisCards({ canais, total }: { canais: import("@/lib/api").CanalData[
                     <span className="flex items-center gap-1 text-[10px] text-zinc-500">
                       <TrendingUp className="size-3" /> Conversão
                     </span>
-                    <span className={`text-xs font-semibold ${s.color}`}>
-                      {taxaConv}%
-                    </span>
+                    <span className={`text-xs font-semibold ${s.color}`}>{taxaConv}%</span>
                   </div>
                 )}
               </div>
@@ -325,8 +461,10 @@ function CanaisCards({ canais, total }: { canais: import("@/lib/api").CanalData[
   );
 }
 
+// ── Pie chart geral ────────────────────────────────────────────────────────
+
 function CanaisPieChart({ canais }: { canais: { nome: string; atendimentos: number }[] }) {
-  const data = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
+  const data  = [...canais].sort((a, b) => b.atendimentos - a.atendimentos);
   const total = data.reduce((s, c) => s + c.atendimentos, 0);
 
   return (
@@ -344,11 +482,11 @@ function CanaisPieChart({ canais }: { canais: { nome: string; atendimentos: numb
             paddingAngle={2}
           >
             {data.map((c, i) => (
-              <Cell key={c.nome} fill={canalColor(c.nome, i)} />
+              <Cell key={c.nome} fill={canalHexColor(c.nome, i)} />
             ))}
           </Pie>
           <Tooltip
-            {...chartTooltipStyle}
+            contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e4e4e7" }}
             formatter={(v: number, name: string) => [
               `${v.toLocaleString("pt-BR")} (${total > 0 ? Math.round((v / total) * 100) : 0}%)`,
               name,
@@ -357,18 +495,15 @@ function CanaisPieChart({ canais }: { canais: { nome: string; atendimentos: numb
         </PieChart>
       </ResponsiveContainer>
 
-      {/* Legenda manual */}
       <div className="flex flex-col gap-2 flex-1">
         {data.map((c, i) => {
-          const pct = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
-          const color = canalColor(c.nome, i);
+          const pct   = total > 0 ? Math.round((c.atendimentos / total) * 100) : 0;
+          const color = canalHexColor(c.nome, i);
           return (
             <div key={c.nome} className="flex items-center gap-2">
               <span className="size-2.5 rounded-full shrink-0" style={{ background: color }} />
               <span className="text-xs text-zinc-600 flex-1">{c.nome}</span>
-              <span className="text-xs font-semibold text-zinc-900">
-                {c.atendimentos.toLocaleString("pt-BR")}
-              </span>
+              <span className="text-xs font-semibold text-zinc-900">{c.atendimentos.toLocaleString("pt-BR")}</span>
               <span className="text-[10px] text-zinc-400 w-8 text-right">{pct}%</span>
             </div>
           );
@@ -382,16 +517,10 @@ function CanaisPieChart({ canais }: { canais: { nome: string; atendimentos: numb
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  delta,
-  positive,
-}: {
-  label: string;
-  value: string;
-  delta?: string;
-  positive?: boolean;
+// ── Componentes auxiliares ─────────────────────────────────────────────────
+
+function MetricCard({ label, value, delta, positive }: {
+  label: string; value: string; delta?: string; positive?: boolean;
 }) {
   return (
     <div className="bg-white p-5 rounded-xl ring-1 ring-black/5 shadow-sm space-y-1">
@@ -406,14 +535,8 @@ function MetricCard({
   );
 }
 
-function ChartCard({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
+function ChartCard({ title, icon, children }: {
+  title: string; icon: React.ReactNode; children: React.ReactNode;
 }) {
   return (
     <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm">
