@@ -249,8 +249,24 @@ export function setFarmaciaMeta(
   return req(`/api/farmacias/${id}/meta`, { method: "PATCH", body: JSON.stringify(data) })
 }
 
-export function getRankingGestores(): Promise<RankingGestor[]> {
-  return req("/api/ranking/gestores")
+export function getRankingGestores(mes?: string): Promise<RankingGestor[]> {
+  const q = mes ? `?mes=${mes}` : ""
+  return req(`/api/ranking/gestores${q}`)
+}
+
+export interface RankingHistoricoEntry {
+  mes: string
+  gestor_id: number
+  gestor_nome: string
+  pontos: number
+  taxa_acerto: number
+  farmacias_meta_ok: number
+  farmacias_com_meta: number
+  percentual_medio_meta: number
+}
+
+export function getRankingHistorico(): Promise<RankingHistoricoEntry[]> {
+  return req("/api/ranking/gestores/historico")
 }
 
 // ── Gestores ───────────────────────────────────────────────────────────────
