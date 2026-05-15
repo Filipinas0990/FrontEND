@@ -2,12 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Target } from "lucide-react";
 import {
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   Cell,
   LabelList,
@@ -22,44 +24,66 @@ export const Route = createFileRoute("/ranking")({
 
 const MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
-function barColor(pontos: number, temMeta: boolean) {
-  if (!temMeta) return "#e4e4e7";
-  if (pontos === 0) return "#fca5a5";
-  if (pontos >= 3) return "#10b981";
-  return "#34d399";
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
-function CustomTooltipPontos({ active, payload }: any) {
+function fmtK(v: number) {
+  if (v >= 1000) return `R$${(v / 1000).toFixed(0)}k`;
+  return `R$${v.toFixed(0)}`;
+}
+
+function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
-  const g: RankingGestor = payload[0].payload;
+  const resultado = payload.find((p: any) => p.dataKey === "receita_total");
+  const meta = payload.find((p: any) => p.dataKey === "meta_receita_total");
+  const entry: RankingGestor = payload[0]?.payload;
+  const pct = entry?.percentual_medio_meta;
+
   return (
-    <div className="bg-white border border-zinc-200 rounded-lg shadow-md p-3 text-xs space-y-1 min-w-[180px]">
-      <p className="font-semibold text-zinc-900 text-sm">
-        {MEDAL[g.posicao] ?? `#${g.posicao}`} {g.gestor_nome}
-      </p>
-      <div className="border-t border-zinc-100 pt-1 space-y-0.5">
-        <p className="text-zinc-700"><span className="font-semibold text-emerald-600">{g.pontos}</span> {g.pontos === 1 ? "ponto" : "pontos"}</p>
-        <p className="text-zinc-500">{g.farmacias_meta_ok} / {g.farmacias_com_meta} farmácias bateram a meta</p>
-        <p className="text-zinc-500">Taxa de acerto: <span className="font-medium">{g.taxa_acerto.toFixed(1)}%</span></p>
-        <p className="text-zinc-500">% médio da meta: <span className="font-medium">{g.percentual_medio_meta.toFixed(1)}%</span></p>
+    <div className="bg-white border border-zinc-200 rounded-xl shadow-lg p-4 text-xs min-w-[200px]">
+      <p className="font-bold text-zinc-900 text-sm mb-2">{label}</p>
+      {resultado && (
+        <div className="flex justify-between gap-6">
+          <span className="text-zinc-500">Resultado</span>
+          <span className="font-semibold text-zinc-900">{fmtBRL(resultado.value)}</span>
+        </div>
+      )}
+      {meta && meta.value != null && (
+        <div className="flex justify-between gap-6 mt-1">
+          <span className="text-zinc-500">Meta</span>
+          <span className="font-semibold text-brand">{fmtBRL(meta.value)}</span>
+        </div>
+      )}
+      {pct != null && (
+        <div className={`mt-2 pt-2 border-t border-zinc-100 flex justify-between gap-6`}>
+          <span className="text-zinc-500">% Atingido</span>
+          <span className={`font-bold ${pct >= 100 ? "text-emerald-600" : "text-red-500"}`}>
+            {pct.toFixed(1)}%
+          </span>
+        </div>
+      )}
+      <div className="mt-1 flex justify-between gap-6">
+        <span className="text-zinc-500">Pontos</span>
+        <span className="font-bold text-emerald-600">{entry?.pontos ?? 0} pts</span>
       </div>
     </div>
   );
 }
 
-function CustomTooltipAcerto({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const g: RankingGestor = payload[0].payload;
+function CustomLabel({ x, y, width, value }: any) {
+  if (!value) return null;
   return (
-    <div className="bg-white border border-zinc-200 rounded-lg shadow-md p-3 text-xs space-y-1 min-w-[180px]">
-      <p className="font-semibold text-zinc-900 text-sm">
-        {MEDAL[g.posicao] ?? `#${g.posicao}`} {g.gestor_nome}
-      </p>
-      <div className="border-t border-zinc-100 pt-1 space-y-0.5">
-        <p className="text-zinc-700">% médio: <span className="font-semibold text-brand">{g.percentual_medio_meta.toFixed(1)}%</span></p>
-        <p className="text-zinc-500">Taxa de acerto: {g.taxa_acerto.toFixed(1)}%</p>
-      </div>
-    </div>
+    <text
+      x={x + width / 2}
+      y={y - 6}
+      fill="#52525b"
+      textAnchor="middle"
+      fontSize={11}
+      fontWeight={600}
+    >
+      {fmtK(value)}
+    </text>
   );
 }
 
@@ -69,10 +93,12 @@ function RankingPage() {
     queryFn: getRankingGestores,
   });
 
-  const chartHeight = Math.max(ranking.length * 60, 200);
+  const chartData = ranking.map((g) => ({
+    ...g,
+    label: `${MEDAL[g.posicao] ?? `#${g.posicao}`} ${g.gestor_nome}`,
+  }));
 
-  const labelNome = (entry: RankingGestor) =>
-    `${MEDAL[entry.posicao] ?? `#${entry.posicao}`} ${entry.gestor_nome}`;
+  const temMeta = ranking.some((g) => g.meta_receita_total != null);
 
   return (
     <AppShell title="Ranking de Gestores">
@@ -83,13 +109,13 @@ function RankingPage() {
           <p className="text-sm font-semibold text-brand">1 ponto por farmácia que bate a meta</p>
           <p className="text-xs text-zinc-600 mt-0.5">
             Cada farmácia tem sua própria meta. Quando bate, o gestor ganha 1 ponto.
-            Faturamento <strong>não</strong> conta — só metas batidas.
+            Faturamento <strong>não</strong> conta para o ranking — só metas batidas.
           </p>
         </div>
       </div>
 
       {isLoading && (
-        <div className="bg-white rounded-xl ring-1 ring-black/5 h-72 animate-pulse" />
+        <div className="bg-white rounded-xl ring-1 ring-black/5 h-80 animate-pulse" />
       )}
 
       {!isLoading && ranking.length === 0 && (
@@ -102,125 +128,159 @@ function RankingPage() {
 
       {!isLoading && ranking.length > 0 && (
         <>
-          {/* Gráfico principal — Pontos */}
+          {/* Gráfico Meta x Resultado — Receita */}
           <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-6">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold text-zinc-900">Pontuação por Gestor</h2>
-              <p className="text-xs text-zinc-400 mt-0.5">1 ponto = 1 farmácia com meta batida</p>
+            <div className="mb-6">
+              <h2 className="text-base font-bold text-zinc-900">Meta × Resultado</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">Receita realizada vs meta de receita por gestor</p>
             </div>
-            <ResponsiveContainer width="100%" height={chartHeight}>
-              <BarChart
-                data={ranking}
-                layout="vertical"
-                margin={{ top: 4, right: 60, left: 0, bottom: 4 }}
-                barCategoryGap="30%"
+
+            <ResponsiveContainer width="100%" height={340}>
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 28, right: 20, left: 10, bottom: 8 }}
+                barCategoryGap="35%"
               >
-                <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f4f4f5" />
+                <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="#f4f4f5" />
                 <XAxis
-                  type="number"
+                  dataKey="label"
+                  tick={{ fontSize: 12, fill: "#52525b", fontWeight: 500 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={fmtK}
+                  tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={52}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f9fafb" }} />
+                <Legend
+                  wrapperStyle={{ fontSize: 12, paddingTop: 16 }}
+                  formatter={(value) =>
+                    value === "receita_total" ? "Resultado" : "Meta"
+                  }
+                />
+
+                {/* Barras — Resultado */}
+                <Bar dataKey="receita_total" name="receita_total" maxBarSize={52} radius={[6, 6, 0, 0]}>
+                  {chartData.map((g) => {
+                    const pct = g.percentual_medio_meta;
+                    const fill = !g.tem_meta
+                      ? "#d4d4d8"
+                      : pct >= 100
+                      ? "#10b981"
+                      : pct >= 70
+                      ? "#f59e0b"
+                      : "#f87171";
+                    return <Cell key={g.gestor_id} fill={fill} />;
+                  })}
+                  <LabelList content={<CustomLabel />} />
+                </Bar>
+
+                {/* Linha — Meta (só renderiza se houver meta_receita_total) */}
+                {temMeta && (
+                  <Line
+                    dataKey="meta_receita_total"
+                    name="meta_receita_total"
+                    type="monotone"
+                    stroke="#6366f1"
+                    strokeWidth={2.5}
+                    dot={{ r: 5, fill: "#6366f1", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 7 }}
+                  />
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+
+            {/* Legenda de cores das barras */}
+            <div className="flex items-center gap-5 mt-4 flex-wrap">
+              <span className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">Cor das barras:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm bg-emerald-500 inline-block" />
+                <span className="text-xs text-zinc-500">Meta batida (≥ 100%)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm bg-amber-400 inline-block" />
+                <span className="text-xs text-zinc-500">Próximo (70–99%)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm bg-red-400 inline-block" />
+                <span className="text-xs text-zinc-500">Abaixo da meta (&lt; 70%)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm bg-zinc-300 inline-block" />
+                <span className="text-xs text-zinc-500">Sem meta definida</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Gráfico Pontos — ranking final */}
+          <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-6">
+            <div className="mb-6">
+              <h2 className="text-base font-bold text-zinc-900">Pontuação Final</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">1 ponto = 1 farmácia com meta batida no período</p>
+            </div>
+
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 28, right: 20, left: 0, bottom: 8 }}
+                barCategoryGap="35%"
+              >
+                <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="#f4f4f5" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 12, fill: "#52525b", fontWeight: 500 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
                   allowDecimals={false}
                   tick={{ fontSize: 11, fill: "#a1a1aa" }}
                   axisLine={false}
                   tickLine={false}
-                  label={{ value: "Pontos", position: "insideBottomRight", offset: -4, fontSize: 10, fill: "#a1a1aa" }}
+                  width={32}
                 />
-                <YAxis
-                  type="category"
-                  dataKey={(entry: RankingGestor) => labelNome(entry)}
-                  width={130}
-                  tick={{ fontSize: 13, fill: "#18181b", fontWeight: 500 }}
-                  axisLine={false}
-                  tickLine={false}
+                <Tooltip
+                  cursor={{ fill: "#f9fafb" }}
+                  formatter={(v: number) => [`${v} ${v === 1 ? "ponto" : "pontos"}`, "Pontuação"]}
+                  labelFormatter={(l) => l}
+                  contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e4e4e7" }}
                 />
-                <Tooltip content={<CustomTooltipPontos />} cursor={{ fill: "#f4f4f5" }} />
-                <Bar dataKey="pontos" radius={[0, 6, 6, 0]} maxBarSize={36}>
-                  {ranking.map((g) => (
-                    <Cell key={g.gestor_id} fill={barColor(g.pontos, g.tem_meta)} />
-                  ))}
-                  <LabelList
-                    dataKey="pontos"
-                    position="right"
-                    style={{ fontSize: 13, fontWeight: 700, fill: "#18181b" }}
-                    formatter={(v: number) => v === 0 ? "0 pts" : `${v} ${v === 1 ? "pt" : "pts"}`}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
 
-          {/* Gráfico secundário — % Médio da meta */}
-          <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-6">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold text-zinc-900">% Médio Atingido da Meta</h2>
-              <p className="text-xs text-zinc-400 mt-0.5">Média de quanto cada gestor chegou na meta de suas farmácias</p>
-            </div>
-            <ResponsiveContainer width="100%" height={chartHeight}>
-              <BarChart
-                data={ranking}
-                layout="vertical"
-                margin={{ top: 4, right: 70, left: 0, bottom: 4 }}
-                barCategoryGap="30%"
-              >
-                <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f4f4f5" />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tick={{ fontSize: 11, fill: "#a1a1aa" }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${v}%`}
+                {/* Linha de metas possíveis */}
+                <Line
+                  dataKey="farmacias_com_meta"
+                  name="farmacias_com_meta"
+                  type="monotone"
+                  stroke="#6366f1"
+                  strokeWidth={2.5}
+                  strokeDasharray="6 3"
+                  dot={{ r: 5, fill: "#6366f1", strokeWidth: 2, stroke: "#fff" }}
+                  legendType="none"
                 />
-                <YAxis
-                  type="category"
-                  dataKey={(entry: RankingGestor) => labelNome(entry)}
-                  width={130}
-                  tick={{ fontSize: 13, fill: "#18181b", fontWeight: 500 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip content={<CustomTooltipAcerto />} cursor={{ fill: "#f4f4f5" }} />
-                <Bar dataKey="percentual_medio_meta" radius={[0, 6, 6, 0]} maxBarSize={36} fill="#6366f1">
-                  {ranking.map((g) => (
+
+                <Bar dataKey="pontos" name="pontos" maxBarSize={52} radius={[6, 6, 0, 0]}>
+                  {chartData.map((g) => (
                     <Cell
                       key={g.gestor_id}
-                      fill={
-                        !g.tem_meta ? "#e4e4e7"
-                        : g.percentual_medio_meta >= 100 ? "#10b981"
-                        : g.percentual_medio_meta >= 70 ? "#6366f1"
-                        : "#f59e0b"
-                      }
+                      fill={g.pontos > 0 ? "#10b981" : "#fca5a5"}
                     />
                   ))}
                   <LabelList
-                    dataKey="percentual_medio_meta"
-                    position="right"
-                    style={{ fontSize: 12, fontWeight: 600, fill: "#52525b" }}
-                    formatter={(v: number) => `${v.toFixed(1)}%`}
+                    dataKey="pontos"
+                    position="top"
+                    style={{ fontSize: 13, fontWeight: 700, fill: "#18181b" }}
+                    formatter={(v: number) => `${v} pt${v !== 1 ? "s" : ""}`}
                   />
                 </Bar>
-              </BarChart>
+              </ComposedChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Legenda de cores */}
-          <div className="flex items-center gap-5 px-1 flex-wrap">
-            <span className="text-xs text-zinc-400 font-medium">Legenda:</span>
-            <div className="flex items-center gap-1.5">
-              <span className="size-3 rounded-sm bg-emerald-500 inline-block" />
-              <span className="text-xs text-zinc-500">Meta batida (≥ 3 pts)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-3 rounded-sm bg-emerald-300 inline-block" />
-              <span className="text-xs text-zinc-500">Parcial</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-3 rounded-sm bg-red-300 inline-block" />
-              <span className="text-xs text-zinc-500">Nenhuma meta batida</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-3 rounded-sm bg-zinc-200 inline-block" />
-              <span className="text-xs text-zinc-500">Sem meta cadastrada</span>
-            </div>
+            <p className="text-[10px] text-zinc-400 mt-2">
+              Linha pontilhada = total de farmácias com meta cadastrada (potencial máximo de pontos)
+            </p>
           </div>
         </>
       )}

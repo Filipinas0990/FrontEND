@@ -114,6 +114,8 @@ export interface RankingGestor {
   tem_meta: boolean
   receita_total: number
   vendas_total: number
+  meta_receita_total: number | null
+  meta_vendas_total: number | null
 }
 
 export interface FarmaciaEvolucao {
