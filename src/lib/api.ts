@@ -108,10 +108,12 @@ export interface RankingGestor {
   total_farmacias: number
   farmacias_com_meta: number
   farmacias_meta_ok: number
+  pontos: number
   taxa_acerto: number
   percentual_medio_meta: number
+  tem_meta: boolean
   receita_total: number
-  meta_receita_total: number
+  vendas_total: number
 }
 
 export interface FarmaciaEvolucao {

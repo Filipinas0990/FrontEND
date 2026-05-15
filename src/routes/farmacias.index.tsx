@@ -10,6 +10,7 @@ import {
   createFarmacia,
   updateFarmacia,
   deleteFarmacia,
+  setFarmaciaMeta,
   type Farmacia,
   type Gestor,
 } from "@/lib/api";
@@ -72,6 +73,8 @@ interface FarmaciaForm {
   email: string;
   senha: string;
   gestor_id: string;
+  meta_vendas: string;
+  meta_receita: string;
 }
 
 function FarmaciaDialog({
@@ -86,7 +89,7 @@ function FarmaciaDialog({
   onOpenChange: (v: boolean) => void;
   editing: Farmacia | null;
   gestores: Gestor[];
-  onSave: (data: FarmaciaForm) => void;
+  onSave: (data: FarmaciaForm) => Promise<void>;
   saving: boolean;
 }) {
   const [form, setForm] = useState<FarmaciaForm>({
@@ -95,6 +98,8 @@ function FarmaciaDialog({
     email: "",
     senha: "",
     gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
+    meta_vendas: editing?.meta_vendas != null ? String(editing.meta_vendas) : "",
+    meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
   });
 
   // Reset when target changes
@@ -105,6 +110,8 @@ function FarmaciaDialog({
       email: "",
       senha: "",
       gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
+      meta_vendas: editing?.meta_vendas != null ? String(editing.meta_vendas) : "",
+      meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
     });
   });
 
@@ -138,6 +145,30 @@ function FarmaciaDialog({
               </FormField>
             </>
           )}
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Meta de Vendas (opcional)">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={form.meta_vendas}
+                onChange={set("meta_vendas")}
+                className="form-input"
+                placeholder="Ex: 600"
+              />
+            </FormField>
+            <FormField label="Meta de Receita R$ (opcional)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.meta_receita}
+                onChange={set("meta_receita")}
+                className="form-input"
+                placeholder="Ex: 45000"
+              />
+            </FormField>
+          </div>
           <FormField label="Gestor (opcional)">
             <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
               <option value="">Sem gestor</option>
@@ -189,24 +220,11 @@ function FarmaciasPage() {
 
   const createMut = useMutation({
     mutationFn: createFarmacia,
-    onSuccess: () => {
-      toast.success("Farmácia criada com sucesso!");
-      qc.invalidateQueries({ queryKey: ["farmacias"] });
-      setDialogOpen(false);
-    },
-    onError: (err: Error) => toast.error(err.message),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Parameters<typeof updateFarmacia>[1] }) =>
       updateFarmacia(id, data),
-    onSuccess: () => {
-      toast.success("Farmácia atualizada!");
-      qc.invalidateQueries({ queryKey: ["farmacias"] });
-      setDialogOpen(false);
-      setEditTarget(null);
-    },
-    onError: (err: Error) => toast.error(err.message),
   });
 
   const deleteMut = useMutation({
@@ -219,20 +237,38 @@ function FarmaciasPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const handleSave = (form: { nome: string; url_base: string; email: string; senha: string; gestor_id: string }) => {
+  const handleSave = async (form: FarmaciaForm) => {
     const gestorId = form.gestor_id ? Number(form.gestor_id) : undefined;
-    if (editTarget) {
-      const patch: Parameters<typeof updateFarmacia>[1] = { nome: form.nome };
-      if (form.gestor_id) patch.gestor_id = gestorId ?? null;
-      updateMut.mutate({ id: editTarget.id, data: patch });
-    } else {
-      createMut.mutate({
-        nome: form.nome,
-        url_base: form.url_base,
-        email: form.email,
-        senha: form.senha,
-        gestor_id: gestorId,
-      });
+    const hasMeta = form.meta_vendas !== "" || form.meta_receita !== "";
+    try {
+      let targetId: number;
+      if (editTarget) {
+        const patch: Parameters<typeof updateFarmacia>[1] = { nome: form.nome };
+        if (form.gestor_id !== undefined) patch.gestor_id = gestorId ?? null;
+        await updateMut.mutateAsync({ id: editTarget.id, data: patch });
+        targetId = editTarget.id;
+      } else {
+        const result = await createMut.mutateAsync({
+          nome: form.nome,
+          url_base: form.url_base,
+          email: form.email,
+          senha: form.senha,
+          gestor_id: gestorId,
+        });
+        targetId = result.id;
+      }
+      if (hasMeta) {
+        await setFarmaciaMeta(targetId, {
+          meta_vendas: form.meta_vendas ? Number(form.meta_vendas) : null,
+          meta_receita: form.meta_receita ? Number(form.meta_receita) : null,
+        });
+      }
+      toast.success(editTarget ? "Farmácia atualizada!" : "Farmácia criada com sucesso!");
+      qc.invalidateQueries({ queryKey: ["farmacias"] });
+      setDialogOpen(false);
+      setEditTarget(null);
+    } catch (err) {
+      toast.error((err as Error).message);
     }
   };
 
