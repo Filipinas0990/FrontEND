@@ -290,62 +290,89 @@ function FarmaciasPage() {
       {/* Cards */}
       {!isLoading && (
         <div className="grid grid-cols-3 gap-4">
-          {farmacias.map((p) => (
-            <div
-              key={p.id}
-              className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1 min-w-0 pr-2">
-                  <h3 className="text-sm font-semibold truncate">{p.nome}</h3>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
+          {farmacias.map((p) => {
+            const naoAtingiuMeta = p.atingiu_meta === false;
+            return (
+              <div
+                key={p.id}
+                className={`bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer ${
+                  naoAtingiuMeta
+                    ? "ring-2 ring-red-500"
+                    : "ring-1 ring-black/5"
+                }`}
+                onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <h3 className="text-sm font-semibold truncate">{p.nome}</h3>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 shrink-0 ${alertColor(p.nivel_alerta)}`}>
+                    {alertLabel(p.nivel_alerta)}
+                  </span>
                 </div>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 shrink-0 ${alertColor(p.nivel_alerta)}`}>
-                  {alertLabel(p.nivel_alerta)}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-zinc-100">
-                <div>
-                  <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Receita</div>
-                  <div className="text-sm font-semibold text-zinc-900">{fmtBRL(p.receita_total)}</div>
-                  <Variacao value={p.variacao_receita} />
-                </div>
-                <div>
-                  <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Vendas</div>
-                  <div className="text-sm font-semibold text-zinc-900">{p.vendas_realizadas}</div>
-                  <Variacao value={p.variacao_vendas} />
-                </div>
-                <div>
-                  <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Conversão</div>
-                  <div className={`text-sm font-semibold ${p.taxa_conversao >= 60 ? "text-brand" : "text-zinc-900"}`}>
-                    {p.taxa_conversao.toFixed(1)}%
+                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-zinc-100">
+                  <div>
+                    <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Receita</div>
+                    <div className="text-sm font-semibold text-zinc-900">{fmtBRL(p.receita_total)}</div>
+                    <Variacao value={p.variacao_receita} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Vendas</div>
+                    <div className="text-sm font-semibold text-zinc-900">{p.vendas_realizadas}</div>
+                    <Variacao value={p.variacao_vendas} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Conversão</div>
+                    <div className={`text-sm font-semibold ${p.taxa_conversao >= 60 ? "text-brand" : "text-zinc-900"}`}>
+                      {p.taxa_conversao.toFixed(1)}%
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {admin && (
-                <div
-                  className="flex gap-2 mt-3 pt-3 border-t border-zinc-100"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={() => { setEditTarget(p); setDialogOpen(true); }}
-                    className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
+                {p.meta_receita != null && p.percentual_meta_receita != null && (
+                  <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between text-[10px] text-zinc-500">
+                      <span>Meta receita</span>
+                      <span className={`font-semibold ${p.atingiu_meta ? "text-emerald-600" : "text-red-500"}`}>
+                        {p.percentual_meta_receita.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${p.atingiu_meta ? "bg-emerald-500" : "bg-red-500"}`}
+                        style={{ width: `${Math.min(p.percentual_meta_receita, 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-zinc-400">
+                      {fmtBRL(p.receita_total)} / {fmtBRL(p.meta_receita)}
+                    </div>
+                  </div>
+                )}
+
+                {admin && (
+                  <div
+                    className="flex gap-2 mt-3 pt-3 border-t border-zinc-100"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Pencil className="size-3" /> Editar
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(p)}
-                    className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-600"
-                  >
-                    <Trash2 className="size-3" /> Desativar
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+                    <button
+                      onClick={() => { setEditTarget(p); setDialogOpen(true); }}
+                      className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
+                    >
+                      <Pencil className="size-3" /> Editar
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(p)}
+                      className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-600"
+                    >
+                      <Trash2 className="size-3" /> Desativar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

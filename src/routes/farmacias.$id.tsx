@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Users, Search, BarChart2, MessageCircle, ShoppingCart, DollarSign, TrendingUp } from "lucide-react";
+import { ArrowLeft, Users, Search, BarChart2, MessageCircle, ShoppingCart, DollarSign, TrendingUp, Target } from "lucide-react";
 import type React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PieChart,
   Pie,
@@ -9,8 +10,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { getFarmacias } from "@/lib/api";
+import { getFarmacias, setFarmaciaMeta } from "@/lib/api";
+import { isAdmin } from "@/lib/auth";
 
 export const Route = createFileRoute("/farmacias/$id")({
   component: FarmaciaDetailPage,
@@ -35,6 +38,8 @@ function FarmaciaDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const farmaciaId = Number(id);
+  const admin = isAdmin();
+  const qc = useQueryClient();
 
   const { data: farmacias = [] } = useQuery({
     queryKey: ["farmacias"],
@@ -42,6 +47,27 @@ function FarmaciaDetailPage() {
     staleTime: 60_000,
   });
   const farmacia = farmacias.find((f) => f.id === farmaciaId);
+
+  const [metaVendas, setMetaVendas] = useState("");
+  const [metaReceita, setMetaReceita] = useState("");
+
+  const metaMut = useMutation({
+    mutationFn: (data: { meta_vendas: number | null; meta_receita: number | null }) =>
+      setFarmaciaMeta(farmaciaId, data),
+    onSuccess: () => {
+      toast.success("Meta atualizada com sucesso!");
+      qc.invalidateQueries({ queryKey: ["farmacias"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const handleMetaSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    metaMut.mutate({
+      meta_vendas: metaVendas ? Number(metaVendas) : null,
+      meta_receita: metaReceita ? Number(metaReceita) : null,
+    });
+  };
 
   return (
     <AppShell
@@ -67,17 +93,60 @@ function FarmaciaDetailPage() {
         </section>
       )}
 
+      {/* Meta de desempenho */}
+      {farmacia && (farmacia.meta_receita != null || farmacia.meta_vendas != null) && (
+        <section className="space-y-4">
+          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meta de Desempenho</h3>
+          <div className="grid grid-cols-2 gap-4 max-w-lg">
+            {farmacia.meta_receita != null && farmacia.percentual_meta_receita != null && (
+              <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-medium text-zinc-500">Meta Receita</span>
+                  <span className={`text-xs font-semibold ${farmacia.atingiu_meta ? "text-emerald-600" : "text-red-500"}`}>
+                    {farmacia.percentual_meta_receita.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${farmacia.atingiu_meta ? "bg-emerald-500" : "bg-red-500"}`}
+                    style={{ width: `${Math.min(farmacia.percentual_meta_receita, 100)}%` }}
+                  />
+                </div>
+                <div className="text-[10px] text-zinc-400">
+                  {fmtBRL(farmacia.receita_total)} / {fmtBRL(farmacia.meta_receita)}
+                </div>
+              </div>
+            )}
+            {farmacia.meta_vendas != null && farmacia.percentual_meta_vendas != null && (
+              <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-medium text-zinc-500">Meta Vendas</span>
+                  <span className={`text-xs font-semibold ${(farmacia.percentual_meta_vendas ?? 0) >= 100 ? "text-emerald-600" : "text-red-500"}`}>
+                    {farmacia.percentual_meta_vendas.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${(farmacia.percentual_meta_vendas ?? 0) >= 100 ? "bg-emerald-500" : "bg-red-500"}`}
+                    style={{ width: `${Math.min(farmacia.percentual_meta_vendas, 100)}%` }}
+                  />
+                </div>
+                <div className="text-[10px] text-zinc-400">
+                  {farmacia.vendas_realizadas} / {farmacia.meta_vendas} vendas
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Canais — cards + gráfico de pizza */}
       {farmacia?.canais && farmacia.canais.length > 0 && (
         <section className="space-y-4">
           <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
             Atendimentos por Canal
           </h3>
-
-          {/* Cards individuais por canal */}
           <CanaisCards canais={farmacia.canais} total={farmacia.total_atendimentos} />
-
-          {/* Gráfico de pizza abaixo dos cards */}
           <ChartCard
             title="Distribuição por Canal"
             icon={<Users className="size-4 text-zinc-400" />}
@@ -87,6 +156,61 @@ function FarmaciaDetailPage() {
         </section>
       )}
 
+      {/* Definir meta (admin only) */}
+      {admin && farmacia && (
+        <section className="space-y-4">
+          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Configurar Meta</h3>
+          <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-zinc-100 flex items-center gap-2">
+              <Target className="size-4 text-brand" />
+              <h4 className="text-sm font-semibold text-zinc-900">Definir metas para esta farmácia</h4>
+            </div>
+            <form onSubmit={handleMetaSave} className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Meta de Vendas</label>
+                  <p className="text-[10px] text-zinc-400 mb-1">
+                    Atual: {farmacia.meta_vendas != null ? farmacia.meta_vendas : "Sem meta"}
+                  </p>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={metaVendas}
+                    onChange={(e) => setMetaVendas(e.target.value)}
+                    placeholder={farmacia.meta_vendas != null ? String(farmacia.meta_vendas) : "Ex: 600"}
+                    className="form-input w-full"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Meta de Receita (R$)</label>
+                  <p className="text-[10px] text-zinc-400 mb-1">
+                    Atual: {farmacia.meta_receita != null ? fmtBRL(farmacia.meta_receita) : "Sem meta"}
+                  </p>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={metaReceita}
+                    onChange={(e) => setMetaReceita(e.target.value)}
+                    placeholder={farmacia.meta_receita != null ? String(farmacia.meta_receita) : "Ex: 45000"}
+                    className="form-input w-full"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={metaMut.isPending || (!metaVendas && !metaReceita)}
+                  className="px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                >
+                  {metaMut.isPending ? "Salvando..." : "Salvar Meta"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+      )}
     </AppShell>
   );
 }

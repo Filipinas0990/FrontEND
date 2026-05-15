@@ -94,6 +94,24 @@ export interface Farmacia {
   periodo_fim: string
   data_coleta: string
   canais?: CanalData[]
+  meta_vendas: number | null
+  meta_receita: number | null
+  atingiu_meta: boolean | null
+  percentual_meta_receita: number | null
+  percentual_meta_vendas: number | null
+}
+
+export interface RankingGestor {
+  posicao: number
+  gestor_id: number
+  gestor_nome: string
+  total_farmacias: number
+  farmacias_com_meta: number
+  farmacias_meta_ok: number
+  taxa_acerto: number
+  percentual_medio_meta: number
+  receita_total: number
+  meta_receita_total: number
 }
 
 export interface FarmaciaEvolucao {
@@ -218,6 +236,17 @@ export function updateFarmacia(
 
 export function deleteFarmacia(id: number): Promise<{ mensagem: string }> {
   return req(`/api/farmacias/${id}`, { method: "DELETE" })
+}
+
+export function setFarmaciaMeta(
+  id: number,
+  data: { meta_vendas: number | null; meta_receita: number | null },
+): Promise<{ id: number; meta_vendas: number | null; meta_receita: number | null }> {
+  return req(`/api/farmacias/${id}/meta`, { method: "PATCH", body: JSON.stringify(data) })
+}
+
+export function getRankingGestores(): Promise<RankingGestor[]> {
+  return req("/api/ranking/gestores")
 }
 
 // ── Gestores ───────────────────────────────────────────────────────────────

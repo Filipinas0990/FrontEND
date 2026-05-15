@@ -9,6 +9,7 @@ import {
   Play,
   LogOut,
   Users,
+  Trophy,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -168,6 +169,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
   const navItems = [
     { icon: LayoutDashboard, label: "Painel Geral", to: "/" as const },
     { icon: Building2, label: "Farmácias", to: "/farmacias" as const },
+    { icon: Trophy, label: "Ranking", to: "/ranking" as const },
     { icon: FileBarChart, label: "Relatórios", to: "/relatorios" as const },
     ...(isAdminUser
       ? [{ icon: Users, label: "Gestores", to: "/gestores" as const }]
