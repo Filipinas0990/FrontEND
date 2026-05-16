@@ -327,7 +327,8 @@ function FarmaciasPage() {
       {!isLoading && (
         <div className="grid grid-cols-3 gap-4">
           {farmacias.map((p) => {
-            const naoAtingiuMeta = p.atingiu_meta === false;
+            const semDados = p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0);
+            const naoAtingiuMeta = !semDados && p.atingiu_meta === false;
             return (
               <div
                 key={p.id}
@@ -341,13 +342,21 @@ function FarmaciasPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0 pr-2">
                     <h3 className="text-sm font-semibold truncate">{p.nome}</h3>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
+                    {semDados
+                      ? <p className="text-[10px] text-zinc-400 mt-0.5 italic">Aguardando dados</p>
+                      : <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
+                    }
                   </div>
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 shrink-0 ${alertColor(p.nivel_alerta)}`}>
                     {alertLabel(p.nivel_alerta)}
                   </span>
                 </div>
 
+                {semDados ? (
+                  <div className="pt-3 border-t border-zinc-100 flex items-center justify-center py-4">
+                    <span className="text-xs text-zinc-400 italic">Nenhum dado coletado neste período.</span>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-3 gap-3 pt-3 border-t border-zinc-100">
                   <div>
                     <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Receita</div>
@@ -366,8 +375,9 @@ function FarmaciasPage() {
                     </div>
                   </div>
                 </div>
+                )}
 
-                {p.meta_receita != null && p.percentual_meta_receita != null && (
+                {!semDados && p.meta_receita != null && p.percentual_meta_receita != null && (
                   <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-between text-[10px] text-zinc-500">
                       <span>Meta receita</span>
