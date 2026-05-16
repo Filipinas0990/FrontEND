@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -202,14 +202,16 @@ function FarmaciasPage() {
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
 
-  const { data: farmacias = [], isLoading } = useQuery({
+  const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ["farmacias", filter, query],
     queryFn: () =>
       getFarmacias({
         status: filter !== "todas" ? filter : undefined,
         busca: query || undefined,
       }),
-    placeholderData: (prev) => prev,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const { data: gestores = [] } = useQuery({
@@ -278,14 +280,30 @@ function FarmaciasPage() {
     <AppShell
       title="Farmácias"
       headerRight={
-        admin ? (
+        <div className="flex items-center gap-2">
+          {isFetching && !isLoading && (
+            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <RefreshCw className="size-3 animate-spin" />
+              Atualizando...
+            </span>
+          )}
           <button
-            onClick={() => { setEditTarget(null); setDialogOpen(true); }}
-            className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Atualizar dados"
+            className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-md transition-colors disabled:opacity-40"
           >
-            <Plus className="size-3.5" /> Nova Farmácia
+            <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
           </button>
-        ) : undefined
+          {admin && (
+            <button
+              onClick={() => { setEditTarget(null); setDialogOpen(true); }}
+              className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
+            >
+              <Plus className="size-3.5" /> Nova Farmácia
+            </button>
+          )}
+        </div>
       }
     >
       {/* Filters */}
