@@ -12,7 +12,6 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { getFarmacias, type CanalData } from "@/lib/api";
-import { isAdmin } from "@/lib/auth";
 
 export const Route = createFileRoute("/farmacias/$id")({
   component: FarmaciaDetailPage,
@@ -261,7 +260,6 @@ function FarmaciaDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const farmaciaId = Number(id);
-  const admin = isAdmin();
 
   const [canalAberto, setCanalAberto] = useState<CanalData | null>(null);
 
@@ -290,8 +288,8 @@ function FarmaciaDetailPage() {
           <MetricCard
             label="Receita Total"
             value={fmtBRL(farmacia.receita_total)}
-            delta={`${farmacia.variacao_receita >= 0 ? "+" : ""}${farmacia.variacao_receita.toFixed(1)}% vs semana anterior`}
-            positive={farmacia.variacao_receita >= 0}
+            delta={farmacia.variacao_receita != null ? `${farmacia.variacao_receita >= 0 ? "+" : ""}${farmacia.variacao_receita.toFixed(1)}% vs semana anterior` : undefined}
+            positive={farmacia.variacao_receita != null ? farmacia.variacao_receita >= 0 : undefined}
           />
         </section>
       )}

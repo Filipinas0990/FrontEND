@@ -50,8 +50,8 @@ function alertLabel(nivel: string) {
   return "Ativa";
 }
 
-function Variacao({ value }: { value: number }) {
-  if (value === 0) return <span className="text-zinc-400 text-[10px]">—</span>;
+function Variacao({ value }: { value: number | null | undefined }) {
+  if (value == null || value === 0) return <span className="text-zinc-400 text-[10px]">—</span>;
   const pos = value > 0;
   return (
     <span className={`flex items-center gap-0.5 text-[10px] font-medium ${pos ? "text-emerald-600" : "text-red-600"}`}>
@@ -388,8 +388,8 @@ function FarmaciasPage() {
                   </div>
                   <div>
                     <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Conversão</div>
-                    <div className={`text-sm font-semibold ${p.taxa_conversao >= 60 ? "text-brand" : "text-zinc-900"}`}>
-                      {p.taxa_conversao.toFixed(1)}%
+                    <div className={`text-sm font-semibold ${(p.taxa_conversao ?? 0) >= 60 ? "text-brand" : "text-zinc-900"}`}>
+                      {(p.taxa_conversao ?? 0).toFixed(1)}%
                     </div>
                   </div>
                 </div>
@@ -400,7 +400,7 @@ function FarmaciasPage() {
                     <div className="flex justify-between text-[10px] text-zinc-500">
                       <span>Meta receita</span>
                       <span className={`font-semibold ${p.atingiu_meta ? "text-emerald-600" : "text-red-500"}`}>
-                        {p.percentual_meta_receita.toFixed(1)}%
+                        {(p.percentual_meta_receita ?? 0).toFixed(1)}%
                       </span>
                     </div>
                     <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
