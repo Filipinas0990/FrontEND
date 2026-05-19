@@ -198,7 +198,11 @@ function GraficoCorrida({ items }: { items: CorridaItem[] }) {
               >
                 <span
                   className="text-2xl leading-none select-none"
-                  style={{ filter: `drop-shadow(0 0 3px ${color})` }}
+                  style={{
+                    display: "inline-block",
+                    transform: "scaleX(-1)",
+                    filter: `drop-shadow(0 0 3px ${color})`,
+                  }}
                 >
                   🏎️
                 </span>
@@ -393,15 +397,30 @@ function RankingGestoresPage() {
     staleTime: 60_000,
   });
 
-  const corridaItems = useMemo<CorridaItem[]>(() => {
+  const fullRanking = useMemo<RankingGestor[]>(() => {
     const regulares = todosGestores.filter((g) => !g.is_admin);
+    if (!regulares.length) return ranking;
     const merged = regulares.map((g) => {
       const r = ranking.find((r) => r.gestor_id === g.id);
-      return { gestor_id: g.id, gestor_nome: g.nome, pontos: r?.pontos ?? 0 };
+      return r ?? {
+        gestor_id: g.id, gestor_nome: g.nome, posicao: 999,
+        pontos: 0, total_farmacias: g.farmacias,
+        farmacias_com_meta: 0, farmacias_meta_ok: 0,
+        taxa_acerto: 0, percentual_medio_meta: 0, tem_meta: false,
+        receita_total: 0, vendas_total: 0,
+        meta_receita_total: null, meta_vendas_total: null,
+      };
     });
     merged.sort((a, b) => b.pontos - a.pontos || a.gestor_nome.localeCompare(b.gestor_nome));
     return merged.map((g, i) => ({ ...g, posicao: i + 1 }));
   }, [todosGestores, ranking]);
+
+  const corridaItems = useMemo<CorridaItem[]>(() =>
+    fullRanking.map((g) => ({
+      gestor_id: g.gestor_id, gestor_nome: g.gestor_nome,
+      pontos: g.pontos, posicao: g.posicao,
+    })),
+  [fullRanking]);
 
   const lider = ranking[0];
   const totalPontos = ranking.reduce((s, g) => s + g.pontos, 0);
@@ -470,21 +489,21 @@ function RankingGestoresPage() {
       >
         {loadRanking
           ? <div className="h-72 bg-zinc-50 rounded-lg animate-pulse" />
-          : ranking.length === 0
+          : fullRanking.length === 0
           ? <EmptyState />
-          : <GraficoPontos ranking={ranking} />
+          : <GraficoPontos ranking={fullRanking} />
         }
       </ChartPanel>
 
       {/* Corrida de Carrinhos */}
       <ChartPanel
         title="Corrida dos Gestores"
-        subtitle="Cada carrinho representa um gestor — posição proporcional aos pontos conquistados"
-        icon={<span className="text-lg">🛒</span>}
+        subtitle="Cada kart representa um gestor — posição proporcional aos pontos conquistados"
+        icon={<span className="text-lg">🏎️</span>}
       >
         {loadRanking
           ? <div className="h-40 bg-zinc-50 rounded-lg animate-pulse" />
-          : ranking.length === 0
+          : corridaItems.length === 0
           ? <EmptyState />
           : <GraficoCorrida items={corridaItems} />
         }
@@ -498,9 +517,9 @@ function RankingGestoresPage() {
       >
         {loadRanking
           ? <div className="h-48 bg-zinc-50 rounded-lg animate-pulse" />
-          : ranking.length === 0
+          : fullRanking.length === 0
           ? <EmptyState />
-          : <GraficoAcerto ranking={ranking} />
+          : <GraficoAcerto ranking={fullRanking} />
         }
       </ChartPanel>
 
