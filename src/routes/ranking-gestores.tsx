@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ShoppingCart, Target, TrendingUp } from "lucide-react";
+import { CalendarDays, Target, TrendingUp } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, LabelList, Legend,
@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import {
-  getRankingGestores, getRankingHistorico,
+  getRankingGestores, getRankingHistorico, getGestores,
   type RankingGestor, type RankingHistoricoEntry,
 } from "@/lib/api";
 
@@ -138,53 +138,57 @@ const CART_COLORS = [
   "#f97316", // laranja
 ];
 
-function GraficoCorrida({ ranking }: { ranking: RankingGestor[] }) {
+type CorridaItem = { gestor_id: number; gestor_nome: string; pontos: number; posicao: number };
+
+function GraficoCorrida({ items }: { items: CorridaItem[] }) {
   const [go, setGo] = useState(false);
 
   useEffect(() => {
     setGo(false);
     const t = setTimeout(() => setGo(true), 120);
     return () => clearTimeout(t);
-  }, [ranking]);
+  }, [items]);
 
-  const maxPontos = Math.max(...ranking.map((g) => g.pontos), 1);
-  const sorted = [...ranking].sort((a, b) => a.posicao - b.posicao);
+  const maxPontos = Math.max(...items.map((g) => g.pontos), 1);
 
   return (
-    <div className="space-y-3 py-1">
-      {sorted.map((g, i) => {
+    <div className="space-y-2 py-1">
+      {items.map((g, i) => {
         const color = CART_COLORS[i % CART_COLORS.length];
         const pct = go ? (g.pontos / maxPontos) * 80 : 0;
 
         return (
           <div key={g.gestor_id} className="flex items-center gap-3">
-            {/* Nome + pontos */}
-            <div className="w-20 shrink-0 text-right">
-              <p className="text-xs font-semibold text-zinc-700 truncate">{g.gestor_nome}</p>
-              <p className="text-[10px] text-zinc-400 leading-tight">
-                {g.pontos} {g.pontos === 1 ? "pt" : "pts"}
-              </p>
+            {/* Indicador de cor + nome + pontos */}
+            <div className="w-20 shrink-0 flex items-center justify-end gap-1.5">
+              <div className="text-right min-w-0">
+                <p className="text-xs font-semibold text-zinc-700 truncate">{g.gestor_nome}</p>
+                <p className="text-[10px] text-zinc-400 leading-tight">
+                  {g.pontos} {g.pontos === 1 ? "pt" : "pts"}
+                </p>
+              </div>
+              <div className="w-1.5 h-8 rounded-full shrink-0" style={{ background: color }} />
             </div>
 
             {/* Pista */}
-            <div className="relative flex-1 h-12 bg-zinc-50 rounded-lg border border-zinc-200 overflow-hidden">
+            <div
+              className="relative flex-1 h-12 bg-zinc-50 rounded-lg border border-zinc-200 overflow-hidden"
+              style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+            >
               {/* Linha central tracejada */}
               <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-zinc-200" />
 
               {/* Faixa xadrez (chegada) */}
               <div
-                className="absolute right-0 top-0 bottom-0 w-10 opacity-25"
+                className="absolute right-0 top-0 bottom-0 w-10 opacity-20"
                 style={{
-                  backgroundImage:
-                    "repeating-conic-gradient(#18181b 0% 25%, #ffffff 0% 50%)",
+                  backgroundImage: "repeating-conic-gradient(#18181b 0% 25%, #ffffff 0% 50%)",
                   backgroundSize: "8px 8px",
                 }}
               />
-              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-base leading-none select-none">
-                🏁
-              </span>
+              <span className="absolute right-1 top-1/2 -translate-y-1/2 text-base leading-none select-none">🏁</span>
 
-              {/* Carrinho animado */}
+              {/* Kart animado */}
               <div
                 className="absolute top-1/2 -translate-y-1/2"
                 style={{
@@ -192,12 +196,12 @@ function GraficoCorrida({ ranking }: { ranking: RankingGestor[] }) {
                   transition: "left 1.4s cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
               >
-                <ShoppingCart
-                  size={22}
-                  style={{ color }}
-                  strokeWidth={2.5}
-                  className="drop-shadow-sm"
-                />
+                <span
+                  className="text-2xl leading-none select-none"
+                  style={{ filter: `drop-shadow(0 0 3px ${color})` }}
+                >
+                  🏎️
+                </span>
               </div>
             </div>
 
@@ -383,6 +387,22 @@ function RankingGestoresPage() {
     staleTime: 5 * 60_000,
   });
 
+  const { data: todosGestores = [] } = useQuery({
+    queryKey: ["gestores"],
+    queryFn: getGestores,
+    staleTime: 60_000,
+  });
+
+  const corridaItems = useMemo<CorridaItem[]>(() => {
+    const regulares = todosGestores.filter((g) => !g.is_admin);
+    const merged = regulares.map((g) => {
+      const r = ranking.find((r) => r.gestor_id === g.id);
+      return { gestor_id: g.id, gestor_nome: g.nome, pontos: r?.pontos ?? 0 };
+    });
+    merged.sort((a, b) => b.pontos - a.pontos || a.gestor_nome.localeCompare(b.gestor_nome));
+    return merged.map((g, i) => ({ ...g, posicao: i + 1 }));
+  }, [todosGestores, ranking]);
+
   const lider = ranking[0];
   const totalPontos = ranking.reduce((s, g) => s + g.pontos, 0);
   const mediaAcerto = ranking.length
@@ -466,7 +486,7 @@ function RankingGestoresPage() {
           ? <div className="h-40 bg-zinc-50 rounded-lg animate-pulse" />
           : ranking.length === 0
           ? <EmptyState />
-          : <GraficoCorrida ranking={ranking} />
+          : <GraficoCorrida items={corridaItems} />
         }
       </ChartPanel>
 
