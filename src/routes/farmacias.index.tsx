@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -101,8 +101,7 @@ function FarmaciaDialog({
   });
   const [confirmPending, setConfirmPending] = useState<FarmaciaForm | null>(null);
 
-  // Reset when target changes
-  useState(() => {
+  useEffect(() => {
     setForm({
       nome: editing?.nome ?? "",
       url_base: "",
@@ -111,7 +110,7 @@ function FarmaciaDialog({
       gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
       meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
     });
-  });
+  }, [editing]);
 
   const set = (f: keyof FarmaciaForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((p) => ({ ...p, [f]: e.target.value }));
