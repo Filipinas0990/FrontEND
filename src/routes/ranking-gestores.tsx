@@ -81,11 +81,11 @@ function TooltipPontos({ active, payload }: any) {
         </div>
         <div className="flex justify-between gap-6">
           <span className="text-zinc-500">Taxa acerto</span>
-          <span className="font-semibold">{g.taxa_acerto.toFixed(1)}%</span>
+          <span className="font-semibold">{(g.taxa_acerto ?? 0).toFixed(1)}%</span>
         </div>
         <div className="flex justify-between gap-6">
           <span className="text-zinc-500">% médio meta</span>
-          <span className="font-semibold">{g.percentual_medio_meta.toFixed(1)}%</span>
+          <span className="font-semibold">{(g.percentual_medio_meta ?? 0).toFixed(1)}%</span>
         </div>
       </div>
     </div>
@@ -100,11 +100,11 @@ function TooltipAcerto({ active, payload }: any) {
       <p className="font-bold text-zinc-900 mb-1">{g.gestor_nome}</p>
       <div className="flex justify-between gap-4">
         <span className="text-zinc-500">Taxa acerto</span>
-        <span className="font-bold text-brand">{g.taxa_acerto.toFixed(1)}%</span>
+        <span className="font-bold text-brand">{(g.taxa_acerto ?? 0).toFixed(1)}%</span>
       </div>
       <div className="flex justify-between gap-4 mt-0.5">
         <span className="text-zinc-500">% médio meta</span>
-        <span className="font-semibold">{g.percentual_medio_meta.toFixed(1)}%</span>
+        <span className="font-semibold">{(g.percentual_medio_meta ?? 0).toFixed(1)}%</span>
       </div>
     </div>
   );
@@ -196,13 +196,13 @@ function GraficoAcerto({ ranking }: { ranking: RankingGestor[] }) {
         {/* Barra taxa acerto */}
         <Bar dataKey="taxa_acerto" name="Taxa de acerto" radius={[0, 6, 6, 0]} maxBarSize={22}>
           {data.map((g) => (
-            <Cell key={g.gestor_id} fill={g.taxa_acerto >= 80 ? "#10b981" : g.taxa_acerto >= 50 ? "#f59e0b" : "#f87171"} />
+            <Cell key={g.gestor_id} fill={(g.taxa_acerto ?? 0) >= 80 ? "#10b981" : (g.taxa_acerto ?? 0) >= 50 ? "#f59e0b" : "#f87171"} />
           ))}
           <LabelList
             dataKey="taxa_acerto"
             position="right"
             style={{ fontSize: 12, fontWeight: 700, fill: "#3f3f46" }}
-            formatter={(v: number) => `${v.toFixed(1)}%`}
+            formatter={(v: number) => `${(v ?? 0).toFixed(1)}%`}
           />
         </Bar>
       </ComposedChart>
@@ -297,7 +297,7 @@ function RankingGestoresPage() {
   const lider = ranking[0];
   const totalPontos = ranking.reduce((s, g) => s + g.pontos, 0);
   const mediaAcerto = ranking.length
-    ? ranking.reduce((s, g) => s + g.taxa_acerto, 0) / ranking.length
+    ? ranking.reduce((s, g) => s + (g.taxa_acerto ?? 0), 0) / ranking.length
     : 0;
 
   return (
@@ -340,7 +340,7 @@ function RankingGestoresPage() {
           />
           <StatCard
             label="Média de acerto"
-            value={`${mediaAcerto.toFixed(1)}%`}
+            value={`${(mediaAcerto ?? 0).toFixed(1)}%`}
             sub="entre todos os gestores"
             color="text-brand"
           />

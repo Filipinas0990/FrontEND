@@ -90,7 +90,7 @@ function Index() {
         },
         {
           label: "Taxa de Conversão",
-          value: `${painel.taxa_conversao_media.toFixed(1)}%`,
+          value: `${(painel.taxa_conversao_media ?? 0).toFixed(1)}%`,
           icon: TrendingUp,
           color: "text-brand",
         },
@@ -209,7 +209,7 @@ function Index() {
                     </td>
                     <td className="px-6 py-3 text-sm">{fmtBRL(p.receita_total)}</td>
                     <td className="px-6 py-3 text-sm">{p.vendas_realizadas}</td>
-                    <td className="px-6 py-3 text-sm">{p.taxa_conversao.toFixed(1)}%</td>
+                    <td className="px-6 py-3 text-sm">{(p.taxa_conversao ?? 0).toFixed(1)}%</td>
                     <td className="px-6 py-3">
                       <span className={`flex items-center gap-1 text-[10px] font-medium ${p.variacao_receita >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                         {p.variacao_receita >= 0
