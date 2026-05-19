@@ -12,7 +12,8 @@
       "Bash(npx vercel *)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\FRONT-END\\\\src\" -Recurse -Filter \"*.tsx\" -o Name)",
       "Bash(Select-Object -First 30)",
-      "Bash(grep -E \"\\\\.json$|\\\\.config\\\\.\")"
+      "Bash(grep -E \"\\\\.json$|\\\\.config\\\\.\")",
+      "Bash(dir \"c:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\AUTOMAÇÂO\")"
     ]
   }
 }

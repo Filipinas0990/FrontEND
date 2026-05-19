@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Target, TrendingUp } from "lucide-react";
+import { CalendarDays, ShoppingCart, Target, TrendingUp } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, LabelList, Legend,
@@ -121,6 +121,95 @@ function TooltipEvolucao({ active, payload, label }: any) {
           <span className="font-bold text-zinc-900">{p.value} {p.value === 1 ? "pt" : "pts"}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Corrida de Carrinhos ───────────────────────────────────────────────────
+
+const CART_COLORS = [
+  "#ef4444", // vermelho
+  "#f59e0b", // amarelo
+  "#10b981", // verde
+  "#3b82f6", // azul
+  "#8b5cf6", // roxo
+  "#ec4899", // rosa
+  "#14b8a6", // teal
+  "#f97316", // laranja
+];
+
+function GraficoCorrida({ ranking }: { ranking: RankingGestor[] }) {
+  const [go, setGo] = useState(false);
+
+  useEffect(() => {
+    setGo(false);
+    const t = setTimeout(() => setGo(true), 120);
+    return () => clearTimeout(t);
+  }, [ranking]);
+
+  const maxPontos = Math.max(...ranking.map((g) => g.pontos), 1);
+  const sorted = [...ranking].sort((a, b) => a.posicao - b.posicao);
+
+  return (
+    <div className="space-y-3 py-1">
+      {sorted.map((g, i) => {
+        const color = CART_COLORS[i % CART_COLORS.length];
+        const pct = go ? (g.pontos / maxPontos) * 80 : 0;
+
+        return (
+          <div key={g.gestor_id} className="flex items-center gap-3">
+            {/* Nome + pontos */}
+            <div className="w-20 shrink-0 text-right">
+              <p className="text-xs font-semibold text-zinc-700 truncate">{g.gestor_nome}</p>
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                {g.pontos} {g.pontos === 1 ? "pt" : "pts"}
+              </p>
+            </div>
+
+            {/* Pista */}
+            <div className="relative flex-1 h-12 bg-zinc-50 rounded-lg border border-zinc-200 overflow-hidden">
+              {/* Linha central tracejada */}
+              <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-zinc-200" />
+
+              {/* Faixa xadrez (chegada) */}
+              <div
+                className="absolute right-0 top-0 bottom-0 w-10 opacity-25"
+                style={{
+                  backgroundImage:
+                    "repeating-conic-gradient(#18181b 0% 25%, #ffffff 0% 50%)",
+                  backgroundSize: "8px 8px",
+                }}
+              />
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-base leading-none select-none">
+                🏁
+              </span>
+
+              {/* Carrinho animado */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2"
+                style={{
+                  left: `${pct}%`,
+                  transition: "left 1.4s cubic-bezier(0.22, 1, 0.36, 1)",
+                }}
+              >
+                <ShoppingCart
+                  size={22}
+                  style={{ color }}
+                  strokeWidth={2.5}
+                  className="drop-shadow-sm"
+                />
+              </div>
+            </div>
+
+            {/* Medalha / posição */}
+            <div className="w-7 shrink-0 text-center text-sm leading-none">
+              {g.posicao === 1 ? "🥇" : g.posicao === 2 ? "🥈" : g.posicao === 3 ? "🥉" : (
+                <span className="text-[11px] font-black" style={{ color }}>#{g.posicao}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -364,6 +453,20 @@ function RankingGestoresPage() {
           : ranking.length === 0
           ? <EmptyState />
           : <GraficoPontos ranking={ranking} />
+        }
+      </ChartPanel>
+
+      {/* Corrida de Carrinhos */}
+      <ChartPanel
+        title="Corrida dos Gestores"
+        subtitle="Cada carrinho representa um gestor — posição proporcional aos pontos conquistados"
+        icon={<span className="text-lg">🛒</span>}
+      >
+        {loadRanking
+          ? <div className="h-40 bg-zinc-50 rounded-lg animate-pulse" />
+          : ranking.length === 0
+          ? <EmptyState />
+          : <GraficoCorrida ranking={ranking} />
         }
       </ChartPanel>
 
