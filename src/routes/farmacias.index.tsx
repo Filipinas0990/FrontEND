@@ -459,23 +459,36 @@ function FarmaciasPage() {
                 </div>
                 )}
 
-                {!semDados && p.meta_receita != null && p.percentual_meta_receita != null && (
+                {!semDados && (
                   <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-between text-[10px] text-zinc-500">
-                      <span>Meta receita</span>
-                      <span className={`font-semibold ${p.atingiu_meta ? "text-emerald-600" : "text-red-500"}`}>
-                        {(p.percentual_meta_receita ?? 0).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${p.atingiu_meta ? "bg-emerald-500" : "bg-red-500"}`}
-                        style={{ width: `${Math.min(p.percentual_meta_receita, 100)}%` }}
-                      />
-                    </div>
-                    <div className="text-[10px] text-zinc-400">
-                      {fmtBRL(p.receita_total)} / {fmtBRL(p.meta_receita)}
-                    </div>
+                    {p.meta_receita != null && p.percentual_meta_receita != null ? (
+                      <>
+                        <div className="flex justify-between text-[10px] text-zinc-500">
+                          <span>Meta receita</span>
+                          <span className={`font-semibold ${p.atingiu_meta ? "text-emerald-600" : "text-red-500"}`}>
+                            {(p.percentual_meta_receita ?? 0).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${p.atingiu_meta ? "bg-emerald-500" : "bg-red-500"}`}
+                            style={{ width: `${Math.min(p.percentual_meta_receita, 100)}%` }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-zinc-400">
+                          {fmtBRL(p.receita_total)} / {fmtBRL(p.meta_receita)}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-[10px] text-zinc-400">
+                          <span>Meta receita</span>
+                          <span>Sem meta</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-zinc-100 rounded-full" />
+                        <div className="text-[10px] text-zinc-300">—</div>
+                      </>
+                    )}
                   </div>
                 )}
 
