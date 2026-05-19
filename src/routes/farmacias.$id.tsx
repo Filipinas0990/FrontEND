@@ -295,11 +295,11 @@ function FarmaciaDetailPage() {
       )}
 
       {/* Meta de desempenho */}
-      {farmacia && (farmacia.meta_receita != null || farmacia.meta_vendas != null) && (
+      {farmacia && farmacia.meta_receita != null && (
         <section className="space-y-4">
           <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meta de Desempenho</h3>
-          <div className="grid grid-cols-2 gap-4 max-w-lg">
-            {farmacia.meta_receita != null && farmacia.percentual_meta_receita != null && (
+          <div className="max-w-sm">
+            {farmacia.percentual_meta_receita != null && (
               <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-medium text-zinc-500">Meta Receita</span>
@@ -315,25 +315,6 @@ function FarmaciaDetailPage() {
                 </div>
                 <div className="text-[10px] text-zinc-400">
                   {fmtBRL(farmacia.receita_total)} / {fmtBRL(farmacia.meta_receita)}
-                </div>
-              </div>
-            )}
-            {farmacia.meta_vendas != null && farmacia.percentual_meta_vendas != null && (
-              <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-medium text-zinc-500">Meta Vendas</span>
-                  <span className={`text-xs font-semibold ${(farmacia.percentual_meta_vendas ?? 0) >= 100 ? "text-emerald-600" : "text-red-500"}`}>
-                    {farmacia.percentual_meta_vendas.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${(farmacia.percentual_meta_vendas ?? 0) >= 100 ? "bg-emerald-500" : "bg-red-500"}`}
-                    style={{ width: `${Math.min(farmacia.percentual_meta_vendas, 100)}%` }}
-                  />
-                </div>
-                <div className="text-[10px] text-zinc-400">
-                  {farmacia.vendas_realizadas} / {farmacia.meta_vendas} vendas
                 </div>
               </div>
             )}

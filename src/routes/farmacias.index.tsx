@@ -73,7 +73,6 @@ interface FarmaciaForm {
   email: string;
   senha: string;
   gestor_id: string;
-  meta_vendas: string;
   meta_receita: string;
 }
 
@@ -98,9 +97,9 @@ function FarmaciaDialog({
     email: "",
     senha: "",
     gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
-    meta_vendas: editing?.meta_vendas != null ? String(editing.meta_vendas) : "",
     meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
   });
+  const [confirmPending, setConfirmPending] = useState<FarmaciaForm | null>(null);
 
   // Reset when target changes
   useState(() => {
@@ -110,7 +109,6 @@ function FarmaciaDialog({
       email: "",
       senha: "",
       gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
-      meta_vendas: editing?.meta_vendas != null ? String(editing.meta_vendas) : "",
       meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
     });
   });
@@ -118,45 +116,50 @@ function FarmaciaDialog({
   const set = (f: keyof FarmaciaForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((p) => ({ ...p, [f]: e.target.value }));
 
+  const metaNum = form.meta_receita ? Number(form.meta_receita) : null;
+  const metaFormatada = metaNum != null && !isNaN(metaNum)
+    ? metaNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : null;
+
+  const gestorNome = form.gestor_id
+    ? gestores.find((g) => String(g.id) === form.gestor_id)?.nome ?? "—"
+    : "Sem gestor";
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setConfirmPending(form);
+  };
+
+  const handleConfirm = async () => {
+    if (!confirmPending) return;
+    await onSave(confirmPending);
+    setConfirmPending(null);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Editar Farmácia" : "Nova Farmácia"}</DialogTitle>
-        </DialogHeader>
-        <form
-          id="farmacia-form"
-          onSubmit={(e) => { e.preventDefault(); onSave(form); }}
-          className="space-y-3 py-2"
-        >
-          <FormField label="Nome">
-            <input required value={form.nome} onChange={set("nome")} className="form-input" placeholder="Farmácia Central" />
-          </FormField>
-          {!editing && (
-            <>
-              <FormField label="URL Base (PharmaChatBot)">
-                <input required value={form.url_base} onChange={set("url_base")} className="form-input" placeholder="https://app13.pharmachatbot.com.br/..." />
-              </FormField>
-              <FormField label="E-mail (PharmaChatBot)">
-                <input required type="email" value={form.email} onChange={set("email")} className="form-input" placeholder="login@farmacia.com" />
-              </FormField>
-              <FormField label="Senha (PharmaChatBot)">
-                <input required type="password" value={form.senha} onChange={set("senha")} className="form-input" placeholder="••••••••" />
-              </FormField>
-            </>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Meta de Vendas (opcional)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={form.meta_vendas}
-                onChange={set("meta_vendas")}
-                className="form-input"
-                placeholder="Ex: 600"
-              />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Editar Farmácia" : "Nova Farmácia"}</DialogTitle>
+          </DialogHeader>
+          <form id="farmacia-form" onSubmit={handleSubmit} className="space-y-3 py-2">
+            <FormField label="Nome">
+              <input required value={form.nome} onChange={set("nome")} className="form-input" placeholder="Farmácia Central" />
             </FormField>
+            {!editing && (
+              <>
+                <FormField label="URL Base (PharmaChatBot)">
+                  <input required value={form.url_base} onChange={set("url_base")} className="form-input" placeholder="https://app13.pharmachatbot.com.br/..." />
+                </FormField>
+                <FormField label="E-mail (PharmaChatBot)">
+                  <input required type="email" value={form.email} onChange={set("email")} className="form-input" placeholder="login@farmacia.com" />
+                </FormField>
+                <FormField label="Senha (PharmaChatBot)">
+                  <input required type="password" value={form.senha} onChange={set("senha")} className="form-input" placeholder="••••••••" />
+                </FormField>
+              </>
+            )}
             <FormField label="Meta de Receita R$ (opcional)">
               <input
                 type="number"
@@ -167,25 +170,87 @@ function FarmaciaDialog({
                 className="form-input"
                 placeholder="Ex: 45000"
               />
+              {metaFormatada && (
+                <p className="mt-1 text-xs font-semibold text-emerald-600">{metaFormatada}</p>
+              )}
+              {form.meta_receita && !metaFormatada && (
+                <p className="mt-1 text-xs text-red-400">Valor inválido</p>
+              )}
             </FormField>
+            <FormField label="Gestor (opcional)">
+              <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
+                <option value="">Sem gestor</option>
+                {gestores.filter((g) => !g.is_admin).map((g) => (
+                  <option key={g.id} value={g.id}>{g.nome}</option>
+                ))}
+              </select>
+            </FormField>
+          </form>
+          <DialogFooter>
+            <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">
+              Cancelar
+            </button>
+            <button type="submit" form="farmacia-form" disabled={saving} className="px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60">
+              {saving ? "Salvando..." : "Revisar e Salvar"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmação */}
+      <AlertDialog open={!!confirmPending} onOpenChange={(o) => { if (!o) setConfirmPending(null); }}>
+        <AlertDialogContent className="sm:max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar alterações</AlertDialogTitle>
+            <AlertDialogDescription>
+              Revise os dados abaixo antes de salvar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 divide-y divide-zinc-200 text-sm overflow-hidden my-1">
+            <Row label="Farmácia" value={confirmPending?.nome ?? "—"} />
+            <Row label="Gestor" value={gestorNome} />
+            <Row
+              label="Meta de Receita"
+              value={
+                confirmPending?.meta_receita
+                  ? Number(confirmPending.meta_receita).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                  : "Sem meta"
+              }
+              highlight={!!confirmPending?.meta_receita}
+            />
+            {!editing && (
+              <>
+                <Row label="URL" value={confirmPending?.url_base ?? "—"} mono />
+                <Row label="E-mail" value={confirmPending?.email ?? "—"} mono />
+              </>
+            )}
           </div>
-          <FormField label="Gestor (opcional)">
-            <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
-              <option value="">Sem gestor</option>
-              {gestores.filter((g) => !g.is_admin).map((g) => (
-                <option key={g.id} value={g.id}>{g.nome}</option>
-              ))}
-            </select>
-          </FormField>
-        </form>
-        <DialogFooter>
-          <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">Cancelar</button>
-          <button type="submit" form="farmacia-form" disabled={saving} className="px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60">
-            {saving ? "Salvando..." : "Salvar"}
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Voltar e editar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirm}
+              disabled={saving}
+              className="bg-brand hover:opacity-90"
+            >
+              {saving ? "Salvando..." : "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function Row({ label, value, highlight, mono }: { label: string; value: string; highlight?: boolean; mono?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-2.5">
+      <span className="text-xs text-zinc-500 shrink-0">{label}</span>
+      <span className={`text-xs text-right break-all ${mono ? "font-mono" : "font-medium"} ${highlight ? "text-emerald-600 font-semibold" : "text-zinc-800"}`}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -241,7 +306,7 @@ function FarmaciasPage() {
 
   const handleSave = async (form: FarmaciaForm) => {
     const gestorId = form.gestor_id ? Number(form.gestor_id) : undefined;
-    const hasMeta = form.meta_vendas !== "" || form.meta_receita !== "";
+    const hasMeta = form.meta_receita !== "";
     try {
       let targetId: number;
       if (editTarget) {
@@ -261,7 +326,7 @@ function FarmaciasPage() {
       }
       if (hasMeta) {
         await setFarmaciaMeta(targetId, {
-          meta_vendas: form.meta_vendas ? Number(form.meta_vendas) : null,
+          meta_vendas: null,
           meta_receita: form.meta_receita ? Number(form.meta_receita) : null,
         });
       }
