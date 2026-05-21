@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -74,6 +74,8 @@ interface FarmaciaForm {
   senha: string;
   gestor_id: string;
   meta_receita: string;
+  meta_leads_google: string;
+  meta_leads_meta: string;
 }
 
 function FarmaciaDialog({
@@ -98,6 +100,8 @@ function FarmaciaDialog({
     senha: "",
     gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
     meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
+    meta_leads_google: editing?.meta_leads_google != null ? String(editing.meta_leads_google) : "",
+    meta_leads_meta: editing?.meta_leads_meta != null ? String(editing.meta_leads_meta) : "",
   });
   const [confirmPending, setConfirmPending] = useState<FarmaciaForm | null>(null);
 
@@ -109,6 +113,8 @@ function FarmaciaDialog({
       senha: "",
       gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
       meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
+      meta_leads_google: editing?.meta_leads_google != null ? String(editing.meta_leads_google) : "",
+      meta_leads_meta: editing?.meta_leads_meta != null ? String(editing.meta_leads_meta) : "",
     });
   }, [editing]);
 
@@ -176,6 +182,41 @@ function FarmaciaDialog({
                 <p className="mt-1 text-xs text-red-400">Valor inválido</p>
               )}
             </FormField>
+            <div className="pt-2 border-t border-zinc-100">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-3">Metas de Leads por Canal</p>
+              <div className="space-y-3">
+                <FormField label="Meta Leads Google (semanal)">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={form.meta_leads_google}
+                      onChange={set("meta_leads_google")}
+                      className="form-input flex-1"
+                      placeholder="Ex: 300"
+                    />
+                    <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400">Deixe em branco para não monitorar este canal.</p>
+                </FormField>
+                <FormField label="Meta Leads Meta/Facebook (semanal)">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={form.meta_leads_meta}
+                      onChange={set("meta_leads_meta")}
+                      className="form-input flex-1"
+                      placeholder="Ex: 200"
+                    />
+                    <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400">Deixe em branco para não monitorar este canal.</p>
+                </FormField>
+              </div>
+            </div>
             <FormField label="Gestor (opcional)">
               <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
                 <option value="">Sem gestor</option>
@@ -218,6 +259,16 @@ function FarmaciaDialog({
               }
               highlight={!!confirmPending?.meta_receita}
             />
+            <Row
+              label="Meta Leads Google"
+              value={confirmPending?.meta_leads_google ? `${Number(confirmPending.meta_leads_google)} leads/semana` : "Sem meta"}
+              highlight={!!confirmPending?.meta_leads_google}
+            />
+            <Row
+              label="Meta Leads Meta"
+              value={confirmPending?.meta_leads_meta ? `${Number(confirmPending.meta_leads_meta)} leads/semana` : "Sem meta"}
+              highlight={!!confirmPending?.meta_leads_meta}
+            />
             {!editing && (
               <>
                 <Row label="URL" value={confirmPending?.url_base ?? "—"} mono />
@@ -249,6 +300,37 @@ function Row({ label, value, highlight, mono }: { label: string; value: string; 
       <span className={`text-xs text-right break-all ${mono ? "font-mono" : "font-medium"} ${highlight ? "text-emerald-600 font-semibold" : "text-zinc-800"}`}>
         {value}
       </span>
+    </div>
+  );
+}
+
+// ── Leads helpers ──────────────────────────────────────────────────────────
+
+function leadsStatus(pct: number): "verde" | "amarelo" | "vermelho" {
+  if (pct >= 100) return "verde";
+  if (pct >= 70) return "amarelo";
+  return "vermelho";
+}
+
+const LEADS_STATUS_STYLE = {
+  verde:    { emoji: "🟢", bar: "bg-emerald-500", text: "text-emerald-600" },
+  amarelo:  { emoji: "🟡", bar: "bg-amber-500",   text: "text-amber-600"   },
+  vermelho: { emoji: "🔴", bar: "bg-red-500",      text: "text-red-600"    },
+};
+
+function LeadsChannelRow({ canalNome, atual, meta }: { canalNome: string; atual: number; meta: number }) {
+  const pct = meta > 0 ? (atual / meta) * 100 : 0;
+  const s = LEADS_STATUS_STYLE[leadsStatus(pct)];
+  return (
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between text-[10px]">
+        <span className="font-medium text-zinc-600">{s.emoji} {canalNome}</span>
+        <span className={`font-semibold ${s.text}`}>{Math.round(Math.min(pct, 100))}%</span>
+      </div>
+      <div className="h-1 w-full bg-zinc-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${s.bar}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <div className="text-[10px] text-zinc-400">{atual} / {meta} leads</div>
     </div>
   );
 }
@@ -305,7 +387,7 @@ function FarmaciasPage() {
 
   const handleSave = async (form: FarmaciaForm) => {
     const gestorId = form.gestor_id ? Number(form.gestor_id) : undefined;
-    const hasMeta = form.meta_receita !== "";
+    const hasMeta = form.meta_receita !== "" || form.meta_leads_google !== "" || form.meta_leads_meta !== "";
     try {
       let targetId: number;
       if (editTarget) {
@@ -323,10 +405,12 @@ function FarmaciasPage() {
         });
         targetId = result.id;
       }
-      if (hasMeta) {
+      if (editTarget || hasMeta) {
         await setFarmaciaMeta(targetId, {
           meta_vendas: null,
           meta_receita: form.meta_receita ? Number(form.meta_receita) : null,
+          meta_leads_google: form.meta_leads_google ? Number(form.meta_leads_google) : null,
+          meta_leads_meta: form.meta_leads_meta ? Number(form.meta_leads_meta) : null,
         });
       }
       toast.success(editTarget ? "Farmácia atualizada!" : "Farmácia criada com sucesso!");
@@ -492,6 +576,27 @@ function FarmaciasPage() {
                   </div>
                 )}
 
+                {/* Leads da semana */}
+                {!semDados && (p.meta_leads_google !== null || p.meta_leads_meta !== null) && (
+                  <div className="mt-3 pt-3 border-t border-zinc-100 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Leads da semana</div>
+                    {p.meta_leads_google !== null && (
+                      <LeadsChannelRow
+                        canalNome="Google"
+                        atual={p.canais?.find((c) => c.nome.toLowerCase().includes("google"))?.atendimentos ?? 0}
+                        meta={p.meta_leads_google}
+                      />
+                    )}
+                    {p.meta_leads_meta !== null && (
+                      <LeadsChannelRow
+                        canalNome="Meta"
+                        atual={p.canais?.find((c) => c.nome.toLowerCase().includes("meta"))?.atendimentos ?? 0}
+                        meta={p.meta_leads_meta}
+                      />
+                    )}
+                  </div>
+                )}
+
                 {admin && (
                   <div
                     className="flex gap-2 mt-3 pt-3 border-t border-zinc-100"
@@ -502,6 +607,12 @@ function FarmaciasPage() {
                       className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
                     >
                       <Pencil className="size-3" /> Editar
+                    </button>
+                    <button
+                      onClick={() => { setEditTarget(p); setDialogOpen(true); }}
+                      className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
+                    >
+                      <Settings className="size-3" /> Metas de leads
                     </button>
                     <button
                       onClick={() => setDeleteTarget(p)}

@@ -431,13 +431,19 @@ function RankingGestoresPage() {
   return (
     <AppShell title="Ranking de Gestores">
       {/* Critério */}
-      <div className="bg-brand/5 border border-brand/20 rounded-xl p-4 flex items-center gap-3">
-        <Target className="size-5 text-brand shrink-0" />
-        <p className="text-sm text-zinc-700">
-          <span className="font-bold text-brand">1 ponto</span> por farmácia que bate a meta — faturamento <strong>não</strong> conta.
-        </p>
+      <div className="bg-brand/5 border border-brand/20 rounded-xl p-4 flex items-start gap-3">
+        <Target className="size-5 text-brand shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Como os pontos são calculados:</p>
+          <div className="space-y-0.5 text-sm text-zinc-700">
+            <p>✅ <span className="font-bold text-emerald-600">+1 ponto</span> — farmácia atingiu a meta de receita ou vendas na semana</p>
+            <p>🔵 <span className="font-bold text-blue-600">+1 ponto</span> — farmácia atingiu a meta de leads do Google na semana</p>
+            <p>🟣 <span className="font-bold text-indigo-600">+1 ponto</span> — farmácia atingiu a meta de leads do Meta/Facebook na semana</p>
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1.5">Máximo de 3 pontos por farmácia por semana. Metas de leads só contam se configuradas.</p>
+        </div>
         {/* Seletor de mês */}
-        <div className="ml-auto flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <CalendarDays className="size-4 text-zinc-400" />
           <select
             value={mes}

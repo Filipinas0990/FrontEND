@@ -1,17 +1,26 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft, Users, Search, BarChart2, MessageCircle,
-  ShoppingCart, DollarSign, TrendingUp, X, Maximize2,
+  ShoppingCart, DollarSign, TrendingUp, X, Maximize2, Settings,
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   RadialBarChart, RadialBar, BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { getFarmacias, type CanalData } from "@/lib/api";
+import { getFarmacias, setFarmaciaMeta, type CanalData } from "@/lib/api";
+import { isAdmin } from "@/lib/auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/farmacias/$id")({
   component: FarmaciaDetailPage,
@@ -254,14 +263,46 @@ function KpiBox({ label, value, color, highlight }: { label: string; value: stri
   );
 }
 
+// ── Meta de Leads ──────────────────────────────────────────────────────────
+
+function leadsDetailStatus(pct: number) {
+  if (pct >= 100) return { emoji: "✅", text: "Meta atingida! +1 ponto", color: "text-emerald-600", bar: "bg-emerald-500" };
+  if (pct >= 70)  return { emoji: "🟡", text: "Quase lá!",               color: "text-amber-500",   bar: "bg-amber-500"   };
+  if (pct >= 40)  return { emoji: "🟠", text: "Em progresso",            color: "text-orange-500",  bar: "bg-orange-500"  };
+  return               { emoji: "🔴", text: "Abaixo da meta",           color: "text-red-500",     bar: "bg-red-500"     };
+}
+
+function LeadsMetaRow({ canal, atual, meta }: { canal: string; atual: number; meta: number }) {
+  const pct = meta > 0 ? (atual / meta) * 100 : 0;
+  const s = leadsDetailStatus(pct);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-zinc-700">{canal}</span>
+        <span className={`text-xs font-medium ${s.color}`}>{s.emoji} {s.text}</span>
+      </div>
+      <p className="text-[11px] text-zinc-500">{atual} leads de {meta} necessários</p>
+      <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${s.bar}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <p className="text-[10px] text-zinc-400">{pct.toFixed(0)}%</p>
+    </div>
+  );
+}
+
 // ── Página principal ───────────────────────────────────────────────────────
 
 function FarmaciaDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const farmaciaId = Number(id);
+  const admin = isAdmin();
+  const qc = useQueryClient();
 
   const [canalAberto, setCanalAberto] = useState<CanalData | null>(null);
+  const [editLeadsOpen, setEditLeadsOpen] = useState(false);
+  const [leadsGoogle, setLeadsGoogle] = useState("");
+  const [leadsMeta, setLeadsMeta] = useState("");
 
   const { data: farmacias = [] } = useQuery({
     queryKey: ["farmacias"],
@@ -269,6 +310,26 @@ function FarmaciaDetailPage() {
     staleTime: 60_000,
   });
   const farmacia = farmacias.find((f) => f.id === farmaciaId);
+
+  const saveLeadsMutation = useMutation({
+    mutationFn: () =>
+      setFarmaciaMeta(farmaciaId, {
+        meta_leads_google: leadsGoogle ? Number(leadsGoogle) : null,
+        meta_leads_meta: leadsMeta ? Number(leadsMeta) : null,
+      }),
+    onSuccess: () => {
+      toast.success("Metas de leads atualizadas!");
+      qc.invalidateQueries({ queryKey: ["farmacias"] });
+      setEditLeadsOpen(false);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function openEditLeads() {
+    setLeadsGoogle(farmacia?.meta_leads_google != null ? String(farmacia.meta_leads_google) : "");
+    setLeadsMeta(farmacia?.meta_leads_meta != null ? String(farmacia.meta_leads_meta) : "");
+    setEditLeadsOpen(true);
+  }
 
   return (
     <AppShell
@@ -322,6 +383,54 @@ function FarmaciaDetailPage() {
         </section>
       )}
 
+      {/* Meta de Leads */}
+      {farmacia && (farmacia.meta_leads_google !== null || farmacia.meta_leads_meta !== null) && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meta de Leads — Semana Atual</h3>
+            {admin && (
+              <button
+                onClick={openEditLeads}
+                className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
+              >
+                <Settings className="size-3" /> Configurar metas de leads
+              </button>
+            )}
+          </div>
+          <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 space-y-4 max-w-sm">
+            {farmacia.meta_leads_google !== null && (
+              <LeadsMetaRow
+                canal="Google"
+                atual={farmacia.canais?.find((c) => c.nome.toLowerCase().includes("google"))?.atendimentos ?? 0}
+                meta={farmacia.meta_leads_google}
+              />
+            )}
+            {farmacia.meta_leads_meta !== null && (
+              <LeadsMetaRow
+                canal="Meta/Facebook"
+                atual={farmacia.canais?.find((c) => c.nome.toLowerCase().includes("meta"))?.atendimentos ?? 0}
+                meta={farmacia.meta_leads_meta}
+              />
+            )}
+            <p className="text-[10px] text-zinc-400 pt-2 border-t border-zinc-100">
+              ⚠️ Os dados são da última coleta da semana. A meta é avaliada ao rodar a automação.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* Botão configurar leads (admin, sem meta configurada) */}
+      {farmacia && admin && farmacia.meta_leads_google === null && farmacia.meta_leads_meta === null && (
+        <section>
+          <button
+            onClick={openEditLeads}
+            className="flex items-center gap-2 py-2 px-3 text-sm font-medium text-zinc-600 hover:text-zinc-900 border border-zinc-200 rounded-md hover:bg-zinc-50"
+          >
+            <Settings className="size-3.5" /> Configurar metas de leads
+          </button>
+        </section>
+      )}
+
       {/* Canais — cards clicáveis */}
       {farmacia?.canais && farmacia.canais.length > 0 && (
         <section className="space-y-4">
@@ -350,6 +459,68 @@ function FarmaciaDetailPage() {
           todos={farmacia.canais}
           onClose={() => setCanalAberto(null)}
         />
+      )}
+
+      {/* Dialog — editar metas de leads */}
+      {admin && (
+        <Dialog open={editLeadsOpen} onOpenChange={setEditLeadsOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Metas de Leads por Canal</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Meta Leads Google (semanal)</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={leadsGoogle}
+                    onChange={(e) => setLeadsGoogle(e.target.value)}
+                    className="form-input flex-1"
+                    placeholder="Ex: 300"
+                  />
+                  <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-400">Deixe em branco para não monitorar este canal.</p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Meta Leads Meta/Facebook (semanal)</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={leadsMeta}
+                    onChange={(e) => setLeadsMeta(e.target.value)}
+                    className="form-input flex-1"
+                    placeholder="Ex: 200"
+                  />
+                  <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-400">Deixe em branco para não monitorar este canal.</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setEditLeadsOpen(false)}
+                className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => saveLeadsMutation.mutate()}
+                disabled={saveLeadsMutation.isPending}
+                className="px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60"
+              >
+                {saveLeadsMutation.isPending ? "Salvando..." : "Salvar"}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </AppShell>
   );

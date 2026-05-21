@@ -96,6 +96,8 @@ export interface Farmacia {
   canais?: CanalData[]
   meta_vendas: number | null
   meta_receita: number | null
+  meta_leads_google: number | null
+  meta_leads_meta: number | null
   atingiu_meta: boolean | null
   percentual_meta_receita: number | null
   percentual_meta_vendas: number | null
@@ -244,8 +246,13 @@ export function deleteFarmacia(id: number): Promise<{ mensagem: string }> {
 
 export function setFarmaciaMeta(
   id: number,
-  data: { meta_vendas: number | null; meta_receita: number | null },
-): Promise<{ id: number; meta_vendas: number | null; meta_receita: number | null }> {
+  data: {
+    meta_vendas?: number | null
+    meta_receita?: number | null
+    meta_leads_google?: number | null
+    meta_leads_meta?: number | null
+  },
+): Promise<{ id: number; nome: string; meta_vendas: number | null; meta_receita: number | null; meta_leads_google: number | null; meta_leads_meta: number | null }> {
   return req(`/api/farmacias/${id}/meta`, { method: "PATCH", body: JSON.stringify(data) })
 }
 
