@@ -18,7 +18,6 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as AutomacoesRouteImport } from './routes/automacoes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FarmaciasIndexRouteImport } from './routes/farmacias.index'
 import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
@@ -68,11 +67,6 @@ const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AutomacoesRoute = AutomacoesRouteImport.update({
-  id: '/automacoes',
-  path: '/automacoes',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -91,7 +85,6 @@ const FarmaciasIdRoute = FarmaciasIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/automacoes': typeof AutomacoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
@@ -106,7 +99,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/automacoes': typeof AutomacoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
@@ -121,7 +113,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/automacoes': typeof AutomacoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
@@ -138,7 +129,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/automacoes'
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
@@ -153,7 +143,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/automacoes'
     | '/configuracoes'
     | '/gestores'
     | '/login'
@@ -167,7 +156,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/automacoes'
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
@@ -183,7 +171,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AutomacoesRoute: typeof AutomacoesRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
   GestoresRoute: typeof GestoresRoute
@@ -260,13 +247,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/automacoes': {
-      id: '/automacoes'
-      path: '/automacoes'
-      fullPath: '/automacoes'
-      preLoaderRoute: typeof AutomacoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -307,7 +287,6 @@ const FarmaciasRouteWithChildren = FarmaciasRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AutomacoesRoute: AutomacoesRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   FarmaciasRoute: FarmaciasRouteWithChildren,
   GestoresRoute: GestoresRoute,

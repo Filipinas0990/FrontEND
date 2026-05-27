@@ -21,7 +21,8 @@
       "Bash(git commit -m 'feat: Multi-período 7/15/30 dias \\(spec completo\\) *)",
       "Bash(git push *)",
       "Bash(git fetch *)",
-      "Bash(git commit -m 'feat: Aba Reunioes com clientes *)"
+      "Bash(git commit -m 'feat: Aba Reunioes com clientes *)",
+      "Bash(git commit -m 'feat: Reunioes v2 — API real + todos os 10 componentes do spec *)"
     ]
   }
 }

@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Building2,
   FileBarChart,
-  Zap,
   Settings,
   Activity,
   Play,
@@ -176,7 +175,6 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
     ...(isAdminUser
       ? [{ icon: Users, label: "Gestores", to: "/gestores" as const }]
       : []),
-    { icon: Zap, label: "Automações", to: "/automacoes" as const },
     { icon: Settings, label: "Configurações", to: "/configuracoes" as const },
   ];
 

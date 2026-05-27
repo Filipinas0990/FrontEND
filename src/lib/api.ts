@@ -352,6 +352,134 @@ export function downloadRelatorioCSV(periodoInicio: string): Promise<void> {
   )
 }
 
+// ── Reuniões ───────────────────────────────────────────────────────────────
+
+export type ReuniaoStatusAPI = "agendada" | "confirmada" | "realizada" | "cancelada"
+
+export interface ReuniaoStats {
+  reunioes_mes: number
+  total_realizadas: number
+  agendadas_futuras: number
+  confirmadas_futuras: number
+}
+
+export interface ReuniaoAPI {
+  id: number
+  farmacia_id: number
+  farmacia_nome: string
+  gestor_nome: string
+  titulo: string
+  descricao: string | null
+  data_reuniao: string          // ISO UTC
+  duracao_minutos: number
+  local: string
+  link_meet: string | null
+  status: ReuniaoStatusAPI
+  google_event_id: string | null
+  observacoes: string | null
+  criado_em: string
+  google_link: string           // link "TEMPLATE" do Google Calendar (sem OAuth)
+}
+
+export interface GoogleStatus {
+  conectado: boolean
+  google_configurado: boolean
+}
+
+export function getReuniaoStats(): Promise<ReuniaoStats> {
+  return req("/api/reunioes/stats")
+}
+
+export function getReunioes(params?: {
+  farmacia_id?: number
+  status?: ReuniaoStatusAPI
+  mes?: string              // "YYYY-MM"
+}): Promise<ReuniaoAPI[]> {
+  const q = new URLSearchParams()
+  if (params?.farmacia_id) q.set("farmacia_id", String(params.farmacia_id))
+  if (params?.status)      q.set("status", params.status)
+  if (params?.mes)         q.set("mes", params.mes)
+  const qs = q.toString()
+  return req(`/api/reunioes${qs ? `?${qs}` : ""}`)
+}
+
+export function criarReuniaoAPI(data: {
+  farmacia_id: number
+  titulo: string
+  descricao?: string
+  data_reuniao: string    // ISO
+  duracao_minutos?: number
+  local?: string
+  link_meet?: string
+  gestor_id?: number
+}): Promise<{ id: number; status: string; google_link: string; google_event_sincronizado: boolean }> {
+  return req("/api/reunioes", { method: "POST", body: JSON.stringify(data) })
+}
+
+export function atualizarReuniaoAPI(
+  id: number,
+  data: Partial<{
+    titulo: string
+    descricao: string
+    data_reuniao: string
+    duracao_minutos: number
+    local: string
+    link_meet: string
+  }>,
+): Promise<ReuniaoAPI> {
+  return req(`/api/reunioes/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export function confirmarReuniao(id: number): Promise<ReuniaoAPI> {
+  return req(`/api/reunioes/${id}/confirmar`, { method: "PATCH" })
+}
+
+export function realizarReuniao(id: number, observacoes?: string): Promise<ReuniaoAPI> {
+  return req(`/api/reunioes/${id}/realizar`, {
+    method: "PATCH",
+    body: JSON.stringify({ observacoes: observacoes ?? null }),
+  })
+}
+
+export function cancelarReuniao(id: number): Promise<ReuniaoAPI> {
+  return req(`/api/reunioes/${id}/cancelar`, { method: "PATCH" })
+}
+
+export function getGoogleLinkReuniao(id: number): Promise<{ link: string }> {
+  return req(`/api/reunioes/${id}/google-link`)
+}
+
+export function syncGoogleCalendar(id: number): Promise<{ google_event_id: string; mensagem: string }> {
+  return req(`/api/reunioes/${id}/sync-google`, { method: "POST" })
+}
+
+export function getGoogleStatus(): Promise<GoogleStatus> {
+  return req("/api/auth/google/status")
+}
+
+export async function iniciarOAuthGoogle(): Promise<void> {
+  const token = getToken()
+  const res = await fetch(`${BASE_URL}/api/auth/google`, {
+    headers: { Authorization: `Bearer ${token}` },
+    redirect: "follow",
+  })
+  // API pode retornar JSON com a URL ou redirecionar diretamente
+  const ct = res.headers.get("content-type") ?? ""
+  if (ct.includes("application/json")) {
+    const data = await res.json() as { auth_url?: string; url?: string; redirect_url?: string }
+    const url = data.auth_url ?? data.url ?? data.redirect_url
+    if (url) { window.location.href = url; return }
+  }
+  // Se chegou aqui e houve redirect, fetch já seguiu — a URL final está em res.url
+  if (res.url && !res.url.includes(BASE_URL)) {
+    window.location.href = res.url
+  }
+}
+
+export function desconectarGoogleCalendar(): Promise<{ mensagem: string }> {
+  return req("/api/auth/google", { method: "DELETE" })
+}
+
 // ── Pipeline ───────────────────────────────────────────────────────────────
 
 export function getStatus(): Promise<PipelineStatus> {
