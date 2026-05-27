@@ -1977,8 +1977,10 @@ function CalendarioMensal({
                           ? "ring-2 ring-brand bg-brand/5 text-brand"
                           : bloqueado
                           ? "bg-red-50 text-red-400 hover:ring-red-200"
+                          : total > 0 && confirmadas > 0
+                          ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100 hover:ring-emerald-300"
                           : total > 0
-                          ? "bg-zinc-50 text-zinc-700 hover:ring-zinc-200"
+                          ? "bg-amber-50 text-amber-800 ring-1 ring-amber-100 hover:ring-amber-300"
                           : "text-zinc-600 hover:bg-zinc-50 hover:ring-zinc-100",
                       ].join(" ")}
                     >
