@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   CalendarDays, Plus, X, Clock, CheckCircle2, XCircle,
   Building2, Search, Pencil, Trash2, AlertCircle, Trophy,
@@ -936,6 +936,86 @@ function BannerGoogleCalendar({ onConectar, loading }: { onConectar: () => void;
   );
 }
 
+// ── 10a. StatusFiltroDropdown ──────────────────────────────────────────────
+
+const STATUS_FILTRO_OPTS: { value: FiltroStatus; label: string; cor: string | null }[] = [
+  { value: "todas",      label: "Todos os status", cor: null       },
+  { value: "agendada",   label: "Agendadas",        cor: "#F59E0B" },
+  { value: "confirmada", label: "Confirmadas",      cor: "#10B981" },
+  { value: "realizada",  label: "Realizadas",       cor: "#3B82F6" },
+  { value: "cancelada",  label: "Canceladas",       cor: "#EF4444" },
+];
+
+function StatusFiltroDropdown({
+  value,
+  onChange,
+}: {
+  value: FiltroStatus;
+  onChange: (v: FiltroStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const current = STATUS_FILTRO_OPTS.find((o) => o.value === value)!;
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={[
+          "flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-white rounded-xl ring-1 shadow-sm transition-all whitespace-nowrap select-none",
+          open ? "ring-brand/60 text-zinc-900" : "ring-black/5 text-zinc-600 hover:ring-zinc-300 hover:text-zinc-900",
+        ].join(" ")}
+      >
+        {current.cor ? (
+          <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: current.cor }} />
+        ) : (
+          <span className="size-2 rounded-full bg-zinc-300 shrink-0" />
+        )}
+        <span>{current.label}</span>
+        <ChevronDown className={`size-3.5 text-zinc-400 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl shadow-xl ring-1 ring-black/8 py-1.5 min-w-[168px] animate-in fade-in slide-in-from-top-1 duration-100">
+          {STATUS_FILTRO_OPTS.map((o) => {
+            const isActive = value === o.value;
+            return (
+              <button
+                key={o.value}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                className={[
+                  "w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors",
+                  isActive
+                    ? "bg-brand/5 text-brand font-semibold"
+                    : "text-zinc-700 hover:bg-zinc-50",
+                ].join(" ")}
+              >
+                {o.cor ? (
+                  <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: o.cor }} />
+                ) : (
+                  <span className="size-2 rounded-full bg-zinc-300 shrink-0" />
+                )}
+                <span className="flex-1 text-left">{o.label}</span>
+                {isActive && <CheckCircle2 className="size-3.5 text-brand shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 10. ListaReunioes (aba Reuniões — lista plana cronológica) ────────────
 
 type StatusOption = { value: ReuniaoStatusAPI; label: string };
@@ -1026,17 +1106,7 @@ function ListaReunioes({
             </button>
           )}
         </div>
-        <select
-          value={filtroStatus}
-          onChange={(e) => setFiltroStatus(e.target.value as FiltroStatus)}
-          className="form-input bg-white rounded-xl ring-1 ring-black/5 shadow-sm text-sm py-2.5 shrink-0 cursor-pointer"
-        >
-          <option value="todas">Todos os status</option>
-          <option value="agendada">Agendadas</option>
-          <option value="confirmada">Confirmadas</option>
-          <option value="realizada">Realizadas</option>
-          <option value="cancelada">Canceladas</option>
-        </select>
+        <StatusFiltroDropdown value={filtroStatus} onChange={setFiltroStatus} />
       </div>
 
       {/* Lista */}
