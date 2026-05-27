@@ -1016,6 +1016,80 @@ function StatusFiltroDropdown({
   );
 }
 
+// ── 10b. RowStatusDropdown ─────────────────────────────────────────────────
+
+function RowStatusDropdown({
+  reuniao,
+  onSelect,
+}: {
+  reuniao: ReuniaoAPI;
+  onSelect: (r: ReuniaoAPI, novo: ReuniaoStatusAPI) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const cfg    = STATUS_CFG[reuniao.status];
+  const opts   = statusTransitions(reuniao.status);
+  const isFinal = reuniao.status === "realizada" || reuniao.status === "cancelada";
+
+  if (isFinal) {
+    return (
+      <span className={`text-xs font-semibold ${cfg.text}`}>{cfg.label}</span>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className={`flex items-center gap-1 text-xs font-semibold transition-opacity hover:opacity-75 select-none ${cfg.text}`}
+      >
+        {cfg.label}
+        <ChevronDown className={`size-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl shadow-xl ring-1 ring-black/8 py-1.5 min-w-[152px]">
+          {opts.map((o) => {
+            const oCfg  = STATUS_CFG[o.value];
+            const isActive = reuniao.status === o.value;
+            return (
+              <button
+                key={o.value}
+                onClick={(e) => { e.stopPropagation(); onSelect(reuniao, o.value); setOpen(false); }}
+                className={[
+                  "w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors",
+                  isActive
+                    ? `${oCfg.bg} ${oCfg.text} font-semibold`
+                    : "text-zinc-700 hover:bg-zinc-50",
+                ].join(" ")}
+              >
+                <span
+                  className="size-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: oCfg.cor }}
+                />
+                <span className="flex-1 text-left">{o.label}</span>
+                {isActive && (
+                  <CheckCircle2 className="size-3 shrink-0" style={{ color: oCfg.cor }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 10. ListaReunioes (aba Reuniões — lista plana cronológica) ────────────
 
 type StatusOption = { value: ReuniaoStatusAPI; label: string };
@@ -1125,9 +1199,8 @@ function ListaReunioes({
               const mesAbrev = MESES_NOME[d.getMonth()].toUpperCase();
               const mesFull  = MESES_NOME[d.getMonth()].toLowerCase();
               const semana   = DIAS_SEMANA_FULL[d.getDay()];
-              const cfg      = STATUS_CFG[r.status];
-              const opts     = statusTransitions(r.status);
-              const isFinal  = r.status === "realizada" || r.status === "cancelada";
+              const cfg     = STATUS_CFG[r.status];
+              const isFinal = r.status === "realizada" || r.status === "cancelada";
 
               return (
                 <div key={r.id} className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-50/60 transition-colors group">
@@ -1161,20 +1234,8 @@ function ListaReunioes({
 
                   {/* Controles direita */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* Status select inline */}
-                    {isFinal ? (
-                      <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
-                    ) : (
-                      <select
-                        value={r.status}
-                        onChange={(e) => handleStatusChange(r, e.target.value as ReuniaoStatusAPI)}
-                        className={`text-xs font-semibold bg-transparent border-0 outline-none cursor-pointer ${cfg.text}`}
-                      >
-                        {opts.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    )}
+                    {/* Status dropdown inline */}
+                    <RowStatusDropdown reuniao={r} onSelect={handleStatusChange} />
 
                     {/* Badge */}
                     <StatusBadge status={r.status} size="xs" />
