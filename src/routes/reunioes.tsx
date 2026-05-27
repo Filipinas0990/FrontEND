@@ -1260,9 +1260,25 @@ function StatusFiltroDropdown({
   );
 }
 
-// ── 10b. RowStatusDropdown ─────────────────────────────────────────────────
+// ── 10b. StatusDropdownBadge — badge clicável que abre dropdown de status ──
 
-function RowStatusDropdown({
+type StatusOption = { value: ReuniaoStatusAPI; label: string };
+function statusTransitions(current: ReuniaoStatusAPI): StatusOption[] {
+  if (current === "agendada")   return [
+    { value: "agendada",   label: "Agendada"   },
+    { value: "confirmada", label: "Confirmada" },
+    { value: "realizada",  label: "Realizada"  },
+    { value: "cancelada",  label: "Cancelada"  },
+  ];
+  if (current === "confirmada") return [
+    { value: "confirmada", label: "Confirmada" },
+    { value: "realizada",  label: "Realizada"  },
+    { value: "cancelada",  label: "Cancelada"  },
+  ];
+  return [{ value: current, label: STATUS_CFG[current].label }];
+}
+
+function StatusDropdownBadge({
   reuniao,
   onSelect,
 }: {
@@ -1281,30 +1297,29 @@ function RowStatusDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const cfg    = STATUS_CFG[reuniao.status];
-  const opts   = statusTransitions(reuniao.status);
+  const cfg = STATUS_CFG[reuniao.status];
+  const Icon = cfg.icon;
+  const opts = statusTransitions(reuniao.status);
   const isFinal = reuniao.status === "realizada" || reuniao.status === "cancelada";
 
-  if (isFinal) {
-    return (
-      <span className={`text-xs font-semibold ${cfg.text}`}>{cfg.label}</span>
-    );
-  }
+  if (isFinal) return <StatusBadge status={reuniao.status} size="xs" />;
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className={`flex items-center gap-1 text-xs font-semibold transition-opacity hover:opacity-75 select-none ${cfg.text}`}
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 transition-opacity hover:opacity-80 select-none ${cfg.bg} ${cfg.ring} ${cfg.text}`}
       >
+        <Icon className="size-3" />
         {cfg.label}
-        <ChevronDown className={`size-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`size-2.5 ml-0.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
         <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl shadow-xl ring-1 ring-black/8 py-1.5 min-w-[152px]">
           {opts.map((o) => {
-            const oCfg  = STATUS_CFG[o.value];
+            const oCfg = STATUS_CFG[o.value];
+            const OIcon = oCfg.icon;
             const isActive = reuniao.status === o.value;
             return (
               <button
@@ -1312,19 +1327,12 @@ function RowStatusDropdown({
                 onClick={(e) => { e.stopPropagation(); onSelect(reuniao, o.value); setOpen(false); }}
                 className={[
                   "w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors",
-                  isActive
-                    ? `${oCfg.bg} ${oCfg.text} font-semibold`
-                    : "text-zinc-700 hover:bg-zinc-50",
+                  isActive ? `${oCfg.bg} ${oCfg.text} font-semibold` : "text-zinc-700 hover:bg-zinc-50",
                 ].join(" ")}
               >
-                <span
-                  className="size-1.5 rounded-full shrink-0"
-                  style={{ backgroundColor: oCfg.cor }}
-                />
+                <OIcon className="size-3 shrink-0" style={{ color: oCfg.cor }} />
                 <span className="flex-1 text-left">{o.label}</span>
-                {isActive && (
-                  <CheckCircle2 className="size-3 shrink-0" style={{ color: oCfg.cor }} />
-                )}
+                {isActive && <CheckCircle2 className="size-3 shrink-0" style={{ color: oCfg.cor }} />}
               </button>
             );
           })}
@@ -1334,23 +1342,161 @@ function RowStatusDropdown({
   );
 }
 
-// ── 10. ListaReunioes (aba Reuniões — lista plana cronológica) ────────────
+// ── 10c. FarmaciaFiltroDropdown ───────────────────────────────────────────
 
-type StatusOption = { value: ReuniaoStatusAPI; label: string };
-function statusTransitions(current: ReuniaoStatusAPI): StatusOption[] {
-  if (current === "agendada")   return [
-    { value: "agendada",   label: "Agendada"   },
-    { value: "confirmada", label: "Confirmada" },
-    { value: "realizada",  label: "Realizada"  },
-    { value: "cancelada",  label: "Cancelada"  },
-  ];
-  if (current === "confirmada") return [
-    { value: "confirmada", label: "Confirmada" },
-    { value: "realizada",  label: "Realizada"  },
-    { value: "cancelada",  label: "Cancelada"  },
-  ];
-  return [{ value: current, label: STATUS_CFG[current].label }];
+function FarmaciaFiltroDropdown({
+  value,
+  onChange,
+  opcoes,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  opcoes: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={[
+          "flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-white rounded-xl ring-1 shadow-sm transition-all whitespace-nowrap select-none max-w-[200px]",
+          open ? "ring-brand/60 text-zinc-900" : "ring-black/5 text-zinc-600 hover:ring-zinc-300 hover:text-zinc-900",
+        ].join(" ")}
+      >
+        <Building2 className="size-3.5 text-zinc-400 shrink-0" />
+        <span className="truncate">{value || "Todas as farmácias"}</span>
+        <ChevronDown className={`size-3.5 text-zinc-400 shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl shadow-xl ring-1 ring-black/8 py-1.5 min-w-[210px] max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-100">
+          <button
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={[
+              "w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors",
+              !value ? "bg-brand/5 text-brand font-semibold" : "text-zinc-700 hover:bg-zinc-50",
+            ].join(" ")}
+          >
+            <span className="size-2 rounded-full bg-zinc-300 shrink-0" />
+            <span className="flex-1 text-left">Todas as farmácias</span>
+            {!value && <CheckCircle2 className="size-3.5 text-brand shrink-0" />}
+          </button>
+          {opcoes.map((nome) => (
+            <button
+              key={nome}
+              onClick={() => { onChange(nome); setOpen(false); }}
+              className={[
+                "w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors",
+                value === nome ? "bg-brand/5 text-brand font-semibold" : "text-zinc-700 hover:bg-zinc-50",
+              ].join(" ")}
+            >
+              <span className="size-2 rounded-full bg-brand/40 shrink-0" />
+              <span className="flex-1 text-left truncate">{nome}</span>
+              {value === nome && <CheckCircle2 className="size-3.5 text-brand shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
+
+// ── 10d. ReuniaoListaRow ──────────────────────────────────────────────────
+
+function ReuniaoListaRow({
+  r,
+  semana = false,
+  onDetalhes,
+  onStatusChange,
+  onCancelar,
+}: {
+  r: ReuniaoAPI;
+  semana?: boolean;
+  onDetalhes: (r: ReuniaoAPI) => void;
+  onStatusChange: (r: ReuniaoAPI, novo: ReuniaoStatusAPI) => void;
+  onCancelar: (r: ReuniaoAPI) => void;
+}) {
+  const d = new Date(r.data_reuniao);
+  const dia = String(d.getDate()).padStart(2, "0");
+  const mesAbrev = MESES_NOME[d.getMonth()].toUpperCase();
+  const mesFull = MESES_NOME[d.getMonth()].toLowerCase();
+  const diaSemana = DIAS_SEMANA_FULL[d.getDay()];
+  const cfg = STATUS_CFG[r.status];
+  const canEdit = r.status !== "realizada" && r.status !== "cancelada";
+
+  return (
+    <div
+      className={[
+        "flex items-center gap-4 px-5 py-4 hover:bg-zinc-50/60 transition-colors group",
+        "first:rounded-t-xl last:rounded-b-xl",
+        semana ? "bg-brand/[0.018]" : "",
+      ].join(" ")}
+    >
+      {/* Badge de data */}
+      <div className="flex flex-col items-center w-8 shrink-0 text-center">
+        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">{mesAbrev}</span>
+        <span className="text-[22px] font-bold text-zinc-800 leading-tight">{dia}</span>
+      </div>
+
+      {/* Separador colorido por status */}
+      <div
+        className="w-[3px] self-stretch rounded-full shrink-0"
+        style={{ backgroundColor: cfg.cor + "80" }}
+      />
+
+      {/* Conteúdo */}
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onDetalhes(r)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="text-sm font-semibold text-zinc-900 truncate">{r.titulo}</p>
+          {semana && isFutura(r.data_reuniao) && (
+            <span className="text-[9px] font-bold text-brand bg-brand/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+              Em breve
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+          {r.farmacia_nome}
+          {" · "}
+          {diaSemana}, {dia} {mesFull}
+          {" · "}
+          {fmtHora(r.data_reuniao)}
+          {r.duracao_minutos > 0 && ` · ${r.duracao_minutos}min`}
+          {r.local && ` · ${r.local}`}
+          {r.gestor_nome && ` · ${r.gestor_nome}`}
+        </p>
+      </div>
+
+      {/* Controles direitos */}
+      <div className="flex items-center gap-2 shrink-0">
+        <StatusDropdownBadge reuniao={r} onSelect={onStatusChange} />
+        {canEdit ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onCancelar(r); }}
+            title="Cancelar reunião"
+            className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : (
+          <span className="size-3.5 inline-block" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── 10. ListaReunioes ─────────────────────────────────────────────────────
 
 function ListaReunioes({
   reunioes,
@@ -1364,6 +1510,7 @@ function ListaReunioes({
   const qc = useQueryClient();
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todas");
+  const [filtroFarmacia, setFiltroFarmacia] = useState<string>("");
   const [realizarTarget, setRealizarTarget] = useState<ReuniaoAPI | null>(null);
   const [confirmCancelar, setConfirmCancelar] = useState<ReuniaoAPI | null>(null);
 
@@ -1372,9 +1519,44 @@ function ListaReunioes({
       const q = busca.toLowerCase();
       const matchQ = !q || r.titulo.toLowerCase().includes(q) || r.farmacia_nome.toLowerCase().includes(q);
       const matchS = filtroStatus === "todas" || r.status === filtroStatus;
-      return matchQ && matchS;
+      const matchF = !filtroFarmacia || r.farmacia_nome === filtroFarmacia;
+      return matchQ && matchS && matchF;
     })
     .sort((a, b) => b.data_reuniao.localeCompare(a.data_reuniao));
+
+  // "Esta semana" — Segunda a Domingo
+  const agora = new Date();
+  const diaHoje = agora.getDay();
+  const segunda = new Date(agora);
+  segunda.setDate(agora.getDate() - (diaHoje === 0 ? 6 : diaHoje - 1));
+  segunda.setHours(0, 0, 0, 0);
+  const domingo = new Date(segunda);
+  domingo.setDate(segunda.getDate() + 6);
+  domingo.setHours(23, 59, 59, 999);
+
+  const semanaAtual = lista.filter((r) => {
+    const d = new Date(r.data_reuniao);
+    return d >= segunda && d <= domingo;
+  });
+  const restante = lista.filter((r) => {
+    const d = new Date(r.data_reuniao);
+    return !(d >= segunda && d <= domingo);
+  });
+
+  // Agrupar restante por mês
+  type MesGrupo = { key: string; label: string; items: ReuniaoAPI[] };
+  const gruposMes: MesGrupo[] = [];
+  for (const r of restante) {
+    const d = new Date(r.data_reuniao);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = `${MESES_FULL[d.getMonth()]} ${d.getFullYear()}`;
+    let grupo = gruposMes.find((g) => g.key === key);
+    if (!grupo) { grupo = { key, label, items: [] }; gruposMes.push(grupo); }
+    grupo.items.push(r);
+  }
+
+  // Farmácias únicas para filtro
+  const farmaciasUnicas = Array.from(new Set(reunioes.map((r) => r.farmacia_nome))).sort();
 
   const confirmarMut = useMutation({
     mutationFn: (id: number) => confirmarReuniao(id),
@@ -1404,13 +1586,13 @@ function ListaReunioes({
     else if (novo === "cancelada") setConfirmCancelar(r);
   }
 
-  const canEdit = (r: ReuniaoAPI) => r.status !== "realizada" && r.status !== "cancelada";
+  const semFiltro = !busca && filtroStatus === "todas" && !filtroFarmacia;
 
   return (
-    <div className={`space-y-3 transition-opacity ${loading ? "opacity-60" : ""}`}>
-      {/* Barra busca + filtro status */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm flex-1">
+    <div className={`space-y-4 transition-opacity ${loading ? "opacity-60" : ""}`}>
+      {/* Barra busca + filtros */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm flex-1 min-w-[180px]">
           <Search className="size-4 text-zinc-400 shrink-0" />
           <input
             value={busca}
@@ -1424,86 +1606,74 @@ function ListaReunioes({
             </button>
           )}
         </div>
+        <FarmaciaFiltroDropdown value={filtroFarmacia} onChange={setFiltroFarmacia} opcoes={farmaciasUnicas} />
         <StatusFiltroDropdown value={filtroStatus} onChange={setFiltroStatus} />
       </div>
 
       {/* Lista */}
-      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm">
-        {lista.length === 0 ? (
-          <div className="py-16 text-center text-zinc-400 text-sm">
-            {busca || filtroStatus !== "todas"
-              ? "Nenhuma reunião encontrada para este filtro."
-              : "Nenhuma reunião cadastrada ainda."}
-          </div>
-        ) : (
-          <div className="divide-y divide-zinc-50">
-            {lista.map((r) => {
-              const d = new Date(r.data_reuniao);
-              const dia = String(d.getDate()).padStart(2, "0");
-              const mesAbrev = MESES_NOME[d.getMonth()].toUpperCase();
-              const mesFull  = MESES_NOME[d.getMonth()].toLowerCase();
-              const semana   = DIAS_SEMANA_FULL[d.getDay()];
-              const cfg     = STATUS_CFG[r.status];
-              const isFinal = r.status === "realizada" || r.status === "cancelada";
+      {lista.length === 0 ? (
+        <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm py-16 text-center text-zinc-400 text-sm">
+          {semFiltro ? "Nenhuma reunião cadastrada ainda." : "Nenhuma reunião encontrada para este filtro."}
+        </div>
+      ) : (
+        <div className="space-y-5">
 
-              return (
-                <div key={r.id} className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-50/60 transition-colors group first:rounded-t-xl last:rounded-b-xl">
+          {/* ── Esta Semana ── */}
+          {semanaAtual.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2.5 mb-2.5">
+                <span className="text-[10px] font-bold text-brand uppercase tracking-widest">⚡ Esta semana</span>
+                <span className="text-[11px] text-zinc-400">
+                  {semanaAtual.length} {semanaAtual.length === 1 ? "reunião" : "reuniões"}
+                </span>
+              </div>
+              <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm divide-y divide-zinc-50">
+                {semanaAtual.map((r) => (
+                  <ReuniaoListaRow
+                    key={r.id}
+                    r={r}
+                    semana
+                    onDetalhes={onDetalhes}
+                    onStatusChange={handleStatusChange}
+                    onCancelar={setConfirmCancelar}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
-                  {/* Data */}
-                  <div className="flex flex-col items-center w-8 shrink-0 text-center">
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">{mesAbrev}</span>
-                    <span className="text-[22px] font-bold text-zinc-800 leading-tight">{dia}</span>
-                  </div>
-
-                  {/* Separador vertical */}
-                  <div className="w-px self-stretch bg-zinc-100 shrink-0" />
-
-                  {/* Conteúdo (clicável → drawer) */}
-                  <div
-                    className="flex-1 min-w-0 cursor-pointer"
-                    onClick={() => onDetalhes(r)}
-                  >
-                    <p className="text-sm font-semibold text-zinc-900 truncate">{r.titulo}</p>
-                    <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                      {r.farmacia_nome}
-                      {" · "}
-                      {semana}, {dia} {mesFull}
-                      {" · "}
-                      {fmtHora(r.data_reuniao)}
-                      {r.duracao_minutos > 0 && ` · ${r.duracao_minutos}min`}
-                      {r.local && ` · ${r.local}`}
-                      {r.gestor_nome && ` · ${r.gestor_nome}`}
-                    </p>
-                  </div>
-
-                  {/* Controles direita */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Status dropdown inline */}
-                    <RowStatusDropdown reuniao={r} onSelect={handleStatusChange} />
-
-                    {/* Badge */}
-                    <StatusBadge status={r.status} size="xs" />
-
-                    {/* Botão cancelar */}
-                    {canEdit(r) ? (
-                      <button
-                        onClick={() => setConfirmCancelar(r)}
-                        title="Cancelar reunião"
-                        className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 ml-1"
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    ) : (
-                      /* placeholder para manter alinhamento */
-                      <span className="size-3.5 ml-1 inline-block" />
-                    )}
-                  </div>
+          {/* ── Grupos por mês ── */}
+          {gruposMes.map((grupo) => {
+            const ativas = grupo.items.filter((r) => r.status !== "cancelada").length;
+            return (
+              <div key={grupo.key}>
+                <div className="flex items-center gap-3 mb-2.5">
+                  <div className="h-px flex-1 bg-zinc-200" />
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest whitespace-nowrap">
+                    {grupo.label}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 whitespace-nowrap">
+                    · {ativas} {ativas === 1 ? "reunião" : "reuniões"}
+                  </span>
+                  <div className="h-px flex-1 bg-zinc-200" />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm divide-y divide-zinc-50">
+                  {grupo.items.map((r) => (
+                    <ReuniaoListaRow
+                      key={r.id}
+                      r={r}
+                      onDetalhes={onDetalhes}
+                      onStatusChange={handleStatusChange}
+                      onCancelar={setConfirmCancelar}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+        </div>
+      )}
 
       {/* Modal marcar realizada */}
       <ModalMarcarRealizada
