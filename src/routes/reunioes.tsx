@@ -1764,6 +1764,8 @@ function ClientesView({
   const now = new Date();
   const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [busca, setBusca] = useState("");
+  const [historicoFarmacia, setHistoricoFarmacia] = useState<{ id: number; nome: string } | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const rows = farmacias
     .filter((f) => f.nome.toLowerCase().includes(busca.toLowerCase()))
@@ -1779,6 +1781,13 @@ function ClientesView({
       return { ...f, totalMes, realizadas, futuras, canceladas, proxima, total: mine.length };
     })
     .sort((a, b) => b.totalMes - a.totalMes || b.total - a.total);
+
+  // Histórico da farmácia selecionada
+  const historicoLista = historicoFarmacia
+    ? reunioes
+        .filter((r) => r.farmacia_id === historicoFarmacia.id)
+        .sort((a, b) => b.data_reuniao.localeCompare(a.data_reuniao))
+    : [];
 
   return (
     <div className="space-y-4">
@@ -1816,7 +1825,8 @@ function ClientesView({
             rows.map((row) => (
               <div
                 key={row.id}
-                className="px-5 py-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-4 hover:bg-zinc-50/50 transition-colors"
+                onClick={() => { setHistoricoFarmacia({ id: row.id, nome: row.nome }); setExpandedId(null); }}
+                className="px-5 py-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-4 hover:bg-zinc-50/60 transition-colors cursor-pointer"
               >
                 {/* Nome + próxima */}
                 <div className="flex items-center gap-3 min-w-0">
@@ -1826,7 +1836,7 @@ function ClientesView({
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-zinc-900 truncate">{row.nome}</p>
                     {row.proxima ? (
-                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                      <p className="text-[11px] text-brand mt-0.5">
                         Próxima: {fmtDataCurta(row.proxima.data_reuniao)} às {fmtHora(row.proxima.data_reuniao)}
                       </p>
                     ) : (
@@ -1851,7 +1861,7 @@ function ClientesView({
 
                 {/* Ação */}
                 <button
-                  onClick={() => onAgendar(row.id, row.nome)}
+                  onClick={(e) => { e.stopPropagation(); onAgendar(row.id, row.nome); }}
                   className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand/5 text-brand ring-1 ring-brand/20 rounded-lg hover:bg-brand/10 shrink-0"
                 >
                   <Plus className="size-3.5" /> Agendar
@@ -1861,6 +1871,102 @@ function ClientesView({
           )}
         </div>
       </div>
+
+      {/* Sheet — Histórico de reuniões */}
+      <Sheet open={!!historicoFarmacia} onOpenChange={(v) => !v && setHistoricoFarmacia(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {historicoFarmacia && (
+            <>
+              <SheetHeader className="pb-4 border-b border-zinc-100">
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-full bg-brand/10 grid place-items-center text-brand text-xs font-bold shrink-0">
+                    {historicoFarmacia.nome.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <SheetTitle className="text-sm font-semibold text-zinc-900">
+                      {historicoFarmacia.nome}
+                    </SheetTitle>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {historicoLista.length} {historicoLista.length === 1 ? "reunião" : "reuniões"} no histórico
+                    </p>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <div className="py-4 space-y-2">
+                {historicoLista.length === 0 ? (
+                  <div className="text-center py-12 text-zinc-400 text-sm">
+                    Nenhuma reunião registrada para este cliente.
+                  </div>
+                ) : (
+                  historicoLista.map((r) => {
+                    const d         = new Date(r.data_reuniao);
+                    const dia       = String(d.getDate()).padStart(2, "0");
+                    const mesAbrev  = MESES_NOME[d.getMonth()].toUpperCase();
+                    const isExpanded = expandedId === r.id;
+                    const cfg        = STATUS_CFG[r.status];
+
+                    return (
+                      <div key={r.id} className="bg-white rounded-xl ring-1 ring-black/5 overflow-hidden transition-all">
+                        {/* Linha principal */}
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                          className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-zinc-50/60 transition-colors"
+                        >
+                          {/* Badge data */}
+                          <div className="flex flex-col items-center w-8 shrink-0 text-center">
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">{mesAbrev}</span>
+                            <span className="text-[18px] font-bold text-zinc-800 leading-tight">{dia}</span>
+                          </div>
+
+                          {/* Separador */}
+                          <div className="w-px self-stretch bg-zinc-100 shrink-0" />
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-zinc-800 truncate">{r.titulo}</p>
+                            <p className="text-[11px] text-zinc-400 mt-0.5">
+                              {fmtHora(r.data_reuniao)}
+                              {r.duracao_minutos > 0 && ` · ${r.duracao_minutos}min`}
+                              {r.local && ` · ${r.local}`}
+                            </p>
+                          </div>
+
+                          {/* Status + chevron */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <StatusBadge status={r.status} size="xs" />
+                            <ChevronDown
+                              className={`size-3.5 transition-transform duration-200 ${cfg.text} ${isExpanded ? "rotate-180" : ""}`}
+                            />
+                          </div>
+                        </button>
+
+                        {/* Observações expandidas */}
+                        {isExpanded && (
+                          <div className={`px-4 pb-4 pt-1 border-t ${cfg.ring} ${cfg.bg}`}>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5 ${cfg.text}" style={{ color: cfg.cor }}>
+                              Observações
+                            </p>
+                            {r.observacoes ? (
+                              <p className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">
+                                {r.observacoes}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-zinc-400 italic">
+                                Sem observações registradas.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
