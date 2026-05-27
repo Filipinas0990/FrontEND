@@ -1184,7 +1184,7 @@ function ListaReunioes({
       </div>
 
       {/* Lista */}
-      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm">
         {lista.length === 0 ? (
           <div className="py-16 text-center text-zinc-400 text-sm">
             {busca || filtroStatus !== "todas"
@@ -1203,7 +1203,7 @@ function ListaReunioes({
               const isFinal = r.status === "realizada" || r.status === "cancelada";
 
               return (
-                <div key={r.id} className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-50/60 transition-colors group">
+                <div key={r.id} className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-50/60 transition-colors group first:rounded-t-xl last:rounded-b-xl">
 
                   {/* Data */}
                   <div className="flex flex-col items-center w-8 shrink-0 text-center">
