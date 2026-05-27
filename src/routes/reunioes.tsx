@@ -4,7 +4,7 @@ import {
   CalendarDays, Plus, X, Clock, CheckCircle2, XCircle,
   Building2, Search, Pencil, Trash2, AlertCircle, Trophy,
   ExternalLink, MapPin, Timer, RefreshCw, Calendar,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Lock, AlertTriangle, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,9 +21,20 @@ import {
   getGoogleStatus,
   iniciarOAuthGoogle,
   desconectarGoogleCalendar,
+  verificarConflitoAgenda,
+  getDisponibilidade,
+  getCalendario,
+  criarBloqueio,
+  listarBloqueios,
+  removerBloqueio,
+  ApiError,
   type ReuniaoAPI,
   type ReuniaoStatusAPI,
+  type ResultadoConflito,
+  type BloqueioAgenda,
+  type CalendarioDia,
 } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -345,6 +356,188 @@ function FarmaciaReuniaoCard({
   );
 }
 
+// ── useVerificarConflito hook ──────────────────────────────────────────────
+
+function useVerificarConflito(
+  data: string,
+  hora: string,
+  duracao: number,
+  reuniaoId?: number,
+) {
+  const [conflito, setConflito] = useState<ResultadoConflito | null>(null);
+  const [verificando, setVerificando] = useState(false);
+
+  useEffect(() => {
+    setConflito(null);
+    if (!data || !hora) { setVerificando(false); return; }
+
+    const dt = formToISO(data, hora);
+    setVerificando(true);
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await verificarConflitoAgenda(dt, duracao, reuniaoId);
+        if (!cancelled) setConflito(res.conflito ? res : null);
+      } catch {
+        if (!cancelled) setConflito(null);
+      } finally {
+        if (!cancelled) setVerificando(false);
+      }
+    }, 500);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [data, hora, duracao, reuniaoId]);
+
+  return { conflito, verificando };
+}
+
+// ── 5a. AlertaConflito ─────────────────────────────────────────────────────
+
+function AlertaConflito({
+  resultado,
+  onVerGrade,
+}: {
+  resultado: ResultadoConflito;
+  onVerGrade?: () => void;
+}) {
+  if (resultado.tipo === "bloqueio") {
+    return (
+      <div className="flex gap-2.5 p-3 bg-red-50 rounded-lg ring-1 ring-red-200">
+        <Lock className="size-4 text-red-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-xs font-semibold text-red-700">Agenda fechada neste dia</p>
+          {resultado.detalhe && (
+            <p className="text-[11px] text-red-600 mt-0.5">
+              {resultado.detalhe.replace(/^Agenda fechada:\s*/i, "")}
+            </p>
+          )}
+          <p className="text-[11px] text-red-500 mt-0.5">Escolha outra data.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2.5 p-3 bg-amber-50 rounded-lg ring-1 ring-amber-200">
+      <AlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-amber-700">Horário indisponível</p>
+        {resultado.detalhe && (
+          <p className="text-[11px] text-amber-600 mt-0.5">{resultado.detalhe}</p>
+        )}
+        {onVerGrade && (
+          <button
+            type="button"
+            onClick={onVerGrade}
+            className="mt-1 text-[11px] font-semibold text-amber-700 underline underline-offset-2 hover:opacity-75"
+          >
+            Ver grade de horários livres →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── 5b. GradeHorarios ─────────────────────────────────────────────────────
+
+function GradeHorarios({
+  data,
+  open,
+  onClose,
+  onSelectHora,
+}: {
+  data: string;
+  open: boolean;
+  onClose: () => void;
+  onSelectHora: (hora: string) => void;
+}) {
+  const { data: disponibilidade, isLoading } = useQuery({
+    queryKey: ["disponibilidade", data],
+    queryFn: () => getDisponibilidade(data),
+    enabled: open && !!data,
+    staleTime: 30_000,
+  });
+
+  const d = data ? new Date(`${data}T12:00:00`) : null;
+  const titulo = d
+    ? `${DIAS_SEMANA[d.getDay()]}, ${d.getDate()} de ${MESES_NOME[d.getMonth()]} ${d.getFullYear()}`
+    : "Grade de horários";
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="w-full sm:max-w-xs overflow-y-auto">
+        <SheetHeader className="pb-4 border-b border-zinc-100">
+          <SheetTitle className="flex items-center gap-2 text-sm">
+            <CalendarDays className="size-4 text-brand" />
+            {titulo}
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="py-4 space-y-1.5">
+          {isLoading ? (
+            Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="h-9 bg-zinc-100 rounded-lg animate-pulse" />
+            ))
+          ) : disponibilidade?.dia_bloqueado ? (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Lock className="size-8 text-red-400" />
+              <p className="font-semibold text-zinc-700 text-sm">Agenda fechada neste dia</p>
+              {disponibilidade.bloqueios[0]?.motivo && (
+                <p className="text-xs text-zinc-500">{disponibilidade.bloqueios[0].motivo}</p>
+              )}
+            </div>
+          ) : (disponibilidade?.slots ?? []).length === 0 ? (
+            <p className="text-center text-zinc-400 text-sm py-10">
+              Sem informações de disponibilidade.
+            </p>
+          ) : (
+            (disponibilidade?.slots ?? []).map((slot) => {
+              const reuniaoOcupada = !slot.disponivel
+                ? (disponibilidade?.reunioes_dia ?? []).find((r) =>
+                    fmtHora(r.data_reuniao) === slot.hora,
+                  )
+                : null;
+
+              return (
+                <button
+                  key={slot.hora}
+                  onClick={() => {
+                    if (slot.disponivel) { onSelectHora(slot.hora); onClose(); }
+                  }}
+                  disabled={!slot.disponivel}
+                  className={[
+                    "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
+                    slot.disponivel
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100 cursor-pointer"
+                      : "bg-red-50 text-red-500 ring-1 ring-red-100 cursor-not-allowed opacity-75",
+                  ].join(" ")}
+                >
+                  <span className="w-12 font-mono text-xs">{slot.hora}</span>
+                  {slot.disponivel ? (
+                    <>
+                      <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
+                      <span className="text-xs">Livre — clique para usar</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="size-3.5 text-red-400 shrink-0" />
+                      <span className="text-xs truncate">
+                        {reuniaoOcupada?.titulo ?? "Ocupado"}
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── 6. ModalAgendarReuniao ─────────────────────────────────────────────────
 
 interface AgendarForm {
@@ -401,6 +594,8 @@ function ModalAgendarReuniao({
   });
 
   const [form, setForm] = useState<AgendarForm>(emptyForm);
+  const [gradeAberta, setGradeAberta] = useState(false);
+  const [erroConflito409, setErroConflito409] = useState<ResultadoConflito | null>(null);
 
   useEffect(() => {
     if (editing) {
@@ -417,8 +612,19 @@ function ModalAgendarReuniao({
     } else {
       setForm(emptyForm());
     }
+    setErroConflito409(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, open, farmaciaIdPreset]);
+
+  // Limpa o erro 409 quando o usuário altera data ou hora
+  useEffect(() => { setErroConflito409(null); }, [form.data, form.hora]);
+
+  const { conflito, verificando } = useVerificarConflito(
+    form.data,
+    form.hora,
+    Number(form.duracao_minutos),
+    editing?.id,
+  );
 
   const set = <K extends keyof AgendarForm>(k: K) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -430,10 +636,18 @@ function ModalAgendarReuniao({
       toast.success("Reunião agendada!");
       qc.invalidateQueries({ queryKey: ["reunioes"] });
       qc.invalidateQueries({ queryKey: ["reunioes-stats"] });
+      qc.invalidateQueries({ queryKey: ["calendario"] });
       onSaved(res.google_event_sincronizado ? undefined : res.google_link);
       onOpenChange(false);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      if ("status" in apiErr && apiErr.status === 409) {
+        setErroConflito409({ conflito: true, tipo: "sobreposicao", detalhe: apiErr.message });
+      } else {
+        toast.error(err.message);
+      }
+    },
   });
 
   const editarMut = useMutation({
@@ -442,10 +656,18 @@ function ModalAgendarReuniao({
     onSuccess: () => {
       toast.success("Reunião atualizada!");
       qc.invalidateQueries({ queryKey: ["reunioes"] });
+      qc.invalidateQueries({ queryKey: ["calendario"] });
       onSaved();
       onOpenChange(false);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      if ("status" in apiErr && apiErr.status === 409) {
+        setErroConflito409({ conflito: true, tipo: "sobreposicao", detalhe: apiErr.message });
+      } else {
+        toast.error(err.message);
+      }
+    },
   });
 
   function handleSave() {
@@ -480,137 +702,159 @@ function ModalAgendarReuniao({
   }
 
   const saving = criarMut.isPending || editarMut.isPending;
+  const hayConflicto = conflito?.conflito === true || erroConflito409?.conflito === true;
+  const conflitoAtivo = erroConflito409 ?? conflito;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarDays className="size-4 text-brand" />
-            {editing ? "Editar Reunião" : "Agendar Reunião"}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="size-4 text-brand" />
+              {editing ? "Editar Reunião" : "Agendar Reunião"}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4 py-1 max-h-[60vh] overflow-y-auto pr-1">
-          {/* Farmácia */}
-          <div>
-            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Farmácia *</label>
-            <select
-              value={form.farmacia_id}
-              onChange={set("farmacia_id")}
-              disabled={!!farmaciaIdPreset || !!editing}
-              className="mt-1 form-input w-full disabled:opacity-60"
-            >
-              <option value="">Selecionar farmácia...</option>
-              {farmacias.map((f) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Título */}
-          <div>
-            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Título *</label>
-            <input
-              value={form.titulo}
-              onChange={set("titulo")}
-              placeholder="Ex: Revisão de metas de maio"
-              className="mt-1 form-input w-full"
-            />
-          </div>
-
-          {/* Data + Hora */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4 py-1 max-h-[60vh] overflow-y-auto pr-1">
+            {/* Farmácia */}
             <div>
-              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Data *</label>
-              <input type="date" value={form.data} onChange={set("data")} className="mt-1 form-input w-full" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Horário *</label>
-              <input type="time" value={form.hora} onChange={set("hora")} className="mt-1 form-input w-full" />
-            </div>
-          </div>
-
-          {/* Duração + Local */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Duração</label>
-              <select value={form.duracao_minutos} onChange={set("duracao_minutos")} className="mt-1 form-input w-full">
-                {DURACAO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Farmácia *</label>
+              <select
+                value={form.farmacia_id}
+                onChange={set("farmacia_id")}
+                disabled={!!farmaciaIdPreset || !!editing}
+                className="mt-1 form-input w-full disabled:opacity-60"
+              >
+                <option value="">Selecionar farmácia...</option>
+                {farmacias.map((f) => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
+                ))}
               </select>
             </div>
+
+            {/* Título */}
             <div>
-              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Local</label>
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Título *</label>
               <input
-                value={form.local}
-                onChange={set("local")}
-                list="locais-list"
-                placeholder="Online"
+                value={form.titulo}
+                onChange={set("titulo")}
+                placeholder="Ex: Revisão de metas de maio"
                 className="mt-1 form-input w-full"
               />
-              <datalist id="locais-list">
-                <option value="Online" />
-                <option value="Presencial" />
-                <option value="Híbrido" />
-              </datalist>
+            </div>
+
+            {/* Data + Hora */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Data *</label>
+                <input type="date" value={form.data} onChange={set("data")} className="mt-1 form-input w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
+                  Horário *
+                  {verificando && <RefreshCw className="size-3 animate-spin text-zinc-400" />}
+                </label>
+                <input type="time" value={form.hora} onChange={set("hora")} className="mt-1 form-input w-full" />
+              </div>
+            </div>
+
+            {/* Alerta de conflito */}
+            {conflitoAtivo && (
+              <AlertaConflito
+                resultado={conflitoAtivo}
+                onVerGrade={conflitoAtivo.tipo !== "bloqueio" ? () => setGradeAberta(true) : undefined}
+              />
+            )}
+
+            {/* Duração + Local */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Duração</label>
+                <select value={form.duracao_minutos} onChange={set("duracao_minutos")} className="mt-1 form-input w-full">
+                  {DURACAO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Local</label>
+                <input
+                  value={form.local}
+                  onChange={set("local")}
+                  list="locais-list"
+                  placeholder="Online"
+                  className="mt-1 form-input w-full"
+                />
+                <datalist id="locais-list">
+                  <option value="Online" />
+                  <option value="Presencial" />
+                  <option value="Híbrido" />
+                </datalist>
+              </div>
+            </div>
+
+            {/* WhatsApp */}
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-base leading-none">💬</span> WhatsApp
+              </label>
+              <input
+                value={form.link_meet}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const apenasNums = raw.replace(/\D/g, "");
+                  if (apenasNums.length >= 8 && apenasNums === raw.replace(/[\s()\-+]/g, "")) {
+                    const com55 = apenasNums.startsWith("55") ? apenasNums : "55" + apenasNums;
+                    setForm((p) => ({ ...p, link_meet: `https://wa.me/${com55}` }));
+                  } else {
+                    setForm((p) => ({ ...p, link_meet: raw }));
+                  }
+                }}
+                placeholder="https://wa.me/5511999999999"
+                className="mt-1 form-input w-full"
+              />
+              <p className="mt-1 text-[11px] text-zinc-400">
+                Cole o link ou digite só o número — ex: (11) 99999-9999
+              </p>
+            </div>
+
+            {/* Descrição */}
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Descrição / Pauta</label>
+              <textarea
+                value={form.descricao}
+                onChange={set("descricao")}
+                rows={3}
+                placeholder="Pauta da reunião, pontos a discutir..."
+                className="mt-1 form-input w-full resize-none"
+              />
             </div>
           </div>
 
-          {/* WhatsApp */}
-          <div>
-            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
-              <span className="text-base leading-none">💬</span> WhatsApp
-            </label>
-            <input
-              value={form.link_meet}
-              onChange={(e) => {
-                const raw = e.target.value;
-                // Se o usuário digitou só números, converte para wa.me
-                const apenasNums = raw.replace(/\D/g, "");
-                if (apenasNums.length >= 8 && apenasNums === raw.replace(/[\s()\-+]/g, "")) {
-                  const com55 = apenasNums.startsWith("55") ? apenasNums : "55" + apenasNums;
-                  setForm((p) => ({ ...p, link_meet: `https://wa.me/${com55}` }));
-                } else {
-                  setForm((p) => ({ ...p, link_meet: raw }));
-                }
-              }}
-              placeholder="https://wa.me/5511999999999"
-              className="mt-1 form-input w-full"
-            />
-            <p className="mt-1 text-[11px] text-zinc-400">
-              Cole o link ou digite só o número — ex: (11) 99999-9999
-            </p>
-          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || hayConflicto}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60"
+            >
+              {saving && <RefreshCw className="size-3.5 animate-spin" />}
+              {editing ? "Salvar alterações" : "Agendar Reunião"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          {/* Descrição */}
-          <div>
-            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Descrição / Pauta</label>
-            <textarea
-              value={form.descricao}
-              onChange={set("descricao")}
-              rows={3}
-              placeholder="Pauta da reunião, pontos a discutir..."
-              className="mt-1 form-input w-full resize-none"
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60"
-          >
-            {saving && <RefreshCw className="size-3.5 animate-spin" />}
-            {editing ? "Salvar alterações" : "Agendar Reunião"}
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Grade de horários livres */}
+      <GradeHorarios
+        data={form.data}
+        open={gradeAberta}
+        onClose={() => setGradeAberta(false)}
+        onSelectHora={(hora) => setForm((p) => ({ ...p, hora }))}
+      />
+    </>
   );
 }
 
@@ -1623,16 +1867,550 @@ function ClientesView({
 
 // ── 10. ReunioesPage ───────────────────────────────────────────────────────
 
-type ViewTab = "dashboard" | "reunioes" | "clientes";
+// ── 13. CalendarioMensal ───────────────────────────────────────────────────
+
+const MESES_FULL = [
+  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+];
+const CABECALHO_SEMANA = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+
+function CalendarioMensal({
+  ano,
+  mes,
+  onAnoMesChange,
+  onDiaClick,
+}: {
+  ano: number;
+  mes: number; // 1-12
+  onAnoMesChange: (ano: number, mes: number) => void;
+  onDiaClick: (data: string) => void;
+}) {
+  const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
+
+  const { data: calendario, isLoading } = useQuery({
+    queryKey: ["calendario", mesStr],
+    queryFn: () => getCalendario(mesStr),
+    staleTime: 60_000,
+  });
+
+  const diaMap = new Map<string, CalendarioDia>();
+  for (const d of calendario?.dias ?? []) diaMap.set(d.data, d);
+
+  // Grade Monday-first
+  const primeiroDia = new Date(ano, mes - 1, 1);
+  const ultimoDia   = new Date(ano, mes, 0);
+  const offset      = (primeiroDia.getDay() + 6) % 7; // Mon=0 … Sun=6
+
+  const celulas: (number | null)[] = [
+    ...Array.from({ length: offset }, () => null),
+    ...Array.from({ length: ultimoDia.getDate() }, (_, i) => i + 1),
+  ];
+  while (celulas.length % 7 !== 0) celulas.push(null);
+
+  const semanas: (number | null)[][] = [];
+  for (let i = 0; i < celulas.length; i += 7) semanas.push(celulas.slice(i, i + 7));
+
+  const agora = new Date();
+  const hoje = `${agora.getFullYear()}-${String(agora.getMonth()+1).padStart(2,"0")}-${String(agora.getDate()).padStart(2,"0")}`;
+
+  function prevMes() {
+    if (mes === 1) onAnoMesChange(ano - 1, 12);
+    else onAnoMesChange(ano, mes - 1);
+  }
+  function nextMes() {
+    if (mes === 12) onAnoMesChange(ano + 1, 1);
+    else onAnoMesChange(ano, mes + 1);
+  }
+
+  return (
+    <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+        <button onClick={prevMes} className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors">
+          <ChevronLeft className="size-4" />
+        </button>
+        <h3 className="text-sm font-semibold text-zinc-800">{MESES_FULL[mes-1]} {ano}</h3>
+        <button onClick={nextMes} className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors">
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+
+      <div className="p-4">
+        {/* Cabeçalho */}
+        <div className="grid grid-cols-7 mb-1">
+          {CABECALHO_SEMANA.map((d) => (
+            <div key={d} className="text-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider py-1">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Dias */}
+        {isLoading ? (
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: 35 }).map((_, i) => (
+              <div key={i} className="h-14 rounded-lg bg-zinc-50 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {semanas.map((semana, si) => (
+              <div key={si} className="grid grid-cols-7 gap-0.5">
+                {semana.map((dia, di) => {
+                  if (!dia) return <div key={di} className="h-14" />;
+
+                  const dataStr = `${ano}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+                  const info    = diaMap.get(dataStr);
+                  const isHoje  = dataStr === hoje;
+                  const bloqueado  = info?.bloqueado ?? false;
+                  const total      = info?.reunioes.total ?? 0;
+                  const confirmadas = info?.reunioes.confirmadas ?? 0;
+
+                  return (
+                    <button
+                      key={di}
+                      onClick={() => onDiaClick(dataStr)}
+                      className={[
+                        "relative flex flex-col items-center justify-start pt-1.5 rounded-lg h-14 text-sm font-medium transition-all hover:ring-1 ring-inset",
+                        isHoje
+                          ? "ring-2 ring-brand bg-brand/5 text-brand"
+                          : bloqueado
+                          ? "bg-red-50 text-red-400 hover:ring-red-200"
+                          : total > 0
+                          ? "bg-zinc-50 text-zinc-700 hover:ring-zinc-200"
+                          : "text-zinc-600 hover:bg-zinc-50 hover:ring-zinc-100",
+                      ].join(" ")}
+                    >
+                      <span className="text-sm font-semibold">{dia}</span>
+                      {bloqueado ? (
+                        <Lock className="size-3 text-red-400 mt-0.5" />
+                      ) : total > 0 ? (
+                        <span className={[
+                          "mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none",
+                          confirmadas > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+                        ].join(" ")}>
+                          {total}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Legenda */}
+      <div className="px-5 py-3 border-t border-zinc-50 flex items-center gap-5 flex-wrap">
+        {[
+          { cor: "bg-brand", label: "Hoje" },
+          { cor: "bg-amber-400", label: "Com reuniões" },
+          { cor: "bg-emerald-400", label: "Confirmadas" },
+        ].map((l) => (
+          <div key={l.label} className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+            <span className={`size-2 rounded-full ${l.cor} inline-block`} />
+            {l.label}
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+          <Lock className="size-3 text-red-400" />
+          Bloqueado
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 14. ModalBloqueio ──────────────────────────────────────────────────────
+
+function ModalBloqueio({
+  open,
+  onOpenChange,
+  dataPreset,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  dataPreset?: string;
+  onSaved: () => void;
+}) {
+  const qc = useQueryClient();
+  const [tipo, setTipo] = useState<"dia" | "horario">("dia");
+  const [data, setData] = useState(dataPreset ?? hojeISO());
+  const [horaInicio, setHoraInicio] = useState("09:00");
+  const [horaFim, setHoraFim] = useState("18:00");
+  const [motivo, setMotivo] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setData(dataPreset ?? hojeISO());
+      setTipo("dia");
+      setMotivo("");
+    }
+  }, [open, dataPreset]);
+
+  const mut = useMutation({
+    mutationFn: criarBloqueio,
+    onSuccess: () => {
+      toast.success("Agenda bloqueada!");
+      qc.invalidateQueries({ queryKey: ["calendario"] });
+      qc.invalidateQueries({ queryKey: ["bloqueios"] });
+      qc.invalidateQueries({ queryKey: ["disponibilidade"] });
+      onSaved();
+      onOpenChange(false);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function handleSave() {
+    if (!data) { toast.error("Selecione uma data."); return; }
+    if (tipo === "horario" && (!horaInicio || !horaFim)) {
+      toast.error("Informe o horário de início e fim.");
+      return;
+    }
+    mut.mutate({
+      data,
+      dia_inteiro: tipo === "dia",
+      hora_inicio: tipo === "horario" ? horaInicio : undefined,
+      hora_fim:    tipo === "horario" ? horaFim    : undefined,
+      motivo:      motivo || undefined,
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="size-4 text-red-500" />
+            Fechar Agenda
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Tipo */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { v: "dia"     as const, label: "🔒 Dia inteiro"         },
+              { v: "horario" as const, label: "⏰ Horário específico"  },
+            ].map((t) => (
+              <button
+                key={t.v}
+                onClick={() => setTipo(t.v)}
+                className={[
+                  "px-3 py-2.5 text-xs font-semibold rounded-lg ring-1 transition-all",
+                  tipo === t.v
+                    ? "bg-red-50 text-red-700 ring-red-200"
+                    : "bg-zinc-50 text-zinc-600 ring-zinc-200 hover:bg-zinc-100",
+                ].join(" ")}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Data */}
+          <div>
+            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Data *</label>
+            <input
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              className="mt-1 form-input w-full"
+            />
+          </div>
+
+          {/* Horário parcial */}
+          {tipo === "horario" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Das</label>
+                <input type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} className="mt-1 form-input w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Até</label>
+                <input type="time" value={horaFim} onChange={(e) => setHoraFim(e.target.value)} className="mt-1 form-input w-full" />
+              </div>
+            </div>
+          )}
+
+          {/* Motivo */}
+          <div>
+            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Motivo (opcional)</label>
+            <input
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Ex: Viagem para São Paulo"
+              className="mt-1 form-input w-full"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={mut.isPending}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:opacity-90 disabled:opacity-60"
+          >
+            {mut.isPending && <RefreshCw className="size-3.5 animate-spin" />}
+            🔒 Fechar Agenda
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── 15. ListaBloqueios ─────────────────────────────────────────────────────
+
+function ListaBloqueios({
+  mes,
+  onAdicionarBloqueio,
+}: {
+  mes: string;
+  onAdicionarBloqueio: () => void;
+}) {
+  const qc = useQueryClient();
+
+  const { data: bloqueios = [], isLoading } = useQuery({
+    queryKey: ["bloqueios", mes],
+    queryFn: () => listarBloqueios(mes),
+    staleTime: 30_000,
+  });
+
+  const removerMut = useMutation({
+    mutationFn: removerBloqueio,
+    onSuccess: () => {
+      toast.success("Bloqueio removido.");
+      qc.invalidateQueries({ queryKey: ["bloqueios"] });
+      qc.invalidateQueries({ queryKey: ["calendario"] });
+      qc.invalidateQueries({ queryKey: ["disponibilidade"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  return (
+    <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-800">Bloqueios de Agenda</h3>
+          <p className="text-xs text-zinc-500 mt-0.5">Dias ou horários fechados para agendamento</p>
+        </div>
+        <button
+          onClick={onAdicionarBloqueio}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-lg hover:bg-red-100 transition-colors"
+        >
+          <Plus className="size-3.5" /> Adicionar Bloqueio
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="p-4 space-y-2">
+          {[1, 2].map((i) => <div key={i} className="h-12 bg-zinc-50 rounded-lg animate-pulse" />)}
+        </div>
+      ) : bloqueios.length === 0 ? (
+        <div className="py-10 text-center text-zinc-400 text-sm">
+          Nenhum bloqueio ativo neste período.
+        </div>
+      ) : (
+        <div className="divide-y divide-zinc-50">
+          {bloqueios.map((b: BloqueioAgenda) => {
+            const d = new Date(`${b.data}T12:00:00`);
+            const dataFmt = `${String(d.getDate()).padStart(2,"0")}/${MESES_NOME[d.getMonth()]}`;
+            const range   = b.dia_inteiro ? "Dia inteiro" : `${b.hora_inicio} às ${b.hora_fim}`;
+
+            return (
+              <div key={b.id} className="flex items-center gap-3 px-5 py-3.5">
+                <div className="size-8 rounded-full bg-red-50 grid place-items-center shrink-0">
+                  <Lock className="size-3.5 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-zinc-800">{dataFmt} — {range}</p>
+                  {b.motivo && <p className="text-xs text-zinc-500 truncate">{b.motivo}</p>}
+                </div>
+                <button
+                  onClick={() => removerMut.mutate(b.id)}
+                  disabled={removerMut.isPending}
+                  title="Remover bloqueio"
+                  className="p-1.5 text-zinc-300 hover:text-red-500 transition-colors disabled:opacity-40"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 16. AgendaView ─────────────────────────────────────────────────────────
+
+function AgendaView({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient();
+  const agora = new Date();
+  const [ano, setAno] = useState(agora.getFullYear());
+  const [mes, setMes] = useState(agora.getMonth() + 1);
+  const [diaDetalhe, setDiaDetalhe] = useState<string | null>(null);
+  const [modalBloqueio, setModalBloqueio] = useState(false);
+  const [dataBloquear, setDataBloquear] = useState<string | undefined>(undefined);
+
+  const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
+
+  const { data: disponibilidadeDia, isLoading: loadingDia } = useQuery({
+    queryKey: ["disponibilidade", diaDetalhe],
+    queryFn: () => getDisponibilidade(diaDetalhe!),
+    enabled: !!diaDetalhe,
+    staleTime: 30_000,
+  });
+
+  function handleAbrirBloqueio(data?: string) {
+    setDataBloquear(data);
+    setModalBloqueio(true);
+  }
+
+  function onBloqueioSaved() {
+    setDiaDetalhe(null);
+    qc.invalidateQueries({ queryKey: ["calendario"] });
+    qc.invalidateQueries({ queryKey: ["bloqueios"] });
+  }
+
+  return (
+    <div className="space-y-4">
+      <CalendarioMensal
+        ano={ano}
+        mes={mes}
+        onAnoMesChange={(a, m) => { setAno(a); setMes(m); }}
+        onDiaClick={setDiaDetalhe}
+      />
+
+      {isAdmin && (
+        <ListaBloqueios
+          mes={mesStr}
+          onAdicionarBloqueio={() => handleAbrirBloqueio(undefined)}
+        />
+      )}
+
+      {/* Detalhe do dia */}
+      <Sheet open={!!diaDetalhe} onOpenChange={(v) => !v && setDiaDetalhe(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {diaDetalhe && (() => {
+            const d = new Date(`${diaDetalhe}T12:00:00`);
+            const titulo = `${DIAS_SEMANA[d.getDay()]}, ${d.getDate()} de ${MESES_FULL[d.getMonth()]} ${d.getFullYear()}`;
+            return (
+              <>
+                <SheetHeader className="pb-4 border-b border-zinc-100">
+                  <SheetTitle className="text-sm font-semibold text-zinc-900">{titulo}</SheetTitle>
+                </SheetHeader>
+
+                <div className="py-5 space-y-4">
+                  {loadingDia ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-12 bg-zinc-50 rounded-lg animate-pulse" />
+                    ))
+                  ) : (
+                    <>
+                      {/* Bloqueio ativo */}
+                      {disponibilidadeDia?.dia_bloqueado && (
+                        <div className="flex gap-3 p-4 bg-red-50 rounded-xl ring-1 ring-red-100">
+                          <Lock className="size-5 text-red-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-semibold text-red-700">Agenda fechada</p>
+                            {disponibilidadeDia.bloqueios[0]?.motivo && (
+                              <p className="text-xs text-red-600 mt-0.5">{disponibilidadeDia.bloqueios[0].motivo}</p>
+                            )}
+                            {!disponibilidadeDia.bloqueios[0]?.dia_inteiro && (
+                              <p className="text-xs text-red-500 mt-0.5">
+                                {disponibilidadeDia.bloqueios[0]?.hora_inicio} — {disponibilidadeDia.bloqueios[0]?.hora_fim}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reuniões do dia */}
+                      {(disponibilidadeDia?.reunioes_dia?.length ?? 0) > 0 ? (
+                        <div>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                            Reuniões ({disponibilidadeDia!.reunioes_dia.length})
+                          </p>
+                          <div className="space-y-2">
+                            {disponibilidadeDia!.reunioes_dia.map((r) => (
+                              <div key={r.id} className="flex items-start gap-3 p-3 bg-zinc-50 rounded-lg ring-1 ring-zinc-100">
+                                <CalendarDays className="size-4 text-brand mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-zinc-800 truncate">{r.titulo}</p>
+                                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                                    {fmtHora(r.data_reuniao)}
+                                    {r.duracao_minutos > 0 && ` · ${r.duracao_minutos}min`}
+                                    {" · "}{r.farmacia_nome}
+                                  </p>
+                                </div>
+                                <StatusBadge status={r.status} size="xs" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : !disponibilidadeDia?.dia_bloqueado ? (
+                        <div className="text-center py-8 text-zinc-400 text-sm">
+                          Dia livre — nenhuma reunião agendada.
+                        </div>
+                      ) : null}
+
+                      {/* Admin: bloquear */}
+                      {isAdmin && !disponibilidadeDia?.dia_bloqueado && (
+                        <div className="pt-2 border-t border-zinc-100">
+                          <button
+                            onClick={() => { handleAbrirBloqueio(diaDetalhe); setDiaDetalhe(null); }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 bg-red-50 ring-1 ring-red-200 hover:bg-red-100 transition-colors"
+                          >
+                            <Lock className="size-4" />
+                            Bloquear este dia
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {isAdmin && (
+        <ModalBloqueio
+          open={modalBloqueio}
+          onOpenChange={setModalBloqueio}
+          dataPreset={dataBloquear}
+          onSaved={onBloqueioSaved}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── ViewTab ────────────────────────────────────────────────────────────────
+
+type ViewTab = "dashboard" | "reunioes" | "clientes" | "agenda";
 
 const VIEW_TABS: { value: ViewTab; label: string }[] = [
   { value: "dashboard", label: "Dashboard" },
   { value: "reunioes",  label: "Reuniões"  },
   { value: "clientes",  label: "Clientes"  },
+  { value: "agenda",    label: "📅 Agenda" },
 ];
 
 function ReunioesPage() {
   const qc = useQueryClient();
+  const isAdmin = getUser()?.is_admin === true;
 
   // View tab
   const [viewTab, setViewTab] = useState<ViewTab>("dashboard");
@@ -1779,6 +2557,11 @@ function ReunioesPage() {
             setModalAgendar({ aberto: true, farmaciaId: id, farmaciaNome: nome });
           }}
         />
+      )}
+
+      {/* ── Tab: Agenda ── */}
+      {viewTab === "agenda" && (
+        <AgendaView isAdmin={isAdmin} />
       )}
 
       {/* ── Modais / Drawer (sempre montados) ── */}

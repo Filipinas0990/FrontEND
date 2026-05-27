@@ -477,3 +477,96 @@ export function getStatus(): Promise<PipelineStatus> {
 export function rodarAgora(): Promise<{ status: string; mensagem: string }> {
   return req("/api/rodar-agora", { method: "POST" })
 }
+
+// ── Agenda / Conflitos ─────────────────────────────────────────────────────
+
+export interface ResultadoConflito {
+  conflito: boolean
+  tipo?: "sobreposicao" | "bloqueio"
+  detalhe?: string
+  reuniao_conflitante?: {
+    id: number
+    titulo: string
+    data_reuniao: string
+    duracao_minutos: number
+  }
+}
+
+export interface SlotDisponivel {
+  hora: string
+  disponivel: boolean
+}
+
+export interface BloqueioAgenda {
+  id: number
+  data: string
+  dia_inteiro: boolean
+  hora_inicio: string | null
+  hora_fim: string | null
+  motivo: string | null
+}
+
+export interface DisponibilidadeResponse {
+  data: string
+  disponivel: boolean
+  conflito: ResultadoConflito
+  dia_bloqueado: boolean
+  reunioes_dia: Array<Pick<ReuniaoAPI, "id" | "titulo" | "data_reuniao" | "duracao_minutos" | "status" | "farmacia_nome">>
+  bloqueios: BloqueioAgenda[]
+  slots: SlotDisponivel[]
+}
+
+export interface CalendarioDia {
+  data: string
+  reunioes: { total: number; realizadas: number; confirmadas: number; agendadas: number }
+  bloqueado: boolean
+  bloqueio: { motivo: string | null; hora_inicio: string | null; hora_fim: string | null } | null
+}
+
+export interface CalendarioResponse {
+  mes: string
+  dias: CalendarioDia[]
+}
+
+export function verificarConflitoAgenda(
+  dataISO: string,
+  duracao: number,
+  reuniaoId?: number,
+): Promise<ResultadoConflito> {
+  const q = new URLSearchParams({ data: dataISO, duracao: String(duracao) })
+  if (reuniaoId) q.set("reuniao_id", String(reuniaoId))
+  return req(`/api/agenda/verificar?${q}`)
+}
+
+export function getDisponibilidade(
+  data: string,
+  params?: { hora?: string; duracao?: number },
+): Promise<DisponibilidadeResponse> {
+  const q = new URLSearchParams({ data })
+  if (params?.hora)    q.set("hora", params.hora)
+  if (params?.duracao) q.set("duracao", String(params.duracao))
+  return req(`/api/agenda/disponibilidade?${q}`)
+}
+
+export function getCalendario(mes: string): Promise<CalendarioResponse> {
+  return req(`/api/agenda/calendario?mes=${mes}`)
+}
+
+export function criarBloqueio(data: {
+  data: string
+  dia_inteiro: boolean
+  hora_inicio?: string
+  hora_fim?: string
+  motivo?: string
+}): Promise<BloqueioAgenda & { mensagem: string }> {
+  return req("/api/agenda/bloqueios", { method: "POST", body: JSON.stringify(data) })
+}
+
+export function listarBloqueios(mes?: string): Promise<BloqueioAgenda[]> {
+  const q = mes ? `?mes=${mes}` : ""
+  return req(`/api/agenda/bloqueios${q}`)
+}
+
+export function removerBloqueio(id: number): Promise<{ mensagem: string }> {
+  return req(`/api/agenda/bloqueios/${id}`, { method: "DELETE" })
+}
