@@ -88,8 +88,9 @@ const STATUS_CFG: Record<ReuniaoStatusAPI, StatusCfg> = {
 
 // ── Helpers de data ────────────────────────────────────────────────────────
 
-const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const MESES_NOME  = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const DIAS_SEMANA      = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const DIAS_SEMANA_FULL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const MESES_NOME       = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 function fmtDataCompleta(iso: string): string {
   const d = new Date(iso);
@@ -935,6 +936,237 @@ function BannerGoogleCalendar({ onConectar, loading }: { onConectar: () => void;
   );
 }
 
+// ── 10. ListaReunioes (aba Reuniões — lista plana cronológica) ────────────
+
+type StatusOption = { value: ReuniaoStatusAPI; label: string };
+function statusTransitions(current: ReuniaoStatusAPI): StatusOption[] {
+  if (current === "agendada")   return [
+    { value: "agendada",   label: "Agendada"   },
+    { value: "confirmada", label: "Confirmada" },
+    { value: "realizada",  label: "Realizada"  },
+    { value: "cancelada",  label: "Cancelada"  },
+  ];
+  if (current === "confirmada") return [
+    { value: "confirmada", label: "Confirmada" },
+    { value: "realizada",  label: "Realizada"  },
+    { value: "cancelada",  label: "Cancelada"  },
+  ];
+  return [{ value: current, label: STATUS_CFG[current].label }];
+}
+
+function ListaReunioes({
+  reunioes,
+  loading,
+  onDetalhes,
+}: {
+  reunioes: ReuniaoAPI[];
+  loading: boolean;
+  onDetalhes: (r: ReuniaoAPI) => void;
+}) {
+  const qc = useQueryClient();
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todas");
+  const [realizarTarget, setRealizarTarget] = useState<ReuniaoAPI | null>(null);
+  const [confirmCancelar, setConfirmCancelar] = useState<ReuniaoAPI | null>(null);
+
+  const lista = reunioes
+    .filter((r) => {
+      const q = busca.toLowerCase();
+      const matchQ = !q || r.titulo.toLowerCase().includes(q) || r.farmacia_nome.toLowerCase().includes(q);
+      const matchS = filtroStatus === "todas" || r.status === filtroStatus;
+      return matchQ && matchS;
+    })
+    .sort((a, b) => b.data_reuniao.localeCompare(a.data_reuniao));
+
+  const confirmarMut = useMutation({
+    mutationFn: (id: number) => confirmarReuniao(id),
+    onSuccess: () => {
+      toast.success("Reunião confirmada!");
+      qc.invalidateQueries({ queryKey: ["reunioes"] });
+      qc.invalidateQueries({ queryKey: ["reunioes-stats"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const cancelarMut = useMutation({
+    mutationFn: (id: number) => cancelarReuniao(id),
+    onSuccess: () => {
+      toast.success("Reunião cancelada.");
+      qc.invalidateQueries({ queryKey: ["reunioes"] });
+      qc.invalidateQueries({ queryKey: ["reunioes-stats"] });
+      setConfirmCancelar(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function handleStatusChange(r: ReuniaoAPI, novo: ReuniaoStatusAPI) {
+    if (novo === r.status) return;
+    if (novo === "confirmada") confirmarMut.mutate(r.id);
+    else if (novo === "realizada") setRealizarTarget(r);
+    else if (novo === "cancelada") setConfirmCancelar(r);
+  }
+
+  const canEdit = (r: ReuniaoAPI) => r.status !== "realizada" && r.status !== "cancelada";
+
+  return (
+    <div className={`space-y-3 transition-opacity ${loading ? "opacity-60" : ""}`}>
+      {/* Barra busca + filtro status */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm flex-1">
+          <Search className="size-4 text-zinc-400 shrink-0" />
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por título ou cliente..."
+            className="bg-transparent outline-none text-sm flex-1 min-w-0"
+          />
+          {busca && (
+            <button onClick={() => setBusca("")} className="text-zinc-400 hover:text-zinc-700 shrink-0">
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+        <select
+          value={filtroStatus}
+          onChange={(e) => setFiltroStatus(e.target.value as FiltroStatus)}
+          className="form-input bg-white rounded-xl ring-1 ring-black/5 shadow-sm text-sm py-2.5 shrink-0 cursor-pointer"
+        >
+          <option value="todas">Todos os status</option>
+          <option value="agendada">Agendadas</option>
+          <option value="confirmada">Confirmadas</option>
+          <option value="realizada">Realizadas</option>
+          <option value="cancelada">Canceladas</option>
+        </select>
+      </div>
+
+      {/* Lista */}
+      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+        {lista.length === 0 ? (
+          <div className="py-16 text-center text-zinc-400 text-sm">
+            {busca || filtroStatus !== "todas"
+              ? "Nenhuma reunião encontrada para este filtro."
+              : "Nenhuma reunião cadastrada ainda."}
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-50">
+            {lista.map((r) => {
+              const d = new Date(r.data_reuniao);
+              const dia = String(d.getDate()).padStart(2, "0");
+              const mesAbrev = MESES_NOME[d.getMonth()].toUpperCase();
+              const mesFull  = MESES_NOME[d.getMonth()].toLowerCase();
+              const semana   = DIAS_SEMANA_FULL[d.getDay()];
+              const cfg      = STATUS_CFG[r.status];
+              const opts     = statusTransitions(r.status);
+              const isFinal  = r.status === "realizada" || r.status === "cancelada";
+
+              return (
+                <div key={r.id} className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-50/60 transition-colors group">
+
+                  {/* Data */}
+                  <div className="flex flex-col items-center w-8 shrink-0 text-center">
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">{mesAbrev}</span>
+                    <span className="text-[22px] font-bold text-zinc-800 leading-tight">{dia}</span>
+                  </div>
+
+                  {/* Separador vertical */}
+                  <div className="w-px self-stretch bg-zinc-100 shrink-0" />
+
+                  {/* Conteúdo (clicável → drawer) */}
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => onDetalhes(r)}
+                  >
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{r.titulo}</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                      {r.farmacia_nome}
+                      {" · "}
+                      {semana}, {dia} {mesFull}
+                      {" · "}
+                      {fmtHora(r.data_reuniao)}
+                      {r.duracao_minutos > 0 && ` · ${r.duracao_minutos}min`}
+                      {r.local && ` · ${r.local}`}
+                      {r.gestor_nome && ` · ${r.gestor_nome}`}
+                    </p>
+                  </div>
+
+                  {/* Controles direita */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Status select inline */}
+                    {isFinal ? (
+                      <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
+                    ) : (
+                      <select
+                        value={r.status}
+                        onChange={(e) => handleStatusChange(r, e.target.value as ReuniaoStatusAPI)}
+                        className={`text-xs font-semibold bg-transparent border-0 outline-none cursor-pointer ${cfg.text}`}
+                      >
+                        {opts.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* Badge */}
+                    <StatusBadge status={r.status} size="xs" />
+
+                    {/* Botão cancelar */}
+                    {canEdit(r) ? (
+                      <button
+                        onClick={() => setConfirmCancelar(r)}
+                        title="Cancelar reunião"
+                        className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 ml-1"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : (
+                      /* placeholder para manter alinhamento */
+                      <span className="size-3.5 ml-1 inline-block" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modal marcar realizada */}
+      <ModalMarcarRealizada
+        reuniao={realizarTarget}
+        onClose={() => setRealizarTarget(null)}
+        onDone={() => {
+          qc.invalidateQueries({ queryKey: ["reunioes"] });
+          qc.invalidateQueries({ queryKey: ["reunioes-stats"] });
+        }}
+      />
+
+      {/* Confirmar cancelamento */}
+      <AlertDialog open={!!confirmCancelar} onOpenChange={(v) => !v && setConfirmCancelar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta reunião?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmCancelar?.google_event_id
+                ? "O evento também será removido do Google Calendar."
+                : "A reunião será marcada como cancelada."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmCancelar && cancelarMut.mutate(confirmCancelar.id)}
+              disabled={cancelarMut.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelarMut.isPending ? "Cancelando..." : "Confirmar cancelamento"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 // ── Dashboard helpers ──────────────────────────────────────────────────────
 
 type WeekEntry = {
@@ -1274,10 +1506,6 @@ function ReunioesPage() {
   // View tab
   const [viewTab, setViewTab] = useState<ViewTab>("dashboard");
 
-  // Filtros (aba Reuniões)
-  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todas");
-  const [filtroBusca, setFiltroBusca] = useState("");
-
   // Modais / drawer
   const [modalAgendar, setModalAgendar] = useState<{ aberto: boolean; farmaciaId?: number; farmaciaNome?: string }>({ aberto: false });
   const [drawerReuniao, setDrawerReuniao] = useState<ReuniaoAPI | null>(null);
@@ -1320,15 +1548,6 @@ function ReunioesPage() {
     queryFn: () => getFarmacias(),
     staleTime: 60_000,
   });
-
-  // Farmácias filtradas por busca (aba Reuniões)
-  const farmaciasFiltradas = farmacias.filter((f) =>
-    f.nome.toLowerCase().includes(filtroBusca.toLowerCase()),
-  );
-
-  function reunioesDa(farmaciaId: number): ReuniaoAPI[] {
-    return todasReunioes.filter((r) => r.farmacia_id === farmaciaId);
-  }
 
   // Google OAuth
   async function handleConectarGoogle() {
@@ -1406,68 +1625,11 @@ function ReunioesPage() {
       {/* ── Tab: Reuniões ── */}
       {viewTab === "reunioes" && (
         <>
-          {/* Stats */}
-          <ReunioeStats loading={isFetching} />
-
-          {/* Barra de filtros */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm flex-1">
-              <Search className="size-4 text-zinc-400 shrink-0" />
-              <input
-                value={filtroBusca}
-                onChange={(e) => setFiltroBusca(e.target.value)}
-                placeholder="Buscar farmácia..."
-                className="bg-transparent outline-none text-sm flex-1"
-              />
-              {filtroBusca && (
-                <button onClick={() => setFiltroBusca("")} className="text-zinc-400 hover:text-zinc-700">
-                  <X className="size-4" />
-                </button>
-              )}
-            </div>
-            <button
-              onClick={handleRefresh}
-              disabled={isFetching}
-              title="Atualizar"
-              className="p-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm text-zinc-400 hover:text-zinc-700 disabled:opacity-40"
-            >
-              <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-
-          {/* Filtros de status */}
-          <FiltroAbas value={filtroStatus} onChange={setFiltroStatus} />
-
-          {/* Grid de farmácias */}
-          {isLoading ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-xl ring-1 ring-black/5 h-44 animate-pulse" />
-              ))}
-            </div>
-          ) : farmaciasFiltradas.length === 0 ? (
-            <div className="text-center py-16 text-zinc-400 text-sm">
-              {filtroBusca ? `Nenhuma farmácia encontrada para "${filtroBusca}".` : "Nenhuma farmácia cadastrada."}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {farmaciasFiltradas.map((f) => (
-                <FarmaciaReuniaoCard
-                  key={f.id}
-                  farmaciaId={f.id}
-                  farmaciaNome={f.nome}
-                  reunioes={reunioesDa(f.id).filter((r) =>
-                    filtroStatus === "todas" ? true : r.status === filtroStatus,
-                  )}
-                  onAgendar={(id, nome) => {
-                    setEditando(null);
-                    setModalAgendar({ aberto: true, farmaciaId: id, farmaciaNome: nome });
-                  }}
-                  onDetalhes={setDrawerReuniao}
-                />
-              ))}
-            </div>
-          )}
+          <ListaReunioes
+            reunioes={todasReunioes}
+            loading={isFetching}
+            onDetalhes={setDrawerReuniao}
+          />
 
           {/* Banner Google Calendar */}
           {googleStatus?.google_configurado && !googleStatus?.conectado && (
