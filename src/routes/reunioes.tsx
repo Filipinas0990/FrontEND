@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import {
   CalendarDays, Plus, X, Clock, CheckCircle2, XCircle,
   Building2, Search, Pencil, Trash2, AlertCircle, Trophy,
-  ExternalLink, Link2, MapPin, Timer, RefreshCw, Calendar,
+  ExternalLink, MapPin, Timer, RefreshCw, Calendar,
   ChevronDown, ChevronUp,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -542,15 +542,30 @@ function ModalAgendarReuniao({
             </div>
           </div>
 
-          {/* Link Meet */}
+          {/* WhatsApp */}
           <div>
-            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Link da Reunião</label>
+            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-base leading-none">💬</span> WhatsApp
+            </label>
             <input
               value={form.link_meet}
-              onChange={set("link_meet")}
-              placeholder="https://meet.google.com/..."
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Se o usuário digitou só números, converte para wa.me
+                const apenasNums = raw.replace(/\D/g, "");
+                if (apenasNums.length >= 8 && apenasNums === raw.replace(/[\s()\-+]/g, "")) {
+                  const com55 = apenasNums.startsWith("55") ? apenasNums : "55" + apenasNums;
+                  setForm((p) => ({ ...p, link_meet: `https://wa.me/${com55}` }));
+                } else {
+                  setForm((p) => ({ ...p, link_meet: raw }));
+                }
+              }}
+              placeholder="https://wa.me/5511999999999"
               className="mt-1 form-input w-full"
             />
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Cole o link ou digite só o número — ex: (11) 99999-9999
+            </p>
           </div>
 
           {/* Descrição */}
@@ -749,14 +764,14 @@ function DrawerDetalhesReuniao({
                   )}
                   {r.link_meet && (
                     <div className="flex items-center gap-2 text-sm">
-                      <Link2 className="size-4 text-zinc-400" />
+                      <span className="text-base leading-none">💬</span>
                       <a
                         href={r.link_meet}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-brand hover:underline truncate"
+                        className="text-emerald-600 hover:underline truncate font-medium"
                       >
-                        Entrar na reunião
+                        Abrir WhatsApp
                       </a>
                     </div>
                   )}
