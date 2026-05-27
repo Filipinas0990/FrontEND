@@ -22,7 +22,16 @@
       "Bash(git push *)",
       "Bash(git fetch *)",
       "Bash(git commit -m 'feat: Aba Reunioes com clientes *)",
-      "Bash(git commit -m 'feat: Reunioes v2 — API real + todos os 10 componentes do spec *)"
+      "Bash(git commit -m 'feat: Reunioes v2 — API real + todos os 10 componentes do spec *)",
+      "Bash(git commit -m 'fix: corrige fluxo OAuth Google \\(fetch URL, navega com window.location\\) *)",
+      "Bash(git commit -m 'feat: campo WhatsApp no modal de reuniao *)",
+      "Bash(git commit -m 'feat\\(reunioes\\): dashboard com KPIs, grafico semanal e donut de status *)",
+      "Bash(git commit -m 'feat\\(reunioes\\): aba Reunioes com lista cronologica plana *)",
+      "Bash(git commit -m 'style\\(reunioes\\): dropdown de filtro de status customizado *)",
+      "Bash(git commit -m 'style\\(reunioes\\): dropdown de status inline customizado por linha *)",
+      "Bash(git commit -m 'fix\\(reunioes\\): corrige dropdown de status cortado pelo overflow-hidden *)",
+      "Bash(git commit -m 'feat: controle de conflitos e bloqueio de agenda *)",
+      "Bash(git commit -m 'style\\(agenda\\): destaque de cor nos dias com reunioes no calendario *)"
     ]
   }
 }
