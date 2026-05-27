@@ -47,6 +47,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
 // ── Rota ───────────────────────────────────────────────────────────────────
 
@@ -922,12 +935,346 @@ function BannerGoogleCalendar({ onConectar, loading }: { onConectar: () => void;
   );
 }
 
+// ── Dashboard helpers ──────────────────────────────────────────────────────
+
+type WeekEntry = {
+  label: string;
+  Realizada: number;
+  Cancelada: number;
+  Agendada: number;
+  Confirmada: number;
+};
+
+function computeWeeklyData(reunioes: ReuniaoAPI[]): WeekEntry[] {
+  const map = new Map<string, WeekEntry>();
+
+  for (const r of reunioes) {
+    const d = new Date(r.data_reuniao);
+    const day = d.getDay(); // 0=Dom … 6=Sáb
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    const key = monday.toISOString().slice(0, 10);
+    const label = `${String(monday.getDate()).padStart(2, "0")}/${String(monday.getMonth() + 1).padStart(2, "0")}`;
+
+    if (!map.has(key)) {
+      map.set(key, { label, Realizada: 0, Cancelada: 0, Agendada: 0, Confirmada: 0 });
+    }
+    const entry = map.get(key)!;
+    if (r.status === "realizada")       entry.Realizada++;
+    else if (r.status === "cancelada")  entry.Cancelada++;
+    else if (r.status === "agendada")   entry.Agendada++;
+    else if (r.status === "confirmada") entry.Confirmada++;
+  }
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-10)
+    .map(([, v]) => v);
+}
+
+// ── 11. DashboardView ──────────────────────────────────────────────────────
+
+function DashboardView({ reunioes, loading }: { reunioes: ReuniaoAPI[]; loading: boolean }) {
+  const agora = new Date();
+  const em7dias = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const total     = reunioes.length;
+  const realizadas = reunioes.filter((r) => r.status === "realizada").length;
+  const canceladas = reunioes.filter((r) => r.status === "cancelada").length;
+  const proximas7 = reunioes.filter((r) => {
+    const d = new Date(r.data_reuniao);
+    return d > agora && d <= em7dias && r.status !== "cancelada";
+  }).length;
+
+  const base = realizadas + canceladas;
+  const comparecimento = base > 0 ? Math.round((realizadas / base) * 100) : 0;
+  const desistencia    = base > 0 ? Math.round((canceladas / base) * 100) : 0;
+
+  const weeklyData = computeWeeklyData(reunioes);
+
+  const statusData = [
+    { name: "Agendada",   value: reunioes.filter((r) => r.status === "agendada").length,   fill: "#8B5CF6" },
+    { name: "Confirmada", value: reunioes.filter((r) => r.status === "confirmada").length,  fill: "#F59E0B" },
+    { name: "Realizada",  value: realizadas, fill: "#84CC16" },
+    { name: "Cancelada",  value: canceladas, fill: "#EF4444" },
+  ].filter((d) => d.value > 0);
+
+  const kpiCards = [
+    {
+      label: "Reuniões Totais",
+      value: total,
+      sub: "todas as reuniões",
+      icon: <CalendarDays className="size-5 text-brand" />,
+      bg: "bg-brand/5",
+      ring: "ring-brand/10",
+    },
+    {
+      label: "Realizadas",
+      value: realizadas,
+      sub: `${comparecimento}% comparecimento`,
+      icon: <CheckCircle2 className="size-5 text-emerald-600" />,
+      bg: "bg-emerald-50",
+      ring: "ring-emerald-100",
+    },
+    {
+      label: "Taxa de Desistência",
+      value: `${desistencia}%`,
+      sub: `${canceladas} desistência${canceladas !== 1 ? "s" : ""}`,
+      icon: <XCircle className="size-5 text-red-500" />,
+      bg: "bg-red-50",
+      ring: "ring-red-100",
+    },
+    {
+      label: "Próximas 7 dias",
+      value: proximas7,
+      sub: "reuniões marcadas",
+      icon: <Timer className="size-5 text-amber-500" />,
+      bg: "bg-amber-50",
+      ring: "ring-amber-100",
+    },
+  ] as const;
+
+  return (
+    <div className={`space-y-6 transition-opacity ${loading ? "opacity-60" : ""}`}>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpiCards.map((c) => (
+          <div key={c.label} className={`${c.bg} rounded-xl ring-1 ${c.ring} shadow-sm p-5`}>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider leading-tight">{c.label}</p>
+              <div className="size-9 rounded-xl bg-white/70 grid place-items-center shadow-sm shrink-0">
+                {c.icon}
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-zinc-900">{c.value}</p>
+            <p className="text-xs text-zinc-500 mt-1">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* Stacked Bar */}
+        <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 lg:col-span-3">
+          <h3 className="text-sm font-semibold text-zinc-800 mb-4">Agendamentos por Semana</h3>
+          {weeklyData.length === 0 ? (
+            <div className="h-52 flex items-center justify-center text-zinc-400 text-sm">
+              Sem dados para exibir
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={weeklyData} barSize={30} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#71717a" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 11, fill: "#71717a" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <RechartsTooltip
+                  contentStyle={{ borderRadius: "8px", border: "1px solid #e4e4e7", fontSize: "12px" }}
+                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                />
+                <Legend
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
+                />
+                <Bar dataKey="Realizada"  stackId="a" fill="#84CC16" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Confirmada" stackId="a" fill="#F59E0B" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Agendada"   stackId="a" fill="#8B5CF6" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Cancelada"  stackId="a" fill="#EF4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Donut */}
+        <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5 lg:col-span-2">
+          <h3 className="text-sm font-semibold text-zinc-800 mb-4">Status das Reuniões</h3>
+          {statusData.length === 0 ? (
+            <div className="h-52 flex items-center justify-center text-zinc-400 text-sm">
+              Sem dados
+            </div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={170}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={76}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {statusData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    contentStyle={{ borderRadius: "8px", border: "1px solid #e4e4e7", fontSize: "12px" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-3 space-y-2">
+                {statusData.map((d) => (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2.5 rounded-full shrink-0 inline-block" style={{ backgroundColor: d.fill }} />
+                      <span className="text-zinc-600">{d.name}</span>
+                    </div>
+                    <span className="font-semibold text-zinc-800">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 12. ClientesView ───────────────────────────────────────────────────────
+
+function ClientesView({
+  farmacias,
+  reunioes,
+  onAgendar,
+}: {
+  farmacias: { id: number; nome: string }[];
+  reunioes: ReuniaoAPI[];
+  onAgendar: (id: number, nome: string) => void;
+}) {
+  const now = new Date();
+  const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [busca, setBusca] = useState("");
+
+  const rows = farmacias
+    .filter((f) => f.nome.toLowerCase().includes(busca.toLowerCase()))
+    .map((f) => {
+      const mine = reunioes.filter((r) => r.farmacia_id === f.id);
+      const totalMes  = mine.filter((r) => r.data_reuniao.startsWith(mesAtual) && r.status !== "cancelada").length;
+      const realizadas = mine.filter((r) => r.status === "realizada").length;
+      const futuras    = mine.filter((r) => (r.status === "agendada" || r.status === "confirmada") && isFutura(r.data_reuniao)).length;
+      const canceladas = mine.filter((r) => r.status === "cancelada").length;
+      const proxima    = mine
+        .filter((r) => (r.status === "agendada" || r.status === "confirmada") && isFutura(r.data_reuniao))
+        .sort((a, b) => a.data_reuniao.localeCompare(b.data_reuniao))[0] ?? null;
+      return { ...f, totalMes, realizadas, futuras, canceladas, proxima, total: mine.length };
+    })
+    .sort((a, b) => b.totalMes - a.totalMes || b.total - a.total);
+
+  return (
+    <div className="space-y-4">
+      {/* Search */}
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm max-w-xs">
+        <Search className="size-4 text-zinc-400 shrink-0" />
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Filtrar cliente..."
+          className="bg-transparent outline-none text-sm flex-1"
+        />
+        {busca && (
+          <button onClick={() => setBusca("")} className="text-zinc-400 hover:text-zinc-700">
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-zinc-100 grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-4">
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Farmácia</p>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Este mês</p>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Realizadas</p>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Agendadas</p>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Canceladas</p>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Ação</p>
+        </div>
+        <div className="divide-y divide-zinc-50">
+          {rows.length === 0 ? (
+            <div className="text-center py-12 text-zinc-400 text-sm">
+              {busca ? `Nenhuma farmácia encontrada para "${busca}".` : "Nenhuma farmácia cadastrada."}
+            </div>
+          ) : (
+            rows.map((row) => (
+              <div
+                key={row.id}
+                className="px-5 py-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-4 hover:bg-zinc-50/50 transition-colors"
+              >
+                {/* Nome + próxima */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="size-8 rounded-full bg-brand/10 grid place-items-center text-brand text-[11px] font-bold shrink-0">
+                    {row.nome.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{row.nome}</p>
+                    {row.proxima ? (
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Próxima: {fmtDataCurta(row.proxima.data_reuniao)} às {fmtHora(row.proxima.data_reuniao)}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-zinc-400 mt-0.5 italic">Sem próximas reuniões</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div className="text-center hidden sm:block">
+                  <p className="text-sm font-bold text-zinc-900">{row.totalMes}</p>
+                </div>
+                <div className="text-center hidden sm:block">
+                  <p className="text-sm font-bold text-emerald-600">{row.realizadas}</p>
+                </div>
+                <div className="text-center hidden sm:block">
+                  <p className="text-sm font-bold text-amber-600">{row.futuras}</p>
+                </div>
+                <div className="text-center hidden sm:block">
+                  <p className="text-sm font-bold text-red-500">{row.canceladas}</p>
+                </div>
+
+                {/* Ação */}
+                <button
+                  onClick={() => onAgendar(row.id, row.nome)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand/5 text-brand ring-1 ring-brand/20 rounded-lg hover:bg-brand/10 shrink-0"
+                >
+                  <Plus className="size-3.5" /> Agendar
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 10. ReunioesPage ───────────────────────────────────────────────────────
+
+type ViewTab = "dashboard" | "reunioes" | "clientes";
+
+const VIEW_TABS: { value: ViewTab; label: string }[] = [
+  { value: "dashboard", label: "Dashboard" },
+  { value: "reunioes",  label: "Reuniões"  },
+  { value: "clientes",  label: "Clientes"  },
+];
 
 function ReunioesPage() {
   const qc = useQueryClient();
 
-  // Filtros
+  // View tab
+  const [viewTab, setViewTab] = useState<ViewTab>("dashboard");
+
+  // Filtros (aba Reuniões)
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todas");
   const [filtroBusca, setFiltroBusca] = useState("");
 
@@ -955,12 +1302,10 @@ function ReunioesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Dados
-  const { data: reunioes = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["reunioes", filtroStatus],
-    queryFn: () => getReunioes(
-      filtroStatus !== "todas" ? { status: filtroStatus as ReuniaoStatusAPI } : undefined,
-    ),
+  // Dados — sempre busca todas as reuniões; filtragem é client-side
+  const { data: todasReunioes = [], isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["reunioes"],
+    queryFn: () => getReunioes(),
     staleTime: 30_000,
   });
 
@@ -970,20 +1315,19 @@ function ReunioesPage() {
     staleTime: 60_000,
   });
 
-  // Farmácias únicas com reuniões ou todas as farmácias cadastradas
   const { data: farmacias = [] } = useQuery({
     queryKey: ["farmacias"],
     queryFn: () => getFarmacias(),
     staleTime: 60_000,
   });
 
-  // Agrupar reuniões por farmácia
+  // Farmácias filtradas por busca (aba Reuniões)
   const farmaciasFiltradas = farmacias.filter((f) =>
     f.nome.toLowerCase().includes(filtroBusca.toLowerCase()),
   );
 
   function reunioesDa(farmaciaId: number): ReuniaoAPI[] {
-    return reunioes.filter((r) => r.farmacia_id === farmaciaId);
+    return todasReunioes.filter((r) => r.farmacia_id === farmaciaId);
   }
 
   // Google OAuth
@@ -1011,7 +1355,6 @@ function ReunioesPage() {
     }
   }
 
-  // Abrir drawer e fechar modal de edição ao mesmo tempo
   function handleEditar(r: ReuniaoAPI) {
     setDrawerReuniao(null);
     setTimeout(() => {
@@ -1020,77 +1363,132 @@ function ReunioesPage() {
     }, 150);
   }
 
-  return (
-    <AppShell title="Reuniões com Clientes">
-      {/* Stats */}
-      <ReunioeStats loading={isFetching} />
+  function handleRefresh() {
+    refetch();
+    qc.invalidateQueries({ queryKey: ["reunioes-stats"] });
+  }
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        {/* Busca */}
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm flex-1">
-          <Search className="size-4 text-zinc-400 shrink-0" />
-          <input
-            value={filtroBusca}
-            onChange={(e) => setFiltroBusca(e.target.value)}
-            placeholder="Buscar farmácia..."
-            className="bg-transparent outline-none text-sm flex-1"
-          />
-          {filtroBusca && (
-            <button onClick={() => setFiltroBusca("")} className="text-zinc-400 hover:text-zinc-700">
-              <X className="size-4" />
-            </button>
-          )}
-        </div>
-        {/* Botão atualizar */}
+  return (
+    <AppShell
+      title="Reuniões com Clientes"
+      headerRight={
         <button
-          onClick={() => { refetch(); qc.invalidateQueries({ queryKey: ["reunioes-stats"] }); }}
-          disabled={isFetching}
-          title="Atualizar"
-          className="p-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm text-zinc-400 hover:text-zinc-700 disabled:opacity-40"
+          onClick={() => { setEditando(null); setModalAgendar({ aberto: true }); }}
+          className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
         >
-          <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
+          <Plus className="size-3.5" /> Nova Reunião
         </button>
+      }
+    >
+      {/* Tabs de navegação */}
+      <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl self-start">
+        {VIEW_TABS.map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setViewTab(t.value)}
+            className={[
+              "px-4 py-1.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
+              viewTab === t.value
+                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5"
+                : "text-zinc-500 hover:text-zinc-800",
+            ].join(" ")}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Abas de status */}
-      <FiltroAbas value={filtroStatus} onChange={setFiltroStatus} />
-
-      {/* Grid de farmácias */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl ring-1 ring-black/5 h-44 animate-pulse" />
-          ))}
-        </div>
-      ) : farmaciasFiltradas.length === 0 ? (
-        <div className="text-center py-16 text-zinc-400 text-sm">
-          {filtroBusca ? `Nenhuma farmácia encontrada para "${filtroBusca}".` : "Nenhuma farmácia cadastrada."}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {farmaciasFiltradas.map((f) => (
-            <FarmaciaReuniaoCard
-              key={f.id}
-              farmaciaId={f.id}
-              farmaciaNome={f.nome}
-              reunioes={reunioesDa(f.id)}
-              onAgendar={(id, nome) => {
-                setEditando(null);
-                setModalAgendar({ aberto: true, farmaciaId: id, farmaciaNome: nome });
-              }}
-              onDetalhes={setDrawerReuniao}
-            />
-          ))}
-        </div>
+      {/* ── Tab: Dashboard ── */}
+      {viewTab === "dashboard" && (
+        <DashboardView reunioes={todasReunioes} loading={isFetching} />
       )}
 
-      {/* Banner Google Calendar (se não conectado e Google configurado) */}
-      {googleStatus?.google_configurado && !googleStatus?.conectado && (
-        <BannerGoogleCalendar onConectar={handleConectarGoogle} loading={googleLoading} />
+      {/* ── Tab: Reuniões ── */}
+      {viewTab === "reunioes" && (
+        <>
+          {/* Stats */}
+          <ReunioeStats loading={isFetching} />
+
+          {/* Barra de filtros */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm flex-1">
+              <Search className="size-4 text-zinc-400 shrink-0" />
+              <input
+                value={filtroBusca}
+                onChange={(e) => setFiltroBusca(e.target.value)}
+                placeholder="Buscar farmácia..."
+                className="bg-transparent outline-none text-sm flex-1"
+              />
+              {filtroBusca && (
+                <button onClick={() => setFiltroBusca("")} className="text-zinc-400 hover:text-zinc-700">
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isFetching}
+              title="Atualizar"
+              className="p-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm text-zinc-400 hover:text-zinc-700 disabled:opacity-40"
+            >
+              <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          {/* Filtros de status */}
+          <FiltroAbas value={filtroStatus} onChange={setFiltroStatus} />
+
+          {/* Grid de farmácias */}
+          {isLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-xl ring-1 ring-black/5 h-44 animate-pulse" />
+              ))}
+            </div>
+          ) : farmaciasFiltradas.length === 0 ? (
+            <div className="text-center py-16 text-zinc-400 text-sm">
+              {filtroBusca ? `Nenhuma farmácia encontrada para "${filtroBusca}".` : "Nenhuma farmácia cadastrada."}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {farmaciasFiltradas.map((f) => (
+                <FarmaciaReuniaoCard
+                  key={f.id}
+                  farmaciaId={f.id}
+                  farmaciaNome={f.nome}
+                  reunioes={reunioesDa(f.id).filter((r) =>
+                    filtroStatus === "todas" ? true : r.status === filtroStatus,
+                  )}
+                  onAgendar={(id, nome) => {
+                    setEditando(null);
+                    setModalAgendar({ aberto: true, farmaciaId: id, farmaciaNome: nome });
+                  }}
+                  onDetalhes={setDrawerReuniao}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Banner Google Calendar */}
+          {googleStatus?.google_configurado && !googleStatus?.conectado && (
+            <BannerGoogleCalendar onConectar={handleConectarGoogle} loading={googleLoading} />
+          )}
+        </>
       )}
 
-      {/* Modal agendar / editar */}
+      {/* ── Tab: Clientes ── */}
+      {viewTab === "clientes" && (
+        <ClientesView
+          farmacias={farmacias}
+          reunioes={todasReunioes}
+          onAgendar={(id, nome) => {
+            setEditando(null);
+            setModalAgendar({ aberto: true, farmaciaId: id, farmaciaNome: nome });
+          }}
+        />
+      )}
+
+      {/* ── Modais / Drawer (sempre montados) ── */}
       <ModalAgendarReuniao
         open={modalAgendar.aberto}
         onOpenChange={(v) => {
@@ -1103,15 +1501,11 @@ function ReunioesPage() {
         onSaved={handleSaved}
       />
 
-      {/* Drawer detalhe */}
       <DrawerDetalhesReuniao
         reuniao={drawerReuniao}
         onClose={() => setDrawerReuniao(null)}
         onEditar={handleEditar}
-        onRefresh={() => {
-          refetch();
-          qc.invalidateQueries({ queryKey: ["reunioes-stats"] });
-        }}
+        onRefresh={handleRefresh}
       />
     </AppShell>
   );
