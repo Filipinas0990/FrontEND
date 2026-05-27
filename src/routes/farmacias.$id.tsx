@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { getFarmacias, setFarmaciaMeta, type CanalData } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
+import { FarmaciaComparativoPanel } from "@/components/FarmaciaComparativoPanel";
 import {
   Dialog,
   DialogContent,
@@ -430,6 +431,12 @@ function FarmaciaDetailPage() {
           </button>
         </section>
       )}
+
+      {/* ── Comparativo de Períodos ── */}
+      <FarmaciaComparativoPanel
+        farmaciaId={farmaciaId}
+        farmaciaNome={farmacia?.nome ?? `Farmácia #${id}`}
+      />
 
       {/* Canais — cards clicáveis */}
       {farmacia?.canais && farmacia.canais.length > 0 && (

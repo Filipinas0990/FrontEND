@@ -120,6 +120,9 @@ export interface RankingGestor {
   meta_vendas_total: number | null
 }
 
+/** Snapshot de uma farmácia para um período específico (retornado por /api/farmacias?dias=X) */
+export type FarmaciaSnapshot = Farmacia & { periodo_dias?: 7 | 15 | 30 }
+
 export interface FarmaciaEvolucao {
   semana_numero: number
   farmacia_id: number
@@ -199,9 +202,12 @@ export async function criarSuperAdmin(data: {
 
 // ── Painel ─────────────────────────────────────────────────────────────────
 
-export function getPainel(gestorId?: number): Promise<PainelData> {
-  const q = gestorId ? `?gestor_id=${gestorId}` : ""
-  return req(`/api/painel${q}`)
+export function getPainel(gestorId?: number, dias?: 7 | 15 | 30): Promise<PainelData> {
+  const q = new URLSearchParams()
+  if (gestorId) q.set("gestor_id", String(gestorId))
+  if (dias)     q.set("dias", String(dias))
+  const qs = q.toString()
+  return req(`/api/painel${qs ? `?${qs}` : ""}`)
 }
 
 // ── Farmácias ──────────────────────────────────────────────────────────────
@@ -210,17 +216,23 @@ export function getFarmacias(params?: {
   gestor_id?: number
   status?: string
   busca?: string
+  dias?: 7 | 15 | 30
 }): Promise<Farmacia[]> {
   const q = new URLSearchParams()
   if (params?.gestor_id) q.set("gestor_id", String(params.gestor_id))
-  if (params?.status) q.set("status", params.status)
-  if (params?.busca) q.set("busca", params.busca)
+  if (params?.status)    q.set("status", params.status)
+  if (params?.busca)     q.set("busca", params.busca)
+  if (params?.dias)      q.set("dias", String(params.dias))
   const qs = q.toString()
   return req(`/api/farmacias${qs ? `?${qs}` : ""}`)
 }
 
 export function getFarmaciaEvolucao(id: number): Promise<FarmaciaEvolucao[]> {
   return req(`/api/farmacias/${id}/evolucao`)
+}
+
+export function getFarmaciaEvolucaoPorPeriodo(id: number, dias: 7 | 15 | 30): Promise<FarmaciaEvolucao[]> {
+  return req(`/api/farmacias/${id}/evolucao?dias=${dias}`)
 }
 
 export function createFarmacia(data: {

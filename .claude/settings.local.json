@@ -16,7 +16,8 @@
       "Bash(dir \"c:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\AUTOMAÇÂO\")",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\FRONT-END\" -Recurse -Directory | Select-Object -First 50 | ForEach-Object { $_.FullName })",
       "Bash(Get-Content \"c:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\FRONT-END\\\\package.json\")",
-      "Bash(Select-Object -First 50)"
+      "Bash(Select-Object -First 50)",
+      "Bash(git add *)"
     ]
   }
 }

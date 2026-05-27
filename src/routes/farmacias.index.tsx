@@ -4,6 +4,9 @@ import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Sett
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { usePeriod } from "@/contexts/PeriodContext";
+import { PeriodSelector } from "@/components/PeriodSelector";
+import { PeriodBadge } from "@/components/PeriodBadge";
 import {
   getFarmacias,
   getGestores,
@@ -341,6 +344,7 @@ function FarmaciasPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const admin = isAdmin();
+  const { period, setPeriod } = usePeriod();
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"todas" | "Ativa" | "Atencao" | "Alerta">("todas");
@@ -349,11 +353,12 @@ function FarmaciasPage() {
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
 
   const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["farmacias", filter, query],
+    queryKey: ["farmacias", filter, query, period],
     queryFn: () =>
       getFarmacias({
         status: filter !== "todas" ? filter : undefined,
         busca: query || undefined,
+        dias: period,
       }),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -454,6 +459,13 @@ function FarmaciasPage() {
         </div>
       }
     >
+      {/* Seletor de período */}
+      <PeriodSelector
+        value={period}
+        onChange={setPeriod}
+        loading={isFetching && !isLoading}
+      />
+
       {/* Filters */}
       <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex items-center gap-3">
         <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-zinc-50 rounded-md border border-zinc-100">
@@ -513,9 +525,12 @@ function FarmaciasPage() {
                       : <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
                     }
                   </div>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 shrink-0 ${alertColor(p.nivel_alerta)}`}>
-                    {alertLabel(p.nivel_alerta)}
-                  </span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
+                      {alertLabel(p.nivel_alerta)}
+                    </span>
+                    <PeriodBadge dias={period} />
+                  </div>
                 </div>
 
                 {semDados ? (

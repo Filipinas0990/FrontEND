@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -13,6 +12,10 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { getPainel, getGestores, getFarmacias } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
+import { usePeriod } from "@/contexts/PeriodContext";
+import { PeriodSelector } from "@/components/PeriodSelector";
+import { PeriodBadge } from "@/components/PeriodBadge";
+import { useState } from "react";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -49,10 +52,11 @@ function Index() {
   const navigate = useNavigate();
   const admin = isAdmin();
   const [gestorId, setGestorId] = useState<number | undefined>();
+  const { period, setPeriod } = usePeriod();
 
-  const { data: painel, isLoading: loadingPainel } = useQuery({
-    queryKey: ["painel", gestorId],
-    queryFn: () => getPainel(gestorId),
+  const { data: painel, isLoading: loadingPainel, isFetching: fetchingPainel } = useQuery({
+    queryKey: ["painel", gestorId, period],
+    queryFn: () => getPainel(gestorId, period),
   });
 
   const { data: gestores = [] } = useQuery({
@@ -62,8 +66,8 @@ function Index() {
   });
 
   const { data: farmacias = [], isLoading: loadingFarmacias } = useQuery({
-    queryKey: ["farmacias", undefined, undefined, gestorId],
-    queryFn: () => getFarmacias(gestorId ? { gestor_id: gestorId } : undefined),
+    queryKey: ["farmacias", undefined, undefined, gestorId, period],
+    queryFn: () => getFarmacias(gestorId ? { gestor_id: gestorId, dias: period } : { dias: period }),
     select: (data) =>
       [...data].sort((a, b) => b.score_criticidade - a.score_criticidade).slice(0, 8),
   });
@@ -118,6 +122,13 @@ function Index() {
         </div>
       )}
 
+      {/* ── Seletor global de período ── */}
+      <PeriodSelector
+        value={period}
+        onChange={setPeriod}
+        loading={fetchingPainel && !loadingPainel}
+      />
+
       {/* KPI Cards */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         {loadingPainel
@@ -125,12 +136,19 @@ function Index() {
               <div key={i} className="bg-white p-6 rounded-xl ring-1 ring-black/5 h-24 animate-pulse" />
             ))
           : kpis.map((k) => (
-              <div key={k.label} className="bg-white p-6 rounded-xl ring-1 ring-black/5 shadow-sm space-y-2">
+              <div
+                key={k.label}
+                className="bg-white p-6 rounded-xl ring-1 ring-black/5 shadow-sm space-y-2 transition-opacity duration-300"
+                style={{ opacity: fetchingPainel ? 0.6 : 1 }}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-zinc-500 font-medium">{k.label}</span>
                   <k.icon className={`size-4 ${k.color}`} />
                 </div>
                 <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
+                <div className="flex justify-end">
+                  <PeriodBadge dias={period} />
+                </div>
               </div>
             ))}
       </section>
@@ -171,6 +189,7 @@ function Index() {
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <AlertTriangle className="size-4 text-zinc-400" />
             Farmácias em Destaque (por criticidade)
+            <PeriodBadge dias={period} />
           </h3>
           <button
             onClick={() => navigate({ to: "/farmacias" })}
