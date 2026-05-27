@@ -10,7 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as ReunioesRouteImport } from './routes/reunioes'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as RankingGestoresRouteImport } from './routes/ranking-gestores'
+import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
@@ -23,6 +26,21 @@ import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReunioesRoute = ReunioesRouteImport.update({
+  id: '/reunioes',
+  path: '/reunioes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RankingGestoresRoute = RankingGestoresRouteImport.update({
+  id: '/ranking-gestores',
+  path: '/ranking-gestores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RankingRoute = RankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RelatoriosRoute = RelatoriosRouteImport.update({
@@ -78,7 +96,10 @@ export interface FileRoutesByFullPath {
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
+  '/ranking': typeof RankingRoute
+  '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
+  '/reunioes': typeof ReunioesRoute
   '/setup': typeof SetupRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/': typeof FarmaciasIndexRoute
@@ -89,7 +110,10 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
+  '/ranking': typeof RankingRoute
+  '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
+  '/reunioes': typeof ReunioesRoute
   '/setup': typeof SetupRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias': typeof FarmaciasIndexRoute
@@ -102,7 +126,10 @@ export interface FileRoutesById {
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
+  '/ranking': typeof RankingRoute
+  '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
+  '/reunioes': typeof ReunioesRoute
   '/setup': typeof SetupRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/': typeof FarmaciasIndexRoute
@@ -116,7 +143,10 @@ export interface FileRouteTypes {
     | '/farmacias'
     | '/gestores'
     | '/login'
+    | '/ranking'
+    | '/ranking-gestores'
     | '/relatorios'
+    | '/reunioes'
     | '/setup'
     | '/farmacias/$id'
     | '/farmacias/'
@@ -127,7 +157,10 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/gestores'
     | '/login'
+    | '/ranking'
+    | '/ranking-gestores'
     | '/relatorios'
+    | '/reunioes'
     | '/setup'
     | '/farmacias/$id'
     | '/farmacias'
@@ -139,7 +172,10 @@ export interface FileRouteTypes {
     | '/farmacias'
     | '/gestores'
     | '/login'
+    | '/ranking'
+    | '/ranking-gestores'
     | '/relatorios'
+    | '/reunioes'
     | '/setup'
     | '/farmacias/$id'
     | '/farmacias/'
@@ -152,12 +188,36 @@ export interface RootRouteChildren {
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
   GestoresRoute: typeof GestoresRoute
   LoginRoute: typeof LoginRoute
+  RankingRoute: typeof RankingRoute
+  RankingGestoresRoute: typeof RankingGestoresRoute
   RelatoriosRoute: typeof RelatoriosRoute
+  ReunioesRoute: typeof ReunioesRoute
   SetupRoute: typeof SetupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reunioes': {
+      id: '/reunioes'
+      path: '/reunioes'
+      fullPath: '/reunioes'
+      preLoaderRoute: typeof ReunioesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ranking-gestores': {
+      id: '/ranking-gestores'
+      path: '/ranking-gestores'
+      fullPath: '/ranking-gestores'
+      preLoaderRoute: typeof RankingGestoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ranking': {
+      id: '/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof RankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/setup': {
       id: '/setup'
       path: '/setup'
@@ -252,7 +312,10 @@ const rootRouteChildren: RootRouteChildren = {
   FarmaciasRoute: FarmaciasRouteWithChildren,
   GestoresRoute: GestoresRoute,
   LoginRoute: LoginRoute,
+  RankingRoute: RankingRoute,
+  RankingGestoresRoute: RankingGestoresRoute,
   RelatoriosRoute: RelatoriosRoute,
+  ReunioesRoute: ReunioesRoute,
   SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport
