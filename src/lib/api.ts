@@ -458,22 +458,10 @@ export function getGoogleStatus(): Promise<GoogleStatus> {
 }
 
 export async function iniciarOAuthGoogle(): Promise<void> {
-  const token = getToken()
-  const res = await fetch(`${BASE_URL}/api/auth/google`, {
-    headers: { Authorization: `Bearer ${token}` },
-    redirect: "follow",
-  })
-  // API pode retornar JSON com a URL ou redirecionar diretamente
-  const ct = res.headers.get("content-type") ?? ""
-  if (ct.includes("application/json")) {
-    const data = await res.json() as { auth_url?: string; url?: string; redirect_url?: string }
-    const url = data.auth_url ?? data.url ?? data.redirect_url
-    if (url) { window.location.href = url; return }
-  }
-  // Se chegou aqui e houve redirect, fetch já seguiu — a URL final está em res.url
-  if (res.url && !res.url.includes(BASE_URL)) {
-    window.location.href = res.url
-  }
+  // Busca a URL de autorização via fetch (token não aparece na barra do browser)
+  const res = await req<{ url: string }>("/api/auth/google/url")
+  if (!res?.url) throw new Error("URL de autenticação não retornada pelo servidor.")
+  window.location.href = res.url
 }
 
 export function desconectarGoogleCalendar(): Promise<{ mensagem: string }> {
