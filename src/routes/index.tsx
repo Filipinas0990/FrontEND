@@ -252,7 +252,7 @@ function Index() {
                     {/* Google */}
                     <td className="px-6 py-3">
                       {google ? (
-                        <div className="flex flex-col leading-tight">
+                        <div className="flex items-baseline gap-2">
                           <span className="text-sm font-semibold text-zinc-800">{(google.atendimentos ?? 0).toLocaleString("pt-BR")}</span>
                           <span className="text-[11px] font-semibold text-[#4285F4]">{gConv != null ? `${gConv}%` : "—"}</span>
                         </div>
@@ -261,7 +261,7 @@ function Index() {
                     {/* Meta / Facebook */}
                     <td className="px-6 py-3">
                       {meta ? (
-                        <div className="flex flex-col leading-tight">
+                        <div className="flex items-baseline gap-2">
                           <span className="text-sm font-semibold text-zinc-800">{(meta.atendimentos ?? 0).toLocaleString("pt-BR")}</span>
                           <span className="text-[11px] font-semibold text-[#1877F2]">{mConv != null ? `${mConv}%` : "—"}</span>
                         </div>
