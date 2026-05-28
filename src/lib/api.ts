@@ -470,12 +470,36 @@ export function desconectarGoogleCalendar(): Promise<{ mensagem: string }> {
 
 // ── Pipeline ───────────────────────────────────────────────────────────────
 
+export interface PipelinePreview {
+  farmaciasTotais: number
+  nomes: string[]
+  periodos: number[]
+  estimativa_segundos?: number
+}
+
 export function getStatus(): Promise<PipelineStatus> {
   return fetch(`${BASE_URL}/api/status`).then((r) => r.json())
 }
 
-export function rodarAgora(): Promise<{ status: string; mensagem: string }> {
-  return req("/api/rodar-agora", { method: "POST" })
+export function getPreviewPipeline(
+  periodos?: number[],
+  gestor_id?: number,
+): Promise<PipelinePreview> {
+  const params = new URLSearchParams()
+  if (periodos?.length) params.set("periodos", periodos.join(","))
+  if (gestor_id != null) params.set("gestor_id", String(gestor_id))
+  const qs = params.toString()
+  return req(`/api/rodar-agora/preview${qs ? `?${qs}` : ""}`)
+}
+
+export function rodarAgora(opts?: {
+  periodos?: number[]
+  gestor_id?: number
+}): Promise<{ status: string; mensagem: string }> {
+  return req("/api/rodar-agora", {
+    method: "POST",
+    ...(opts ? { body: JSON.stringify(opts) } : {}),
+  })
 }
 
 // ── Agenda / Conflitos ─────────────────────────────────────────────────────
