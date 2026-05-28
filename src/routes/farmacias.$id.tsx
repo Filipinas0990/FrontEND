@@ -344,17 +344,6 @@ function FarmaciaDetailPage() {
         </button>
       }
     >
-      {/* Receita total */}
-      {farmacia && (
-        <section className="grid grid-cols-1 gap-4 max-w-xs">
-          <MetricCard
-            label="Receita Total"
-            value={fmtBRL(farmacia.receita_total)}
-            delta={farmacia.variacao_receita != null ? `${farmacia.variacao_receita >= 0 ? "+" : ""}${farmacia.variacao_receita.toFixed(1)}% vs semana anterior` : undefined}
-            positive={farmacia.variacao_receita != null ? farmacia.variacao_receita >= 0 : undefined}
-          />
-        </section>
-      )}
 
       {/* Meta de desempenho */}
       {farmacia && farmacia.meta_receita != null && (
