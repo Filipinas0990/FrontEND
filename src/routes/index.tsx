@@ -205,15 +205,38 @@ function Index() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-zinc-50/50 border-b border-zinc-100">
-                  {["#", "Farmácia", "Status", "Cliques", "Conversão", "Variação"].map((h) => (
-                    <th key={h} className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                      {h}
-                    </th>
-                  ))}
+                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">#</th>
+                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Farmácia</th>
+                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-[#4285F4] inline-block shrink-0" />
+                      Google
+                    </span>
+                    <span className="text-[9px] font-normal text-zinc-400 normal-case tracking-normal">cliques · conv%</span>
+                  </th>
+                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-[#1877F2] inline-block shrink-0" />
+                      Meta / FB
+                    </span>
+                    <span className="text-[9px] font-normal text-zinc-400 normal-case tracking-normal">cliques · conv%</span>
+                  </th>
+                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Variação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {farmacias.map((p) => (
+                {farmacias.map((p) => {
+                  const google = p.canais?.find((c) => c.nome.toLowerCase().includes("google"));
+                  const meta   = p.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
+                  const gConv  = google?.vendas != null && (google.atendimentos ?? 0) > 0
+                    ? ((google.vendas / google.atendimentos) * 100).toFixed(1)
+                    : null;
+                  const mConv  = meta?.vendas != null && (meta.atendimentos ?? 0) > 0
+                    ? ((meta.vendas / meta.atendimentos) * 100).toFixed(1)
+                    : null;
+
+                  return (
                   <tr
                     key={p.id}
                     className="hover:bg-zinc-50/50 cursor-pointer"
@@ -226,8 +249,25 @@ function Index() {
                         {alertLabel(p.nivel_alerta)}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-sm font-medium text-zinc-700">{p.total_atendimentos.toLocaleString("pt-BR")}</td>
-                    <td className="px-6 py-3 text-sm font-semibold text-brand">{(p.taxa_conversao ?? 0).toFixed(1)}%</td>
+                    {/* Google */}
+                    <td className="px-6 py-3">
+                      {google ? (
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-sm font-semibold text-zinc-800">{(google.atendimentos ?? 0).toLocaleString("pt-BR")}</span>
+                          <span className="text-[11px] font-semibold text-[#4285F4]">{gConv != null ? `${gConv}%` : "—"}</span>
+                        </div>
+                      ) : <span className="text-xs text-zinc-300">—</span>}
+                    </td>
+                    {/* Meta / Facebook */}
+                    <td className="px-6 py-3">
+                      {meta ? (
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-sm font-semibold text-zinc-800">{(meta.atendimentos ?? 0).toLocaleString("pt-BR")}</span>
+                          <span className="text-[11px] font-semibold text-[#1877F2]">{mConv != null ? `${mConv}%` : "—"}</span>
+                        </div>
+                      ) : <span className="text-xs text-zinc-300">—</span>}
+                    </td>
+                    {/* Variação */}
                     <td className="px-6 py-3">
                       <span className={`flex items-center gap-1 text-[10px] font-medium ${p.variacao_atendimentos >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                         {p.variacao_atendimentos >= 0
@@ -237,7 +277,8 @@ function Index() {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             {farmacias.length === 0 && (
