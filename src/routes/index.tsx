@@ -205,7 +205,7 @@ function Index() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-zinc-50/50 border-b border-zinc-100">
-                  {["#", "Farmácia", "Status", "Receita", "Vendas", "Conversão", "Variação"].map((h) => (
+                  {["#", "Farmácia", "Status", "Cliques", "Conversão", "Variação"].map((h) => (
                     <th key={h} className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
                       {h}
                     </th>
@@ -226,15 +226,14 @@ function Index() {
                         {alertLabel(p.nivel_alerta)}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-sm">{fmtBRL(p.receita_total)}</td>
-                    <td className="px-6 py-3 text-sm">{p.vendas_realizadas}</td>
-                    <td className="px-6 py-3 text-sm">{(p.taxa_conversao ?? 0).toFixed(1)}%</td>
+                    <td className="px-6 py-3 text-sm font-medium text-zinc-700">{p.total_atendimentos.toLocaleString("pt-BR")}</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-brand">{(p.taxa_conversao ?? 0).toFixed(1)}%</td>
                     <td className="px-6 py-3">
-                      <span className={`flex items-center gap-1 text-[10px] font-medium ${p.variacao_receita >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        {p.variacao_receita >= 0
+                      <span className={`flex items-center gap-1 text-[10px] font-medium ${p.variacao_atendimentos >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        {p.variacao_atendimentos >= 0
                           ? <TrendingUp className="size-3" />
                           : <TrendingDown className="size-3" />}
-                        {Math.abs(p.variacao_receita).toFixed(1)}%
+                        {Math.abs(p.variacao_atendimentos).toFixed(1)}%
                       </span>
                     </td>
                   </tr>
