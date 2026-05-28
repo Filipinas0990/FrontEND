@@ -203,37 +203,6 @@ export function FarmaciaComparativoPanel({ farmaciaId, farmaciaNome }: FarmaciaC
         )}
       </div>
 
-      {/* ── KPI Cards com tendência ── */}
-      {!isLoading && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiComparativoCard
-            label="Receita Total"
-            icon={<DollarSign className="size-4 text-zinc-400" />}
-            values={receitaValues}
-            activePeriod={activePeriod}
-            format={fmtBRL}
-          />
-          <KpiComparativoCard
-            label="Vendas"
-            icon={<ShoppingCart className="size-4 text-zinc-400" />}
-            values={vendasValues}
-            activePeriod={activePeriod}
-          />
-          <KpiComparativoCard
-            label="Atendimentos"
-            icon={<Users className="size-4 text-zinc-400" />}
-            values={atendValues}
-            activePeriod={activePeriod}
-          />
-          <KpiComparativoCard
-            label="Score Criticidade"
-            icon={<BarChart2 className="size-4 text-zinc-400" />}
-            values={scoreValues}
-            activePeriod={activePeriod}
-          />
-        </div>
-      )}
-
       {/* ── Gráfico de barras agrupadas ── */}
       {!isLoading && (
         <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5">
