@@ -46,7 +46,8 @@
       "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"RECEITA TOTAL\\\\|VENDAS\\\\|ATENDIMENTOS\\\\|SCORE\\\\|MetricCard\\\\|vs 7\\\\|vs 15\\\\|variacao\" src/components/FarmaciaComparativoPanel.tsx | head -30)",
       "Read(//c/c/Users/Grupo Symbol Digital/Desktop/FRONT-END/src/components/**)",
       "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && find src -name \"FarmaciaComparativoPanel*\" 2>/dev/null)",
-      "Read(//c/c/Users/Grupo Symbol Digital/Desktop/FRONT-END/**)"
+      "Read(//c/c/Users/Grupo Symbol Digital/Desktop/FRONT-END/**)",
+      "Bash(npx tsr *)"
     ]
   }
 }

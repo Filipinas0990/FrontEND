@@ -71,7 +71,7 @@ function NovidadesPage() {
           </h1>
 
           <p className="text-base text-white/80 leading-relaxed max-w-xl">
-            Desenvolvido por <span className="font-semibold text-white">Filipe do Marketing</span> para
+            Desenvolvido por <span className="font-semibold text-white">Filipe</span> para
             transformar a gestão da sua rede farmacêutica. Acompanhe em um só lugar o desempenho real de
             cada farmácia — cliques, conversões, metas e reuniões — para que cada gestor saiba
             exatamente onde agir e como evoluir.
