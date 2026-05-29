@@ -19,6 +19,7 @@ import { usePeriod } from "@/contexts/PeriodContext";
 import { PeriodSelector } from "@/components/PeriodSelector";
 import { PeriodBadge } from "@/components/PeriodBadge";
 import { useState } from "react";
+import { PipelineProgressBar, PipelineResultadoBanner } from "@/components/PipelineResultadoBanner";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -130,6 +131,10 @@ function Index() {
 
   return (
     <AppShell title="Painel de Performance">
+      {/* Banners de pipeline */}
+      <PipelineProgressBar />
+      <PipelineResultadoBanner />
+
       {/* Gestor filter (admin only) */}
       {admin && (
         <div className="flex items-center gap-3">

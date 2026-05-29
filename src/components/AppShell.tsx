@@ -12,19 +12,21 @@ import {
   CalendarDays,
   RefreshCw,
   Newspaper,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getToken, getUser, clearAuth } from "@/lib/auth";
 import {
-  getStatus,
-  rodarAgora,
   getPreviewPipeline,
   getGestores,
   type PipelinePreview,
 } from "@/lib/api";
+import { usePipelineContext } from "@/contexts/PipelineContext";
 import {
   Dialog,
   DialogContent,
@@ -98,21 +100,33 @@ function PipelineOverlay() {
   );
 }
 
+// ── helpers ───────────────────────────────────────────────────────────────
+
+function fmtDuracao(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r > 0 ? `${m}min ${r}s` : `${m}min`;
+}
+
+const CHIP_PERIODO: Record<number, string> = {
+  7:  "bg-blue-100 text-blue-700",
+  15: "bg-purple-100 text-purple-700",
+  30: "bg-emerald-100 text-emerald-700",
+};
+
 // ── ModalRodarAgora ───────────────────────────────────────────────────────
 
-function ModalRodarAgora({
-  open,
-  onOpenChange,
-  onConfirmar,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onConfirmar: (opts: { periodos: number[]; gestor_id?: number }) => void;
-}) {
+type ModalFase = "config" | "rodando" | "resultado";
+
+function ModalRodarAgora({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { pipelineRodando, ultimoResultado, iniciarPipeline, iniciadoEm } = usePipelineContext();
   const [periodos, setPeriodos] = useState<number[]>([7, 15, 30]);
   const [gestorId, setGestorId] = useState<number | undefined>(undefined);
   const [preview, setPreview] = useState<PipelinePreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [fase, setFase] = useState<ModalFase>("config");
 
   const { data: gestores = [] } = useQuery({
     queryKey: ["gestores"],
@@ -123,163 +137,207 @@ function ModalRodarAgora({
 
   // Reset ao abrir
   useEffect(() => {
-    if (open) {
-      setPeriodos([7, 15, 30]);
-      setGestorId(undefined);
-      setPreview(null);
-    }
+    if (open) { setPeriodos([7, 15, 30]); setGestorId(undefined); setPreview(null); setFase("config"); }
   }, [open]);
+
+  // Quando o pipeline termina, avança para "resultado"
+  useEffect(() => {
+    if (fase === "rodando" && !pipelineRodando) setFase("resultado");
+  }, [pipelineRodando, fase]);
 
   // Preview com debounce
   useEffect(() => {
-    if (!open || periodos.length === 0) { setPreview(null); return; }
+    if (!open || fase !== "config" || periodos.length === 0) { setPreview(null); return; }
     setLoadingPreview(true);
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
         const res = await getPreviewPipeline(periodos, gestorId);
         if (!cancelled) setPreview(res);
-      } catch {
-        if (!cancelled) setPreview(null);
-      } finally {
-        if (!cancelled) setLoadingPreview(false);
-      }
+      } catch { if (!cancelled) setPreview(null); }
+      finally { if (!cancelled) setLoadingPreview(false); }
     }, 350);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [open, periodos, gestorId]);
+  }, [open, fase, periodos, gestorId]);
 
   function togglePeriodo(p: number) {
     setPeriodos((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]);
   }
+
+  async function handleConfirmar() {
+    if (periodos.length === 0) return;
+    setFase("rodando");
+    await iniciarPipeline({ periodos, gestor_id: gestorId });
+  }
+
+  // Duração calculada
+  const duracao = iniciadoEm && ultimoResultado?.executado_em
+    ? fmtDuracao(new Date(ultimoResultado.executado_em).getTime() - iniciadoEm)
+    : null;
+
+  // Agrupa erros por farmácia
+  const errosAgrupados = ultimoResultado
+    ? Object.values(
+        ultimoResultado.farmaciasComErro.reduce<Record<string, { nome: string; periodos: number[]; erro: string }>>((acc, e) => {
+          if (!acc[e.nome]) acc[e.nome] = { nome: e.nome, periodos: [], erro: e.erro };
+          acc[e.nome].periodos.push(e.periodo);
+          return acc;
+        }, {})
+      )
+    : [];
 
   const estimativa = preview
     ? preview.estimativa_segundos ?? preview.farmaciasTotais * periodos.length * 8
     : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v && fase === "rodando") return; onOpenChange(v); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Play className="size-4 text-brand" fill="currentColor" />
-            Configurar Automação
+            {fase === "config"    && <><Play className="size-4 text-brand" fill="currentColor" /> Configurar Automação</>}
+            {fase === "rodando"   && <><RefreshCw className="size-4 text-blue-500 animate-spin" /> Automação em andamento</>}
+            {fase === "resultado" && (ultimoResultado?.totalErros === 0
+              ? <><CheckCircle2 className="size-4 text-emerald-500" /> Coleta concluída</>
+              : <><AlertTriangle className="size-4 text-amber-500" /> Coleta com erros</>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-1">
-          {/* Períodos */}
-          <div>
-            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Períodos</p>
-            <p className="text-xs text-zinc-400 mt-0.5 mb-2.5">Selecione quais períodos processar</p>
-            <div className="flex gap-2">
-              {[7, 15, 30].map((p) => {
-                const active = periodos.includes(p);
-                return (
-                  <button
-                    key={p}
-                    onClick={() => togglePeriodo(p)}
-                    className={[
-                      "flex-1 py-2.5 text-sm font-semibold rounded-xl ring-1 transition-all",
-                      active
-                        ? "bg-brand text-white ring-brand shadow-sm"
-                        : "bg-zinc-50 text-zinc-600 ring-zinc-200 hover:ring-zinc-300 hover:bg-zinc-100",
-                    ].join(" ")}
-                  >
-                    {p} dias
-                  </button>
-                );
-              })}
+        {/* ── Fase: config ── */}
+        {fase === "config" && (
+          <div className="space-y-5 py-1">
+            <div>
+              <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Períodos</p>
+              <p className="text-xs text-zinc-400 mt-0.5 mb-2.5">Selecione quais períodos processar</p>
+              <div className="flex gap-2">
+                {[7, 15, 30].map((p) => {
+                  const active = periodos.includes(p);
+                  return (
+                    <button key={p} onClick={() => togglePeriodo(p)}
+                      className={["flex-1 py-2.5 text-sm font-semibold rounded-xl ring-1 transition-all",
+                        active ? "bg-brand text-white ring-brand shadow-sm" : "bg-zinc-50 text-zinc-600 ring-zinc-200 hover:ring-zinc-300 hover:bg-zinc-100",
+                      ].join(" ")}
+                    >{p} dias</button>
+                  );
+                })}
+              </div>
+              {periodos.length === 0 && <p className="text-xs text-red-500 mt-1.5">Selecione ao menos um período.</p>}
             </div>
-            {periodos.length === 0 && (
-              <p className="text-xs text-red-500 mt-1.5">Selecione ao menos um período.</p>
+            <div>
+              <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Gestor</p>
+              <select value={gestorId ?? ""} onChange={(e) => setGestorId(e.target.value ? Number(e.target.value) : undefined)} className="mt-1.5 form-input w-full">
+                <option value="">Todos os gestores</option>
+                {gestores.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
+              </select>
+            </div>
+            <div className="bg-zinc-50 rounded-xl ring-1 ring-zinc-100 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Prévia</p>
+                {loadingPreview && <RefreshCw className="size-3 animate-spin text-zinc-400" />}
+              </div>
+              {periodos.length === 0 ? <p className="text-xs text-zinc-400 italic">Selecione ao menos um período.</p>
+              : loadingPreview && !preview ? (
+                <div className="space-y-2">{[80,60,70].map((w,i) => <div key={i} className="h-3 bg-zinc-200 rounded animate-pulse" style={{ width:`${w}%` }} />)}</div>
+              ) : preview ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Farmácias</span><span className="text-sm font-bold text-zinc-900">{preview.farmaciasTotais}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Períodos</span><span className="text-sm font-semibold text-zinc-700">{periodos.map(p=>`${p}d`).join(" · ")}</span></div>
+                  {estimativa != null && <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Estimativa</span><span className="text-sm font-medium text-zinc-700">~{estimativa<60?`${Math.round(estimativa)}s`:`${Math.ceil(estimativa/60)} min`}</span></div>}
+                  {preview.nomes.length > 0 && (
+                    <div className="pt-2.5 border-t border-zinc-100">
+                      <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Farmácias incluídas</p>
+                      <div className="flex flex-wrap gap-1">
+                        {preview.nomes.slice(0,8).map(n=><span key={n} className="text-[10px] bg-white ring-1 ring-zinc-200 px-2 py-0.5 rounded-full text-zinc-600 truncate max-w-[140px]">{n}</span>)}
+                        {preview.nomes.length > 8 && <span className="text-[10px] text-zinc-400 self-center">+{preview.nomes.length-8} mais</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {/* ── Fase: rodando ── */}
+        {fase === "rodando" && (
+          <div className="py-6 space-y-5">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="relative size-14">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-zinc-800">Coletando dados...</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{preview?.farmaciasTotais ?? "—"} farmácias · Não feche esta janela</p>
+              </div>
+            </div>
+            <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full animate-[indeterminate_1.6s_ease-in-out_infinite]" />
+            </div>
+          </div>
+        )}
+
+        {/* ── Fase: resultado ── */}
+        {fase === "resultado" && ultimoResultado && (
+          <div className="py-2 space-y-4">
+            {ultimoResultado.totalErros === 0 ? (
+              <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-xl ring-1 ring-emerald-100">
+                <CheckCircle2 className="size-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-emerald-800">Tudo certo!</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">
+                    {ultimoResultado.totalSucessos}/{ultimoResultado.farmaciasTotais} farmácias coletadas
+                    {duracao && ` · ${duracao}`}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl ring-1 ring-amber-100">
+                  <AlertTriangle className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">
+                      {ultimoResultado.totalSucessos}/{ultimoResultado.farmaciasTotais} farmácias coletadas
+                    </p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      {ultimoResultado.totalErros} falharam mesmo após retries{duracao && ` · ${duracao}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {errosAgrupados.map((e) => (
+                    <div key={e.nome} className="flex items-center gap-2 p-2.5 bg-zinc-50 rounded-lg ring-1 ring-zinc-100">
+                      <XCircle className="size-3.5 text-amber-500 shrink-0" />
+                      <span className="text-xs font-medium text-zinc-800 flex-1 min-w-0 truncate">{e.nome}</span>
+                      <div className="flex gap-1 shrink-0">
+                        {e.periodos.sort().map(p => (
+                          <span key={p} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${CHIP_PERIODO[p] ?? "bg-zinc-100 text-zinc-600"}`}>{p}d</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-
-          {/* Gestor */}
-          <div>
-            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Gestor</p>
-            <select
-              value={gestorId ?? ""}
-              onChange={(e) => setGestorId(e.target.value ? Number(e.target.value) : undefined)}
-              className="mt-1.5 form-input w-full"
-            >
-              <option value="">Todos os gestores</option>
-              {gestores.map((g) => (
-                <option key={g.id} value={g.id}>{g.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Prévia */}
-          <div className="bg-zinc-50 rounded-xl ring-1 ring-zinc-100 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Prévia</p>
-              {loadingPreview && <RefreshCw className="size-3 animate-spin text-zinc-400" />}
-            </div>
-
-            {periodos.length === 0 ? (
-              <p className="text-xs text-zinc-400 italic">Selecione ao menos um período.</p>
-            ) : loadingPreview && !preview ? (
-              <div className="space-y-2">
-                {[80, 60, 70].map((w, i) => (
-                  <div key={i} className="h-3 bg-zinc-200 rounded animate-pulse" style={{ width: `${w}%` }} />
-                ))}
-              </div>
-            ) : preview ? (
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-500">Farmácias</span>
-                  <span className="text-sm font-bold text-zinc-900">{preview.farmaciasTotais}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-500">Períodos</span>
-                  <span className="text-sm font-semibold text-zinc-700">{periodos.map((p) => `${p}d`).join(" · ")}</span>
-                </div>
-                {estimativa != null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-zinc-500">Tempo estimado</span>
-                    <span className="text-sm font-medium text-zinc-700">
-                      ~{estimativa < 60 ? `${Math.round(estimativa)}s` : `${Math.ceil(estimativa / 60)} min`}
-                    </span>
-                  </div>
-                )}
-                {preview.nomes.length > 0 && (
-                  <div className="pt-2.5 border-t border-zinc-100">
-                    <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Farmácias incluídas</p>
-                    <div className="flex flex-wrap gap-1">
-                      {preview.nomes.slice(0, 8).map((n) => (
-                        <span key={n} className="text-[10px] bg-white ring-1 ring-zinc-200 px-2 py-0.5 rounded-full text-zinc-600 truncate max-w-[140px]">
-                          {n}
-                        </span>
-                      ))}
-                      {preview.nomes.length > 8 && (
-                        <span className="text-[10px] text-zinc-400 self-center">+{preview.nomes.length - 8} mais</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </div>
+        )}
 
         <DialogFooter>
-          <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (periodos.length === 0) return;
-              onConfirmar({ periodos, gestor_id: gestorId });
-              onOpenChange(false);
-            }}
-            disabled={periodos.length === 0}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60"
-          >
-            <Play className="size-3.5" fill="currentColor" />
-            Confirmar e Rodar
-          </button>
+          {fase === "config" && (
+            <>
+              <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">Cancelar</button>
+              <button type="button" onClick={handleConfirmar} disabled={periodos.length === 0}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60">
+                <Play className="size-3.5" fill="currentColor" /> Confirmar e Rodar
+              </button>
+            </>
+          )}
+          {fase === "resultado" && (
+            <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm font-medium bg-zinc-100 text-zinc-700 rounded-md hover:bg-zinc-200">
+              Fechar
+            </button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -321,50 +379,19 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
     : "??";
 
   const queryClient = useQueryClient();
-  const [overlayVisible, setOverlayVisible] = useState(false);
   const [modalRodar, setModalRodar] = useState(false);
-  const seenRunning = useRef(false);
+  const { pipelineRodando } = usePipelineContext();
+  const prevRodando = useRef(false);
 
-  const { data: pipelineStatus } = useQuery({
-    queryKey: ["pipeline-status"],
-    queryFn: getStatus,
-    refetchInterval: (query) =>
-      query.state.data?.pipeline_rodando ? 3000 : 30000,
-    enabled: typeof window !== "undefined",
-  });
-
-  // Fecha o overlay quando o backend confirmar que o pipeline terminou
+  // Invalida cache quando o pipeline termina
   useEffect(() => {
-    if (pipelineStatus?.pipeline_rodando) {
-      seenRunning.current = true;
-    } else if (seenRunning.current && pipelineStatus?.pipeline_rodando === false) {
-      seenRunning.current = false;
-      setOverlayVisible(false);
-      toast.success("Automação concluída! Dados atualizados.");
+    if (prevRodando.current && !pipelineRodando) {
       queryClient.invalidateQueries();
     }
-  }, [pipelineStatus?.pipeline_rodando, queryClient]);
+    prevRodando.current = pipelineRodando;
+  }, [pipelineRodando, queryClient]);
 
-  const { mutate: runPipeline } = useMutation({
-    mutationFn: rodarAgora,
-    onMutate: () => {
-      setOverlayVisible(true);
-      seenRunning.current = false;
-    },
-    onSuccess: (data) => {
-      if (data.status === "ja_rodando") {
-        toast.info("Pipeline já está em execução");
-        seenRunning.current = true;
-      }
-      queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
-    },
-    onError: (err: Error) => {
-      toast.error(err.message);
-      setOverlayVisible(false);
-    },
-  });
-
-  const isPipelineActive = overlayVisible || pipelineStatus?.pipeline_rodando === true;
+  const isPipelineActive = pipelineRodando;
 
   const navItems = [
     { icon: Newspaper,       label: "Início",       to: "/novidades" as const },
@@ -450,11 +477,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
         <div className="p-8 max-w-7xl mx-auto space-y-8">{children}</div>
       </main>
 
-      <ModalRodarAgora
-        open={modalRodar}
-        onOpenChange={setModalRodar}
-        onConfirmar={(opts) => runPipeline(opts)}
-      />
+      <ModalRodarAgora open={modalRodar} onOpenChange={setModalRodar} />
     </div>
   );
 }

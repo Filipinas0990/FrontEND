@@ -18,6 +18,7 @@ import {
   type Gestor,
 } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
+import { usePipelineContext } from "@/contexts/PipelineContext";
 import {
   Dialog,
   DialogContent,
@@ -345,6 +346,8 @@ function FarmaciasPage() {
   const qc = useQueryClient();
   const admin = isAdmin();
   const { period, setPeriod } = usePeriod();
+  const { ultimoResultado } = usePipelineContext();
+  const pipelineErros = ultimoResultado?.farmaciasComErro ?? [];
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"todas" | "Ativa" | "Atencao" | "Alerta">("todas");
@@ -507,13 +510,12 @@ function FarmaciasPage() {
           {farmacias.map((p) => {
             const semDados = p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0);
             const naoAtingiuMeta = !semDados && p.atingiu_meta === false;
+            const errosPipeline = pipelineErros.filter((e) => e.nome === p.nome);
             return (
               <div
                 key={p.id}
                 className={`bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer ${
-                  naoAtingiuMeta
-                    ? "ring-2 ring-red-500"
-                    : "ring-1 ring-black/5"
+                  naoAtingiuMeta ? "ring-2 ring-red-500" : "ring-1 ring-black/5"
                 }`}
                 onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
               >
@@ -524,6 +526,20 @@ function FarmaciasPage() {
                       ? <p className="text-[10px] text-zinc-400 mt-0.5 italic">Aguardando dados</p>
                       : <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
                     }
+                    {/* Badge de erro do pipeline */}
+                    {errosPipeline.length > 0 && (
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {errosPipeline.map((e) => (
+                          <span
+                            key={e.periodo}
+                            title={e.erro}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 cursor-help"
+                          >
+                            ⚠ Sem dados {e.periodo}d
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
@@ -538,24 +554,24 @@ function FarmaciasPage() {
                     <span className="text-xs text-zinc-400 italic">Nenhum dado coletado neste período.</span>
                   </div>
                 ) : (
-                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-zinc-100">
-                  <div>
-                    <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Receita</div>
-                    <div className="text-sm font-semibold text-zinc-900">{fmtBRL(p.receita_total)}</div>
-                    <Variacao value={p.variacao_receita} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Vendas</div>
-                    <div className="text-sm font-semibold text-zinc-900">{p.vendas_realizadas}</div>
-                    <Variacao value={p.variacao_vendas} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Conversão</div>
-                    <div className={`text-sm font-semibold ${(p.taxa_conversao ?? 0) >= 60 ? "text-brand" : "text-zinc-900"}`}>
-                      {(p.taxa_conversao ?? 0).toFixed(1)}%
+                  <div className="grid grid-cols-3 gap-3 pt-3 border-t border-zinc-100">
+                    <div>
+                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Receita</div>
+                      <div className="text-sm font-semibold text-zinc-900">{fmtBRL(p.receita_total)}</div>
+                      <Variacao value={p.variacao_receita} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Vendas</div>
+                      <div className="text-sm font-semibold text-zinc-900">{p.vendas_realizadas}</div>
+                      <Variacao value={p.variacao_vendas} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Conversão</div>
+                      <div className={`text-sm font-semibold ${(p.taxa_conversao ?? 0) >= 60 ? "text-brand" : "text-zinc-900"}`}>
+                        {(p.taxa_conversao ?? 0).toFixed(1)}%
+                      </div>
                     </div>
                   </div>
-                </div>
                 )}
 
                 {!semDados && (
@@ -581,8 +597,7 @@ function FarmaciasPage() {
                     ) : (
                       <>
                         <div className="flex justify-between text-[10px] text-zinc-400">
-                          <span>Meta receita</span>
-                          <span>Sem meta</span>
+                          <span>Meta receita</span><span>Sem meta</span>
                         </div>
                         <div className="h-1.5 w-full bg-zinc-100 rounded-full" />
                         <div className="text-[10px] text-zinc-300">—</div>
@@ -591,48 +606,27 @@ function FarmaciasPage() {
                   </div>
                 )}
 
-                {/* Leads da semana */}
                 {!semDados && (p.meta_leads_google !== null || p.meta_leads_meta !== null) && (
                   <div className="mt-3 pt-3 border-t border-zinc-100 space-y-2" onClick={(e) => e.stopPropagation()}>
                     <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Leads da semana</div>
                     {p.meta_leads_google !== null && (
-                      <LeadsChannelRow
-                        canalNome="Google"
-                        atual={p.canais?.find((c) => c.nome.toLowerCase().includes("google"))?.atendimentos ?? 0}
-                        meta={p.meta_leads_google}
-                      />
+                      <LeadsChannelRow canalNome="Google" atual={p.canais?.find((c) => c.nome.toLowerCase().includes("google"))?.atendimentos ?? 0} meta={p.meta_leads_google} />
                     )}
                     {p.meta_leads_meta !== null && (
-                      <LeadsChannelRow
-                        canalNome="Meta"
-                        atual={p.canais?.find((c) => c.nome.toLowerCase().includes("meta"))?.atendimentos ?? 0}
-                        meta={p.meta_leads_meta}
-                      />
+                      <LeadsChannelRow canalNome="Meta" atual={p.canais?.find((c) => c.nome.toLowerCase().includes("meta"))?.atendimentos ?? 0} meta={p.meta_leads_meta} />
                     )}
                   </div>
                 )}
 
                 {admin && (
-                  <div
-                    className="flex gap-2 mt-3 pt-3 border-t border-zinc-100"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={() => { setEditTarget(p); setDialogOpen(true); }}
-                      className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
-                    >
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
                       <Pencil className="size-3" /> Editar
                     </button>
-                    <button
-                      onClick={() => { setEditTarget(p); setDialogOpen(true); }}
-                      className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
-                    >
+                    <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
                       <Settings className="size-3" /> Metas de leads
                     </button>
-                    <button
-                      onClick={() => setDeleteTarget(p)}
-                      className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-600"
-                    >
+                    <button onClick={() => setDeleteTarget(p)} className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-600">
                       <Trash2 className="size-3" /> Desativar
                     </button>
                   </div>

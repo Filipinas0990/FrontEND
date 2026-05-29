@@ -155,9 +155,24 @@ export interface Relatorio {
   status: "Concluido" | "Parcial" | "Erro"
 }
 
+export interface FarmaciaErro {
+  nome:    string
+  periodo: 7 | 15 | 30
+  erro:    string
+}
+
+export interface UltimoResultado {
+  executado_em:      string
+  farmaciasTotais:   number
+  totalSucessos:     number
+  totalErros:        number
+  farmaciasComErro:  FarmaciaErro[]
+}
+
 export interface PipelineStatus {
-  pipeline_rodando: boolean
-  timestamp: string
+  pipeline_rodando:  boolean
+  timestamp:         string
+  ultimo_resultado:  UltimoResultado | null
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────
