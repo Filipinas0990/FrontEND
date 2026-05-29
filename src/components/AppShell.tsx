@@ -138,7 +138,13 @@ function ModalRodarAgora({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
   // Reset ao abrir
   useEffect(() => {
-    if (open) { setPeriodos([7, 15, 30]); setGestorId(undefined); setPreview(null); setFase("config"); }
+    if (open) {
+      setPeriodos([7, 15, 30]);
+      setGestorId(undefined);
+      setPreview(null);
+      // Se pipeline já está rodando ao abrir, vai direto para fase "rodando"
+      setFase(pipelineRodando ? "rodando" : ultimoResultado ? "resultado" : "config");
+    }
   }, [open]);
 
   // Quando o pipeline termina, avança para "resultado"
@@ -413,7 +419,6 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
 
   return (
     <div className="flex min-h-screen bg-neutral-50 text-zinc-900 font-sans">
-      {isPipelineActive && <PipelineOverlay />}
       <aside className="w-52 bg-brand flex flex-col sticky top-0 h-screen">
         <div className="p-6 flex items-center gap-3">
           <div className="size-8 bg-white/20 rounded-lg grid place-items-center text-white">
@@ -467,8 +472,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
             {headerRight ?? (
               isAdminUser ? (
                 <button
-                  onClick={() => { if (!isPipelineActive) setModalRodar(true); }}
-                  disabled={isPipelineActive}
+                  onClick={() => setModalRodar(true)}
                   className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 transition-opacity disabled:opacity-60"
                 >
                   {isPipelineActive
