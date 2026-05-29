@@ -72,7 +72,7 @@ function Index() {
     queryKey: ["farmacias", undefined, undefined, gestorId, period],
     queryFn: () => getFarmacias(gestorId ? { gestor_id: gestorId, dias: period } : { dias: period }),
     select: (data) =>
-      [...data].sort((a, b) => b.score_criticidade - a.score_criticidade).slice(0, 8),
+      [...data].sort((a, b) => b.score_criticidade - a.score_criticidade),
   });
 
   type SortKey = "criticidade" | "google_cliques" | "google_conv" | "meta_cliques" | "meta_conv" | "variacao";
