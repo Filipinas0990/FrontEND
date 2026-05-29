@@ -27,6 +27,7 @@ import {
   type PipelinePreview,
 } from "@/lib/api";
 import { usePipelineContext } from "@/contexts/PipelineContext";
+import { PipelineLogTerminal } from "@/components/PipelineLogTerminal";
 import {
   Dialog,
   DialogContent,
@@ -191,8 +192,11 @@ function ModalRodarAgora({ open, onOpenChange }: { open: boolean; onOpenChange: 
     : null;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v && fase === "rodando") return; onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={(v) => {
+      // Permite fechar em qualquer fase, mas enquanto roda o modal reabre (usuário precisa clicar fora com intenção)
+      onOpenChange(v);
+    }}>
+      <DialogContent className={fase === "config" ? "sm:max-w-md" : "sm:max-w-2xl"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {fase === "config"    && <><Play className="size-4 text-brand" fill="currentColor" /> Configurar Automação</>}
@@ -259,28 +263,20 @@ function ModalRodarAgora({ open, onOpenChange }: { open: boolean; onOpenChange: 
           </div>
         )}
 
-        {/* ── Fase: rodando ── */}
+        {/* ── Fase: rodando — terminal em tempo real ── */}
         {fase === "rodando" && (
-          <div className="py-6 space-y-5">
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="relative size-14">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-zinc-800">Coletando dados...</p>
-                <p className="text-xs text-zinc-500 mt-0.5">{preview?.farmaciasTotais ?? "—"} farmácias · Não feche esta janela</p>
-              </div>
-            </div>
-            <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full animate-[indeterminate_1.6s_ease-in-out_infinite]" />
-            </div>
+          <div className="py-2 space-y-3">
+            <PipelineLogTerminal ativo={pipelineRodando} onConcluir={() => setFase("resultado")} />
+            <p className="text-[11px] text-zinc-400 text-center">
+              Pode fechar — o pipeline continua rodando e o resultado aparecerá no painel.
+            </p>
           </div>
         )}
 
-        {/* ── Fase: resultado ── */}
+        {/* ── Fase: resultado — resumo + logs ── */}
         {fase === "resultado" && ultimoResultado && (
           <div className="py-2 space-y-4">
+            {/* Resumo */}
             {ultimoResultado.totalErros === 0 ? (
               <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-xl ring-1 ring-emerald-100">
                 <CheckCircle2 className="size-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -320,6 +316,8 @@ function ModalRodarAgora({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 </div>
               </div>
             )}
+            {/* Terminal com logs completos */}
+            <PipelineLogTerminal ativo={false} />
           </div>
         )}
 
@@ -333,8 +331,15 @@ function ModalRodarAgora({ open, onOpenChange }: { open: boolean; onOpenChange: 
               </button>
             </>
           )}
+          {fase === "rodando" && (
+            <button type="button" onClick={() => onOpenChange(false)}
+              className="px-4 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-700">
+              Fechar (pipeline continua em background)
+            </button>
+          )}
           {fase === "resultado" && (
-            <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm font-medium bg-zinc-100 text-zinc-700 rounded-md hover:bg-zinc-200">
+            <button type="button" onClick={() => onOpenChange(false)}
+              className="px-4 py-2 text-sm font-medium bg-zinc-100 text-zinc-700 rounded-md hover:bg-zinc-200">
               Fechar
             </button>
           )}

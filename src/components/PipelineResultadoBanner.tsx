@@ -1,5 +1,7 @@
-import { CheckCircle2, AlertTriangle, X, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, AlertTriangle, X, RefreshCw, ChevronDown } from "lucide-react";
 import { usePipelineContext } from "@/contexts/PipelineContext";
+import { PipelineLogTerminal } from "@/components/PipelineLogTerminal";
 import type { UltimoResultado } from "@/lib/api";
 
 const CHIP: Record<number, string> = {
@@ -25,20 +27,32 @@ function fmtDataHora(iso: string) {
 
 export function PipelineProgressBar() {
   const { pipelineRodando } = usePipelineContext();
+  const [logsAbertos, setLogsAbertos] = useState(false);
+
   if (!pipelineRodando) return null;
 
   return (
-    <div className="rounded-xl border-l-4 border-blue-500 bg-blue-50 px-5 py-4">
+    <div className="rounded-xl border-l-4 border-blue-500 bg-blue-50 space-y-3 px-5 py-4">
       <div className="flex items-center gap-3">
         <RefreshCw className="size-4 text-blue-500 shrink-0 animate-spin" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-blue-800">Coletando dados das farmácias...</p>
-          <p className="text-xs text-blue-600 mt-0.5">Isso pode levar alguns minutos. Não feche a página.</p>
+          <p className="text-xs text-blue-600 mt-0.5">Isso pode levar alguns minutos.</p>
         </div>
+        <button
+          onClick={() => setLogsAbertos((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 shrink-0"
+        >
+          {logsAbertos ? "Ocultar logs" : "Ver logs"}
+          <ChevronDown className={`size-3.5 transition-transform ${logsAbertos ? "rotate-180" : ""}`} />
+        </button>
       </div>
-      <div className="mt-3 w-full h-1.5 bg-blue-100 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-blue-100 rounded-full overflow-hidden">
         <div className="h-full bg-blue-500 rounded-full animate-[indeterminate_1.6s_ease-in-out_infinite]" />
       </div>
+      {logsAbertos && (
+        <PipelineLogTerminal ativo={pipelineRodando} />
+      )}
     </div>
   );
 }
