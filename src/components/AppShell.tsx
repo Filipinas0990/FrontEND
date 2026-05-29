@@ -385,7 +385,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
           <div className="size-8 bg-brand rounded-lg grid place-items-center text-white">
             <Activity className="size-4" strokeWidth={2.5} />
           </div>
-          <span className="font-semibold tracking-tight text-zinc-900">PharmaFlow</span>
+          <span className="font-semibold tracking-tight text-zinc-900">GrupoSymbol</span>
         </div>
 
         <nav className="flex-1 px-4 space-y-1">

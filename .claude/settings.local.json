@@ -31,7 +31,22 @@
       "Bash(git commit -m 'style\\(reunioes\\): dropdown de status inline customizado por linha *)",
       "Bash(git commit -m 'fix\\(reunioes\\): corrige dropdown de status cortado pelo overflow-hidden *)",
       "Bash(git commit -m 'feat: controle de conflitos e bloqueio de agenda *)",
-      "Bash(git commit -m 'style\\(agenda\\): destaque de cor nos dias com reunioes no calendario *)"
+      "Bash(git commit -m 'style\\(agenda\\): destaque de cor nos dias com reunioes no calendario *)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"Farmácias em Destaque\\\\|criticidade\\\\|RECEITA\\\\|VENDAS\\\\|CONVERSÃO\" src/routes/index.tsx | head -30)",
+      "Read(//c/c/Users/Grupo Symbol Digital/Desktop/FRONT-END/src/routes/**)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"clique\\\\|click\\\\|impressao\\\\|impressão\\\\|FarmaciaResumo\\\\|FarmaciaItem\\\\|interface Farm\" src/lib/api.ts | head -30)",
+      "Read(//c/c/Users/Grupo Symbol Digital/Desktop/FRONT-END/src/lib/**)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -rn \"canais\\\\|canal\\\\.nome\\\\|atendimentos\" src/routes/farmacias.\\\\$id.tsx 2>/dev/null | head -30)",
+      "Read(//c/Users/Grupo Symbol Digital/Desktop/FRONT-END/src/routes/**)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"Receita Total\\\\|receita_total\\\\|variacao_receita\" src/routes/farmacias.\\\\$id.tsx | head -20)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"RECEITA TOTAL\\\\|VENDAS\\\\|ATENDIMENTOS\\\\|SCORE CRITICIDADE\\\\|MetricCard\\\\|kpi\\\\|KPI\\\\|grid.*cols.*4\\\\|receita_total\\\\|vendas_realizadas\\\\|total_atendimentos\\\\|score_criticidade\" src/routes/farmacias.\\\\$id.tsx | head -40)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"RECEITA TOTAL\\\\|SCORE CRITICIDADE\\\\|Receita Total\\\\|Score Criticidade\\\\|score_criticidade\\\\|variacao_receita\\\\|variacao_vendas\\\\|variacao_atend\" src/routes/farmacias.\\\\$id.tsx | head -30)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"143\\\\|7.244\\\\|1.439\\\\|SCORE\\\\|score\\\\|grid.*cols\\\\|MetricCard\\\\|StatCard\\\\|kpi-card\\\\|receita\\\\|vendas\\\\|atendimento\" src/routes/farmacias.\\\\$id.tsx | head -40)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"FarmaciaComparativoPanel\\\\|RECEITA TOTAL\\\\|VENDAS\\\\|ATENDIMENTOS\\\\|SCORE CRITICIDADE\\\\|ComparativoPanel\\\\|vs 7 dias\\\\|vs 15 dias\" src/routes/farmacias.\\\\$id.tsx | head -20)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"RECEITA TOTAL\\\\|VENDAS\\\\|ATENDIMENTOS\\\\|SCORE\\\\|MetricCard\\\\|vs 7\\\\|vs 15\\\\|variacao\" src/components/FarmaciaComparativoPanel.tsx | head -30)",
+      "Read(//c/c/Users/Grupo Symbol Digital/Desktop/FRONT-END/src/components/**)",
+      "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && find src -name \"FarmaciaComparativoPanel*\" 2>/dev/null)",
+      "Read(//c/c/Users/Grupo Symbol Digital/Desktop/FRONT-END/**)"
     ]
   }
 }

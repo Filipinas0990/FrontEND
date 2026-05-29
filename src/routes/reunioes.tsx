@@ -76,7 +76,7 @@ import {
 
 export const Route = createFileRoute("/reunioes")({
   component: ReunioesPage,
-  head: () => ({ meta: [{ title: "Reuniões — PharmaFlow" }] }),
+  head: () => ({ meta: [{ title: "Reuniões — GrupoSymbol" }] }),
 });
 
 // ── Status config ──────────────────────────────────────────────────────────

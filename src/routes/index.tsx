@@ -21,7 +21,7 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "PharmaFlow — Painel de Performance" },
+      { title: "GrupoSymbol — Painel de Performance" },
       { name: "description", content: "Painel de performance para farmácias." },
     ],
   }),

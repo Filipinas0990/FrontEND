@@ -26,7 +26,7 @@ import {
 
 export const Route = createFileRoute("/gestores")({
   component: GestoresPage,
-  head: () => ({ meta: [{ title: "Gestores — PharmaFlow" }] }),
+  head: () => ({ meta: [{ title: "Gestores — GrupoSymbol" }] }),
 });
 
 // ── Form dialog ────────────────────────────────────────────────────────────

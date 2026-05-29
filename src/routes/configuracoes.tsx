@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 
 export const Route = createFileRoute("/configuracoes")({
   component: ConfigPage,
-  head: () => ({ meta: [{ title: "Configurações — PharmaFlow" }] }),
+  head: () => ({ meta: [{ title: "Configurações — GrupoSymbol" }] }),
 });
 
 function ConfigPage() {

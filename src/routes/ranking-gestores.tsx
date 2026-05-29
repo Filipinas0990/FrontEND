@@ -15,7 +15,7 @@ import {
 
 export const Route = createFileRoute("/ranking-gestores")({
   component: RankingGestoresPage,
-  head: () => ({ meta: [{ title: "Ranking de Gestores — PharmaFlow" }] }),
+  head: () => ({ meta: [{ title: "Ranking de Gestores — GrupoSymbol" }] }),
 });
 
 // ── Cores ──────────────────────────────────────────────────────────────────
