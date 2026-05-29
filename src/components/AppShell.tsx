@@ -380,21 +380,21 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
   return (
     <div className="flex min-h-screen bg-neutral-50 text-zinc-900 font-sans">
       {isPipelineActive && <PipelineOverlay />}
-      <aside className="w-64 border-r border-zinc-200 bg-white flex flex-col sticky top-0 h-screen">
+      <aside className="w-64 bg-brand flex flex-col sticky top-0 h-screen">
         <div className="p-6 flex items-center gap-3">
-          <div className="size-8 bg-brand rounded-lg grid place-items-center text-white">
+          <div className="size-8 bg-white/20 rounded-lg grid place-items-center text-white">
             <Activity className="size-4" strokeWidth={2.5} />
           </div>
-          <span className="font-semibold tracking-tight text-zinc-900">GrupoSymbol</span>
+          <span className="font-semibold tracking-tight text-white">GrupoSymbol</span>
         </div>
 
-        <nav className="flex-1 px-4 space-y-1">
+        <nav className="flex-1 px-4 space-y-0.5">
           {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
               activeOptions={{ exact: item.to === "/" }}
-              className="flex items-center gap-2.5 py-2 px-2.5 text-sm font-medium rounded-md transition-colors text-zinc-600 hover:bg-zinc-50 data-[status=active]:text-brand data-[status=active]:bg-brand/5"
+              className="flex items-center gap-2.5 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-white/75 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
             >
               <item.icon className="size-4 shrink-0" />
               {item.label}
@@ -402,23 +402,23 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-zinc-100">
+        <div className="p-4 border-t border-white/15">
           <div className="flex items-center gap-3 px-2 py-2">
-            <div className="size-8 rounded-full bg-brand/10 grid place-items-center text-brand text-xs font-semibold">
+            <div className="size-8 rounded-full bg-white/20 grid place-items-center text-white text-xs font-semibold">
               {initials}
             </div>
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-xs font-medium truncate">
+              <span className="text-xs font-medium text-white truncate">
                 {user?.nome ?? "Usuário"}
               </span>
-              <span className="text-[10px] text-zinc-500">
+              <span className="text-[10px] text-white/60">
                 {isAdminUser ? "Super Admin" : "Gestor"}
               </span>
             </div>
             <button
               onClick={handleLogout}
               title="Sair"
-              className="text-zinc-400 hover:text-zinc-900 transition-colors"
+              className="text-white/60 hover:text-white transition-colors"
             >
               <LogOut className="size-4" />
             </button>
