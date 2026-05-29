@@ -380,7 +380,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
   return (
     <div className="flex min-h-screen bg-neutral-50 text-zinc-900 font-sans">
       {isPipelineActive && <PipelineOverlay />}
-      <aside className="w-64 bg-brand flex flex-col sticky top-0 h-screen">
+      <aside className="w-52 bg-brand flex flex-col sticky top-0 h-screen">
         <div className="p-6 flex items-center gap-3">
           <div className="size-8 bg-white/20 rounded-lg grid place-items-center text-white">
             <Activity className="size-4" strokeWidth={2.5} />
