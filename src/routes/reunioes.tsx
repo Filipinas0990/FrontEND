@@ -1536,11 +1536,14 @@ function ListaReunioes({
 
   const semanaAtual = lista.filter((r) => {
     const d = new Date(r.data_reuniao);
-    return d >= segunda && d <= domingo;
+    return d >= segunda && d <= domingo
+      && r.status !== "realizada"
+      && r.status !== "cancelada";
   });
   const restante = lista.filter((r) => {
     const d = new Date(r.data_reuniao);
-    return !(d >= segunda && d <= domingo);
+    const naSemana = d >= segunda && d <= domingo;
+    return !naSemana || r.status === "realizada" || r.status === "cancelada";
   });
 
   // Agrupar restante por mês
