@@ -11,6 +11,7 @@ import {
   Trophy,
   CalendarDays,
   RefreshCw,
+  Newspaper,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -366,6 +367,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
   const isPipelineActive = overlayVisible || pipelineStatus?.pipeline_rodando === true;
 
   const navItems = [
+    { icon: Newspaper,       label: "Início",       to: "/novidades" as const },
     { icon: LayoutDashboard, label: "Painel Geral", to: "/" as const },
     { icon: Building2, label: "Farmácias", to: "/farmacias" as const },
     { icon: CalendarDays, label: "Reuniões", to: "/reunioes" as const },

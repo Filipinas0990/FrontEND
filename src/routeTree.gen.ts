@@ -14,6 +14,7 @@ import { Route as ReunioesRouteImport } from './routes/reunioes'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as RankingGestoresRouteImport } from './routes/ranking-gestores'
 import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as NovidadesRouteImport } from './routes/novidades'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
@@ -32,6 +33,11 @@ const ReunioesRoute = ReunioesRouteImport.update({
   path: '/reunioes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RankingGestoresRoute = RankingGestoresRouteImport.update({
   id: '/ranking-gestores',
   path: '/ranking-gestores',
@@ -42,9 +48,9 @@ const RankingRoute = RankingRouteImport.update({
   path: '/ranking',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RelatoriosRoute = RelatoriosRouteImport.update({
-  id: '/relatorios',
-  path: '/relatorios',
+const NovidadesRoute = NovidadesRouteImport.update({
+  id: '/novidades',
+  path: '/novidades',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
+  '/novidades': typeof NovidadesRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
+  '/novidades': typeof NovidadesRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
+  '/novidades': typeof NovidadesRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/farmacias'
     | '/gestores'
     | '/login'
+    | '/novidades'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/gestores'
     | '/login'
+    | '/novidades'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -160,6 +171,7 @@ export interface FileRouteTypes {
     | '/farmacias'
     | '/gestores'
     | '/login'
+    | '/novidades'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -175,6 +187,7 @@ export interface RootRouteChildren {
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
   GestoresRoute: typeof GestoresRoute
   LoginRoute: typeof LoginRoute
+  NovidadesRoute: typeof NovidadesRoute
   RankingRoute: typeof RankingRoute
   RankingGestoresRoute: typeof RankingGestoresRoute
   RelatoriosRoute: typeof RelatoriosRoute
@@ -184,11 +197,25 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reunioes': {
       id: '/reunioes'
       path: '/reunioes'
       fullPath: '/reunioes'
       preLoaderRoute: typeof ReunioesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ranking-gestores': {
@@ -205,18 +232,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RankingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/setup': {
-      id: '/setup'
-      path: '/setup'
-      fullPath: '/setup'
-      preLoaderRoute: typeof SetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/relatorios': {
-      id: '/relatorios'
-      path: '/relatorios'
-      fullPath: '/relatorios'
-      preLoaderRoute: typeof RelatoriosRouteImport
+    '/novidades': {
+      id: '/novidades'
+      path: '/novidades'
+      fullPath: '/novidades'
+      preLoaderRoute: typeof NovidadesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -291,6 +311,7 @@ const rootRouteChildren: RootRouteChildren = {
   FarmaciasRoute: FarmaciasRouteWithChildren,
   GestoresRoute: GestoresRoute,
   LoginRoute: LoginRoute,
+  NovidadesRoute: NovidadesRoute,
   RankingRoute: RankingRoute,
   RankingGestoresRoute: RankingGestoresRoute,
   RelatoriosRoute: RelatoriosRoute,
