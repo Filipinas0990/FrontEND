@@ -7,6 +7,9 @@ import {
   ShoppingCart,
   AlertTriangle,
   Clock,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
@@ -70,6 +73,30 @@ function Index() {
     queryFn: () => getFarmacias(gestorId ? { gestor_id: gestorId, dias: period } : { dias: period }),
     select: (data) =>
       [...data].sort((a, b) => b.score_criticidade - a.score_criticidade).slice(0, 8),
+  });
+
+  type SortKey = "criticidade" | "google_cliques" | "google_conv" | "meta_cliques" | "meta_conv" | "variacao";
+  const [sortKey, setSortKey] = useState<SortKey>("criticidade");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortKey(key); setSortDir("desc"); }
+  }
+
+  const sortedFarmacias = [...farmacias].sort((a, b) => {
+    const gA = a.canais?.find((c) => c.nome.toLowerCase().includes("google"));
+    const gB = b.canais?.find((c) => c.nome.toLowerCase().includes("google"));
+    const mA = a.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
+    const mB = b.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
+    let vA = 0, vB = 0;
+    if (sortKey === "criticidade")   { vA = a.score_criticidade; vB = b.score_criticidade; }
+    if (sortKey === "google_cliques"){ vA = gA?.atendimentos ?? 0; vB = gB?.atendimentos ?? 0; }
+    if (sortKey === "google_conv")   { vA = gA?.vendas != null && (gA.atendimentos ?? 0) > 0 ? gA.vendas / gA.atendimentos : 0; vB = gB?.vendas != null && (gB.atendimentos ?? 0) > 0 ? gB.vendas / gB.atendimentos : 0; }
+    if (sortKey === "meta_cliques")  { vA = mA?.atendimentos ?? 0; vB = mB?.atendimentos ?? 0; }
+    if (sortKey === "meta_conv")     { vA = mA?.vendas != null && (mA.atendimentos ?? 0) > 0 ? mA.vendas / mA.atendimentos : 0; vB = mB?.vendas != null && (mB.atendimentos ?? 0) > 0 ? mB.vendas / mB.atendimentos : 0; }
+    if (sortKey === "variacao")      { vA = a.variacao_atendimentos; vB = b.variacao_atendimentos; }
+    return sortDir === "desc" ? vB - vA : vA - vB;
   });
 
   const kpis = painel
@@ -208,25 +235,49 @@ function Index() {
                   <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">#</th>
                   <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Farmácia</th>
                   <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Status</th>
+                  {/* Google — cliques clicável, conv clicável */}
                   <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    <span className="flex items-center gap-1.5">
-                      <span className="size-2 rounded-full bg-[#4285F4] inline-block shrink-0" />
-                      Google
-                    </span>
-                    <span className="text-[9px] font-normal text-zinc-400 normal-case tracking-normal">cliques · conv%</span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-[#4285F4] inline-block shrink-0" />
+                        Google
+                      </span>
+                      <button onClick={() => toggleSort("google_cliques")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "google_cliques" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
+                        cliques {sortKey === "google_cliques" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
+                      </button>
+                      <button onClick={() => toggleSort("google_conv")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "google_conv" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
+                        conv% {sortKey === "google_conv" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
+                      </button>
+                    </div>
                   </th>
+                  {/* Meta — cliques clicável, conv clicável */}
                   <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    <span className="flex items-center gap-1.5">
-                      <span className="size-2 rounded-full bg-[#1877F2] inline-block shrink-0" />
-                      Meta / FB
-                    </span>
-                    <span className="text-[9px] font-normal text-zinc-400 normal-case tracking-normal">cliques · conv%</span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-[#1877F2] inline-block shrink-0" />
+                        Meta / FB
+                      </span>
+                      <button onClick={() => toggleSort("meta_cliques")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "meta_cliques" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
+                        cliques {sortKey === "meta_cliques" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
+                      </button>
+                      <button onClick={() => toggleSort("meta_conv")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "meta_conv" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
+                        conv% {sortKey === "meta_conv" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
+                      </button>
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Variação</th>
+                  <th
+                    className={`px-6 py-3 text-[10px] font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors ${sortKey === "variacao" ? "text-brand" : "text-zinc-500 hover:text-zinc-800"}`}
+                    onClick={() => toggleSort("variacao")}
+                  >
+                    <span className="flex items-center gap-1">
+                      Variação
+                      {sortKey === "variacao" ? (sortDir === "desc" ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />) : <ArrowUpDown className="size-3 text-zinc-300" />}
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {farmacias.map((p) => {
+                {sortedFarmacias.map((p) => {
                   const google = p.canais?.find((c) => c.nome.toLowerCase().includes("google"));
                   const meta   = p.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
                   const gConv  = google?.vendas != null && (google.atendimentos ?? 0) > 0
