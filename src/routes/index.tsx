@@ -289,7 +289,7 @@ function Index() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {sortedFarmacias.map((p) => {
+                {sortedFarmacias.map((p, idx) => {
                   // Google = canal "google" (prioritário) ou "site" como fallback
                   // Meta   = canal "meta" ou "facebook"
                   // NÃO agregar outros canais (WhatsApp, Orgânico, etc.)
@@ -313,7 +313,7 @@ function Index() {
                     className="hover:bg-zinc-50/50 cursor-pointer"
                     onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
                   >
-                    <td className="px-6 py-3 text-xs text-zinc-400 font-mono">{p.posicao_ranking}</td>
+                    <td className="px-6 py-3 text-xs text-zinc-400 font-mono">{idx + 1}</td>
                     <td className="px-6 py-3 text-sm font-medium text-zinc-900">{p.nome}</td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
