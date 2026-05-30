@@ -15,6 +15,9 @@ import { AppShell } from "@/components/AppShell";
 import { getFarmacias, setFarmaciaMeta, type CanalData } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
 import { FarmaciaComparativoPanel } from "@/components/FarmaciaComparativoPanel";
+import { usePeriod } from "@/contexts/PeriodContext";
+import { PeriodSelector } from "@/components/PeriodSelector";
+import { PeriodBadge } from "@/components/PeriodBadge";
 import {
   Dialog,
   DialogContent,
@@ -300,14 +303,15 @@ function FarmaciaDetailPage() {
   const admin = isAdmin();
   const qc = useQueryClient();
 
+  const { period, setPeriod } = usePeriod();
   const [canalAberto, setCanalAberto] = useState<CanalData | null>(null);
   const [editLeadsOpen, setEditLeadsOpen] = useState(false);
   const [leadsGoogle, setLeadsGoogle] = useState("");
   const [leadsMeta, setLeadsMeta] = useState("");
 
-  const { data: farmacias = [] } = useQuery({
-    queryKey: ["farmacias"],
-    queryFn: () => getFarmacias(),
+  const { data: farmacias = [], isFetching } = useQuery({
+    queryKey: ["farmacias", period],
+    queryFn: () => getFarmacias({ dias: period }),
     staleTime: 60_000,
   });
   const farmacia = farmacias.find((f) => f.id === farmaciaId);
@@ -427,12 +431,19 @@ function FarmaciaDetailPage() {
         farmaciaNome={farmacia?.nome ?? `Farmácia #${id}`}
       />
 
+      {/* Seletor de período global — afeta canais e metas de leads */}
+      <PeriodSelector value={period} onChange={setPeriod} loading={isFetching} />
+
       {/* Canais — cards clicáveis */}
       {farmacia?.canais && farmacia.canais.length > 0 && (
         <section className="space-y-4">
-          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-            Atendimentos por Canal — <span className="normal-case font-normal text-zinc-400">clique em um canal para ver detalhes</span>
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+              Atendimentos por Canal
+            </h3>
+            <PeriodBadge dias={period} />
+            <span className="text-zinc-400 text-xs font-normal">— clique em um canal para ver detalhes</span>
+          </div>
           <CanaisCards
             canais={farmacia.canais}
             total={farmacia.total_atendimentos}
