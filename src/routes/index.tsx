@@ -85,15 +85,22 @@ function Index() {
     else { setSortKey(key); setSortDir("desc"); }
   }
 
+  const isMeta = (nome: string) =>
+    nome.toLowerCase().includes("meta") || nome.toLowerCase().includes("facebook");
+
   const sortedFarmacias = [...farmacias].sort((a, b) => {
-    const gA = a.canais?.find((c) => c.nome.toLowerCase().includes("google"));
-    const gB = b.canais?.find((c) => c.nome.toLowerCase().includes("google"));
-    const mA = a.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
-    const mB = b.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
+    const gCanaisA = a.canais?.filter((c) => !isMeta(c.nome)) ?? [];
+    const gCanaisB = b.canais?.filter((c) => !isMeta(c.nome)) ?? [];
+    const mA = a.canais?.find((c) => isMeta(c.nome));
+    const mB = b.canais?.find((c) => isMeta(c.nome));
+    const gAtendA = gCanaisA.reduce((s, c) => s + (c.atendimentos ?? 0), 0);
+    const gAtendB = gCanaisB.reduce((s, c) => s + (c.atendimentos ?? 0), 0);
+    const gVendasA = gCanaisA.reduce((s, c) => s + (c.vendas ?? 0), 0);
+    const gVendasB = gCanaisB.reduce((s, c) => s + (c.vendas ?? 0), 0);
     let vA = 0, vB = 0;
     if (sortKey === "criticidade")   { vA = a.score_criticidade; vB = b.score_criticidade; }
-    if (sortKey === "google_cliques"){ vA = gA?.atendimentos ?? 0; vB = gB?.atendimentos ?? 0; }
-    if (sortKey === "google_conv")   { vA = gA?.vendas != null && (gA.atendimentos ?? 0) > 0 ? gA.vendas / gA.atendimentos : 0; vB = gB?.vendas != null && (gB.atendimentos ?? 0) > 0 ? gB.vendas / gB.atendimentos : 0; }
+    if (sortKey === "google_cliques"){ vA = gAtendA; vB = gAtendB; }
+    if (sortKey === "google_conv")   { vA = gAtendA > 0 ? gVendasA / gAtendA : 0; vB = gAtendB > 0 ? gVendasB / gAtendB : 0; }
     if (sortKey === "meta_cliques")  { vA = mA?.atendimentos ?? 0; vB = mB?.atendimentos ?? 0; }
     if (sortKey === "meta_conv")     { vA = mA?.vendas != null && (mA.atendimentos ?? 0) > 0 ? mA.vendas / mA.atendimentos : 0; vB = mB?.vendas != null && (mB.atendimentos ?? 0) > 0 ? mB.vendas / mB.atendimentos : 0; }
     if (sortKey === "variacao")      { vA = a.variacao_atendimentos; vB = b.variacao_atendimentos; }
@@ -283,10 +290,16 @@ function Index() {
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {sortedFarmacias.map((p) => {
-                  const google = p.canais?.find((c) => c.nome.toLowerCase().includes("google"));
-                  const meta   = p.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
-                  const gConv  = google?.vendas != null && (google.atendimentos ?? 0) > 0
-                    ? ((google.vendas / google.atendimentos) * 100).toFixed(1)
+                  // Meta = canal que contenha "meta" ou "facebook"
+                  // Google/Site = todos os outros canais (Google Ads, Site Novo, etc.)
+                  const isMeta = (nome: string) =>
+                    nome.toLowerCase().includes("meta") || nome.toLowerCase().includes("facebook");
+                  const meta        = p.canais?.find((c) => isMeta(c.nome));
+                  const googleCanais = p.canais?.filter((c) => !isMeta(c.nome)) ?? [];
+                  const gAtend  = googleCanais.reduce((s, c) => s + (c.atendimentos ?? 0), 0);
+                  const gVendas = googleCanais.reduce((s, c) => s + (c.vendas ?? 0), 0);
+                  const gConv   = gAtend > 0 && gVendas > 0
+                    ? ((gVendas / gAtend) * 100).toFixed(1)
                     : null;
                   const mConv  = meta?.vendas != null && (meta.atendimentos ?? 0) > 0
                     ? ((meta.vendas / meta.atendimentos) * 100).toFixed(1)
@@ -305,11 +318,11 @@ function Index() {
                         {alertLabel(p.nivel_alerta)}
                       </span>
                     </td>
-                    {/* Google */}
+                    {/* Google / Site (todos os canais não-Meta) */}
                     <td className="px-6 py-3">
-                      {google ? (
+                      {gAtend > 0 ? (
                         <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-semibold text-zinc-800">{(google.atendimentos ?? 0).toLocaleString("pt-BR")}</span>
+                          <span className="text-sm font-semibold text-zinc-800">{gAtend.toLocaleString("pt-BR")}</span>
                           <span className="text-[11px] font-semibold text-[#4285F4]">{gConv != null ? `${gConv}%` : "—"}</span>
                         </div>
                       ) : <span className="text-xs text-zinc-300">—</span>}
