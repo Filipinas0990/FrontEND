@@ -77,9 +77,14 @@ export interface PainelData {
 export interface Farmacia {
   id: number
   nome: string
+  fase: "entrada" | "ativo"
+  telefone: string | null
+  responsavel: string | null
+  cidade: string | null
   status: string
   nivel_alerta: "verde" | "amarelo" | "vermelho"
   gestor_id: number | null
+  tem_chatbot: boolean
   receita_total: number
   total_atendimentos: number
   atendimentos_finalizados: number
@@ -232,12 +237,14 @@ export function getFarmacias(params?: {
   status?: string
   busca?: string
   dias?: 7 | 15 | 30
+  fase?: "entrada" | "ativo"
 }): Promise<Farmacia[]> {
   const q = new URLSearchParams()
   if (params?.gestor_id) q.set("gestor_id", String(params.gestor_id))
   if (params?.status)    q.set("status", params.status)
   if (params?.busca)     q.set("busca", params.busca)
   if (params?.dias)      q.set("dias", String(params.dias))
+  if (params?.fase)      q.set("fase", params.fase)
   const qs = q.toString()
   return req(`/api/farmacias${qs ? `?${qs}` : ""}`)
 }
@@ -252,19 +259,42 @@ export function getFarmaciaEvolucaoPorPeriodo(id: number, dias: 7 | 15 | 30): Pr
 
 export function createFarmacia(data: {
   nome: string
-  url_base: string
-  email: string
-  senha: string
+  fase?: "entrada" | "ativo"
+  telefone?: string
+  responsavel?: string
+  cidade?: string
+  tem_chatbot?: boolean
+  url_base?: string
+  email?: string
+  senha?: string
   gestor_id?: number
-}): Promise<{ id: number; nome: string; gestor_id: number | null }> {
+}): Promise<{ id: number; nome: string; fase: string; gestor_id: number | null }> {
   return req("/api/farmacias", { method: "POST", body: JSON.stringify(data) })
 }
 
 export function updateFarmacia(
   id: number,
-  data: Partial<{ nome: string; gestor_id: number | null; ativa: boolean; url_base: string; email: string; senha: string }>,
+  data: Partial<{
+    nome: string
+    fase: "entrada" | "ativo"
+    telefone: string | null
+    responsavel: string | null
+    cidade: string | null
+    gestor_id: number | null
+    ativa: boolean
+    url_base: string
+    email: string
+    senha: string
+  }>,
 ): Promise<{ id: number; nome: string; ativa: boolean }> {
   return req(`/api/farmacias/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export function ativarFarmacia(
+  id: number,
+  data: { url_base?: string; email?: string; senha?: string; gestor_id?: number },
+): Promise<{ id: number; nome: string; fase: "ativo"; gestor_id: number | null; mensagem: string }> {
+  return req(`/api/farmacias/${id}/ativar`, { method: "PATCH", body: JSON.stringify(data) })
 }
 
 export function deleteFarmacia(id: number): Promise<{ mensagem: string }> {

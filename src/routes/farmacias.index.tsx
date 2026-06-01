@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings } from "lucide-react";
+import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings, Phone, MapPin, User, Rocket, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -14,6 +14,7 @@ import {
   updateFarmacia,
   deleteFarmacia,
   setFarmaciaMeta,
+  ativarFarmacia,
   type Farmacia,
   type Gestor,
 } from "@/lib/api";
@@ -72,7 +73,12 @@ function fmtBRL(v: number) {
 // ── Form dialog ────────────────────────────────────────────────────────────
 
 interface FarmaciaForm {
+  fase: "entrada" | "ativo";
   nome: string;
+  telefone: string;
+  responsavel: string;
+  cidade: string;
+  tem_chatbot: boolean;
   url_base: string;
   email: string;
   senha: string;
@@ -97,8 +103,13 @@ function FarmaciaDialog({
   onSave: (data: FarmaciaForm) => Promise<void>;
   saving: boolean;
 }) {
-  const [form, setForm] = useState<FarmaciaForm>({
+  const emptyForm = (): FarmaciaForm => ({
+    fase: editing?.fase ?? "ativo",
     nome: editing?.nome ?? "",
+    telefone: editing?.telefone ?? "",
+    responsavel: editing?.responsavel ?? "",
+    cidade: editing?.cidade ?? "",
+    tem_chatbot: editing?.tem_chatbot ?? true,
     url_base: "",
     email: "",
     senha: "",
@@ -107,20 +118,11 @@ function FarmaciaDialog({
     meta_leads_google: editing?.meta_leads_google != null ? String(editing.meta_leads_google) : "",
     meta_leads_meta: editing?.meta_leads_meta != null ? String(editing.meta_leads_meta) : "",
   });
+  const [form, setForm] = useState<FarmaciaForm>(emptyForm);
   const [confirmPending, setConfirmPending] = useState<FarmaciaForm | null>(null);
+  const [showSenha, setShowSenha] = useState(false);
 
-  useEffect(() => {
-    setForm({
-      nome: editing?.nome ?? "",
-      url_base: "",
-      email: "",
-      senha: "",
-      gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
-      meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
-      meta_leads_google: editing?.meta_leads_google != null ? String(editing.meta_leads_google) : "",
-      meta_leads_meta: editing?.meta_leads_meta != null ? String(editing.meta_leads_meta) : "",
-    });
-  }, [editing]);
+  useEffect(() => { setForm(emptyForm()); }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (f: keyof FarmaciaForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((p) => ({ ...p, [f]: e.target.value }));
@@ -152,75 +154,121 @@ function FarmaciaDialog({
           <DialogHeader>
             <DialogTitle>{editing ? "Editar Farmácia" : "Nova Farmácia"}</DialogTitle>
           </DialogHeader>
-          <form id="farmacia-form" onSubmit={handleSubmit} className="space-y-3 py-2">
-            <FormField label="Nome">
+          <form id="farmacia-form" onSubmit={handleSubmit} className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+            {/* Toggle Entrada / Ativo */}
+            {!editing && (
+              <div className="flex gap-2 p-1 bg-zinc-100 rounded-xl">
+                {(["entrada", "ativo"] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, fase: f }))}
+                    className={[
+                      "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
+                      form.fase === f
+                        ? f === "entrada"
+                          ? "bg-amber-500 text-white shadow-sm"
+                          : "bg-brand text-white shadow-sm"
+                        : "text-zinc-500 hover:text-zinc-800",
+                    ].join(" ")}
+                  >
+                    {f === "entrada" ? "📋 Cliente de Entrada" : "✅ Cliente Ativo"}
+                  </button>
+                ))}
+              </div>
+            )}
+            {form.fase === "entrada" && !editing && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 ring-1 ring-amber-200">
+                Cliente ainda sem credenciais da plataforma. Será ativado depois com URL + login.
+              </p>
+            )}
+
+            {/* Dados básicos */}
+            <FormField label="Nome *">
               <input required value={form.nome} onChange={set("nome")} className="form-input" placeholder="Farmácia Central" />
             </FormField>
-            {!editing && (
-              <>
-                <FormField label="URL Base (PharmaChatBot)">
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Responsável">
+                <input value={form.responsavel} onChange={set("responsavel")} className="form-input" placeholder="João Silva" />
+              </FormField>
+              <FormField label="Telefone">
+                <input value={form.telefone} onChange={set("telefone")} className="form-input" placeholder="(11) 99999-1234" />
+              </FormField>
+            </div>
+            <FormField label="Cidade">
+              <input value={form.cidade} onChange={set("cidade")} className="form-input" placeholder="São Paulo" />
+            </FormField>
+
+            {/* Tem chatbot — sempre visível */}
+            <div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl ring-1 ring-zinc-100">
+              <input
+                type="checkbox"
+                id="tem_chatbot"
+                checked={form.tem_chatbot}
+                onChange={(e) => setForm((p) => ({ ...p, tem_chatbot: e.target.checked }))}
+                className="size-4 accent-brand"
+              />
+              <label htmlFor="tem_chatbot" className="text-sm font-medium text-zinc-700 cursor-pointer">
+                Tem PharmaChatBot
+              </label>
+            </div>
+
+            {/* Credenciais — só quando ativo E tem_chatbot */}
+            {form.fase === "ativo" && !editing && form.tem_chatbot && (
+              <div className="space-y-3 pt-2 border-t border-zinc-100">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Credenciais da Plataforma</p>
+                <FormField label="URL Base *">
                   <input required value={form.url_base} onChange={set("url_base")} className="form-input" placeholder="https://app13.pharmachatbot.com.br/..." />
                 </FormField>
-                <FormField label="E-mail (PharmaChatBot)">
+                <FormField label="E-mail *">
                   <input required type="email" value={form.email} onChange={set("email")} className="form-input" placeholder="login@farmacia.com" />
                 </FormField>
-                <FormField label="Senha (PharmaChatBot)">
-                  <input required type="password" value={form.senha} onChange={set("senha")} className="form-input" placeholder="••••••••" />
-                </FormField>
-              </>
-            )}
-            <FormField label="Meta de Receita R$ (opcional)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.meta_receita}
-                onChange={set("meta_receita")}
-                className="form-input"
-                placeholder="Ex: 45000"
-              />
-              {metaFormatada && (
-                <p className="mt-1 text-xs font-semibold text-emerald-600">{metaFormatada}</p>
-              )}
-              {form.meta_receita && !metaFormatada && (
-                <p className="mt-1 text-xs text-red-400">Valor inválido</p>
-              )}
-            </FormField>
-            <div className="pt-2 border-t border-zinc-100">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-3">Metas de Leads por Canal</p>
-              <div className="space-y-3">
-                <FormField label="Meta Leads Google (semanal)">
-                  <div className="flex items-center gap-2">
+                <FormField label="Senha *">
+                  <div className="relative">
                     <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={form.meta_leads_google}
-                      onChange={set("meta_leads_google")}
-                      className="form-input flex-1"
-                      placeholder="Ex: 300"
+                      required
+                      type={showSenha ? "text" : "password"}
+                      value={form.senha}
+                      onChange={set("senha")}
+                      className="form-input pr-10"
+                      placeholder="••••••••"
                     />
-                    <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
+                    <button type="button" onClick={() => setShowSenha((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700">
+                      {showSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
                   </div>
-                  <p className="mt-1 text-[11px] text-zinc-400">Deixe em branco para não monitorar este canal.</p>
-                </FormField>
-                <FormField label="Meta Leads Meta/Facebook (semanal)">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={form.meta_leads_meta}
-                      onChange={set("meta_leads_meta")}
-                      className="form-input flex-1"
-                      placeholder="Ex: 200"
-                    />
-                    <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-zinc-400">Deixe em branco para não monitorar este canal.</p>
                 </FormField>
               </div>
-            </div>
+            )}
+
+            {/* Metas — só para clientes ativos */}
+            {form.fase === "ativo" && (
+              <>
+                <FormField label="Meta de Receita R$ (opcional)">
+                  <input type="number" min="0" step="0.01" value={form.meta_receita} onChange={set("meta_receita")} className="form-input" placeholder="Ex: 45000" />
+                  {metaFormatada && <p className="mt-1 text-xs font-semibold text-emerald-600">{metaFormatada}</p>}
+                </FormField>
+                <div className="pt-2 border-t border-zinc-100">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-3">Metas de Leads por Canal</p>
+                  <div className="space-y-3">
+                    <FormField label="Meta Leads Google (semanal)">
+                      <div className="flex items-center gap-2">
+                        <input type="number" min="1" step="1" value={form.meta_leads_google} onChange={set("meta_leads_google")} className="form-input flex-1" placeholder="Ex: 300" />
+                        <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
+                      </div>
+                    </FormField>
+                    <FormField label="Meta Leads Meta/Facebook (semanal)">
+                      <div className="flex items-center gap-2">
+                        <input type="number" min="1" step="1" value={form.meta_leads_meta} onChange={set("meta_leads_meta")} className="form-input flex-1" placeholder="Ex: 200" />
+                        <span className="text-xs text-zinc-400 shrink-0">leads/sem.</span>
+                      </div>
+                    </FormField>
+                  </div>
+                </div>
+              </>
+            )}
+
             <FormField label="Gestor (opcional)">
               <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
                 <option value="">Sem gestor</option>
@@ -339,6 +387,116 @@ function LeadsChannelRow({ canalNome, atual, meta }: { canalNome: string; atual:
   );
 }
 
+// ── Modal Ativar Farmácia ──────────────────────────────────────────────────
+
+function ModalAtivarFarmacia({
+  farmacia,
+  gestores,
+  onClose,
+  onSaved,
+}: {
+  farmacia: Farmacia | null;
+  gestores: Gestor[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({ url_base: "", email: "", senha: "", gestor_id: "" });
+  const [showSenha, setShowSenha] = useState(false);
+
+  useEffect(() => {
+    if (farmacia) setForm({ url_base: "", email: "", senha: "", gestor_id: farmacia.gestor_id ? String(farmacia.gestor_id) : "" });
+  }, [farmacia]);
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const mut = useMutation({
+    mutationFn: () =>
+      ativarFarmacia(farmacia!.id, {
+        url_base: form.url_base || undefined,
+        email: form.email || undefined,
+        senha: form.senha || undefined,
+        gestor_id: form.gestor_id ? Number(form.gestor_id) : undefined,
+      }),
+    onSuccess: () => {
+      toast.success(`${farmacia!.nome} ativada com sucesso!`);
+      qc.invalidateQueries({ queryKey: ["farmacias"] });
+      onSaved();
+      onClose();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  return (
+    <Dialog open={!!farmacia} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Rocket className="size-4 text-brand" />
+            Ativar Cliente — {farmacia?.nome}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="p-3 bg-amber-50 rounded-lg ring-1 ring-amber-200 text-xs text-amber-800">
+            Após a ativação, o cliente entra no próximo ciclo de coleta automaticamente.
+          </div>
+          {farmacia?.tem_chatbot ? (
+            <>
+              <FormField label="URL da Plataforma *">
+                <input required value={form.url_base} onChange={set("url_base")} className="form-input" placeholder="https://app13.pharmachatbot.com.br/..." />
+              </FormField>
+              <FormField label="E-mail da Plataforma *">
+                <input required type="email" value={form.email} onChange={set("email")} className="form-input" placeholder="login@farmacia.com" />
+              </FormField>
+              <FormField label="Senha da Plataforma *">
+                <div className="relative">
+                  <input
+                    required
+                    type={showSenha ? "text" : "password"}
+                    value={form.senha}
+                    onChange={set("senha")}
+                    className="form-input pr-10"
+                    placeholder="••••••••"
+                  />
+                  <button type="button" onClick={() => setShowSenha((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700">
+                    {showSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </FormField>
+            </>
+          ) : (
+            <div className="p-3 bg-zinc-50 rounded-lg ring-1 ring-zinc-200 text-xs text-zinc-600">
+              Este cliente não usa PharmaChatBot. Nenhuma credencial necessária.
+            </div>
+          )}
+          <FormField label="Atribuir Gestor">
+            <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
+              <option value="">Sem gestor</option>
+              {gestores.filter((g) => !g.is_admin).map((g) => (
+                <option key={g.id} value={g.id}>{g.nome}</option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+        <DialogFooter>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">Cancelar</button>
+          <button
+            type="button"
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending || (farmacia?.tem_chatbot === true && (!form.url_base || !form.email || !form.senha))}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60"
+          >
+            {mut.isPending ? <RefreshCw className="size-3.5 animate-spin" /> : <Rocket className="size-3.5" />}
+            Ativar Cliente
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 
 function FarmaciasPage() {
@@ -350,18 +508,21 @@ function FarmaciasPage() {
   const pipelineErros = ultimoResultado?.farmaciasComErro ?? [];
 
   const [query, setQuery] = useState("");
+  const [faseTab, setFaseTab] = useState<"todos" | "ativo" | "entrada">("todos");
   const [filter, setFilter] = useState<"todas" | "Ativa" | "Atencao" | "Alerta">("todas");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
+  const [ativarTarget, setAtivarTarget] = useState<Farmacia | null>(null);
 
   const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["farmacias", filter, query, period],
+    queryKey: ["farmacias", filter, query, period, faseTab],
     queryFn: () =>
       getFarmacias({
         status: filter !== "todas" ? filter : undefined,
         busca: query || undefined,
-        dias: period,
+        dias: faseTab !== "entrada" ? period : undefined,
+        fase: faseTab !== "todos" ? faseTab : undefined,
       }),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -399,21 +560,32 @@ function FarmaciasPage() {
     try {
       let targetId: number;
       if (editTarget) {
-        const patch: Parameters<typeof updateFarmacia>[1] = { nome: form.nome };
+        const patch: Parameters<typeof updateFarmacia>[1] = {
+          nome: form.nome,
+          telefone: form.telefone || null,
+          responsavel: form.responsavel || null,
+          cidade: form.cidade || null,
+        };
         if (form.gestor_id !== undefined) patch.gestor_id = gestorId ?? null;
         await updateMut.mutateAsync({ id: editTarget.id, data: patch });
         targetId = editTarget.id;
       } else {
         const result = await createMut.mutateAsync({
           nome: form.nome,
-          url_base: form.url_base,
-          email: form.email,
-          senha: form.senha,
+          fase: form.fase,
+          telefone: form.telefone || undefined,
+          responsavel: form.responsavel || undefined,
+          cidade: form.cidade || undefined,
+          tem_chatbot: form.tem_chatbot,
+          url_base: form.fase === "ativo" && form.tem_chatbot ? form.url_base : undefined,
+          email: form.fase === "ativo" && form.tem_chatbot ? form.email : undefined,
+          senha: form.fase === "ativo" && form.tem_chatbot ? form.senha : undefined,
           gestor_id: gestorId,
         });
         targetId = result.id;
       }
-      if (editTarget || hasMeta) {
+      const fase = editTarget ? editTarget.fase : form.fase;
+      if (fase !== "entrada" && (editTarget || hasMeta)) {
         await setFarmaciaMeta(targetId, {
           meta_vendas: null,
           meta_receita: form.meta_receita ? Number(form.meta_receita) : null,
@@ -463,14 +635,31 @@ function FarmaciasPage() {
       }
     >
       {/* Seletor de período */}
-      <PeriodSelector
-        value={period}
-        onChange={setPeriod}
-        loading={isFetching && !isLoading}
-      />
+      {faseTab !== "entrada" && (
+        <PeriodSelector
+          value={period}
+          onChange={setPeriod}
+          loading={isFetching && !isLoading}
+        />
+      )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex items-center gap-3">
+      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex flex-wrap items-center gap-3">
+        {admin && (
+          <div className="flex gap-1 bg-zinc-50 p-1 rounded-md">
+            {(["todos", "ativo", "entrada"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setFaseTab(t)}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  faseTab === t ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
+                }`}
+              >
+                {t === "todos" ? "Todos" : t === "ativo" ? "Ativos" : "Em Entrada"}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-zinc-50 rounded-md border border-zinc-100">
           <Search className="size-4 text-zinc-400" />
           <input
@@ -480,19 +669,21 @@ function FarmaciasPage() {
             className="bg-transparent outline-none text-sm flex-1"
           />
         </div>
-        <div className="flex gap-1 bg-zinc-50 p-1 rounded-md">
-          {(["todas", "Ativa", "Atencao", "Alerta"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors capitalize ${
-                filter === f ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
-              }`}
-            >
-              {f === "Atencao" ? "Atenção" : f}
-            </button>
-          ))}
-        </div>
+        {faseTab !== "entrada" && (
+          <div className="flex gap-1 bg-zinc-50 p-1 rounded-md">
+            {(["todas", "Ativa", "Atencao", "Alerta"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors capitalize ${
+                  filter === f ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
+                }`}
+              >
+                {f === "Atencao" ? "Atenção" : f}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Loading */}
@@ -508,26 +699,36 @@ function FarmaciasPage() {
       {!isLoading && (
         <div className="grid grid-cols-3 gap-4">
           {farmacias.map((p) => {
-            const semDados = p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0);
-            const naoAtingiuMeta = !semDados && p.atingiu_meta === false;
+            const isEntrada = p.fase === "entrada";
+            const semDados = !isEntrada && (p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0));
+            const naoAtingiuMeta = !isEntrada && !semDados && p.atingiu_meta === false;
             const errosPipeline = pipelineErros.filter((e) => e.nome === p.nome);
             return (
               <div
                 key={p.id}
                 className={`bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer ${
-                  naoAtingiuMeta ? "ring-2 ring-red-500" : "ring-1 ring-black/5"
+                  isEntrada ? "ring-1 ring-amber-200" : naoAtingiuMeta ? "ring-2 ring-red-500" : "ring-1 ring-black/5"
                 }`}
                 onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0 pr-2">
-                    <h3 className="text-sm font-semibold truncate">{p.nome}</h3>
-                    {semDados
-                      ? <p className="text-[10px] text-zinc-400 mt-0.5 italic">Aguardando dados</p>
-                      : <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {isEntrada && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 ring-1 ring-amber-200 shrink-0">
+                          ENTRADA
+                        </span>
+                      )}
+                      <h3 className="text-sm font-semibold truncate">{p.nome}</h3>
+                    </div>
+                    {isEntrada
+                      ? <p className="text-[10px] text-amber-600 mt-0.5 italic">Aguardando ativação</p>
+                      : semDados
+                        ? <p className="text-[10px] text-zinc-400 mt-0.5 italic">Aguardando dados</p>
+                        : <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
                     }
                     {/* Badge de erro do pipeline */}
-                    {errosPipeline.length > 0 && (
+                    {!isEntrada && errosPipeline.length > 0 && (
                       <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {errosPipeline.map((e) => (
                           <span
@@ -541,15 +742,46 @@ function FarmaciasPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
-                      {alertLabel(p.nivel_alerta)}
-                    </span>
-                    <PeriodBadge dias={period} />
-                  </div>
+                  {!isEntrada && (
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
+                        {alertLabel(p.nivel_alerta)}
+                      </span>
+                      <PeriodBadge dias={period} />
+                    </div>
+                  )}
                 </div>
 
-                {semDados ? (
+                {isEntrada ? (
+                  <div className="pt-3 border-t border-zinc-100 space-y-1.5">
+                    {(p.responsavel || p.telefone || p.cidade) ? (
+                      <div className="space-y-1">
+                        {p.responsavel && (
+                          <div className="flex items-center gap-1.5 text-xs text-zinc-600">
+                            <User className="size-3 text-zinc-400 shrink-0" />{p.responsavel}
+                          </div>
+                        )}
+                        {p.telefone && (
+                          <div className="flex items-center gap-1.5 text-xs text-zinc-600">
+                            <Phone className="size-3 text-zinc-400 shrink-0" />{p.telefone}
+                          </div>
+                        )}
+                        {p.cidade && (
+                          <div className="flex items-center gap-1.5 text-xs text-zinc-600">
+                            <MapPin className="size-3 text-zinc-400 shrink-0" />{p.cidade}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-400 italic">Sem dados de contato</p>
+                    )}
+                    <div className="text-[10px] text-zinc-400">
+                      {p.gestor_id
+                        ? gestores.find((g) => g.id === p.gestor_id)?.nome ?? "Gestor atribuído"
+                        : "Sem gestor atribuído"}
+                    </div>
+                  </div>
+                ) : semDados ? (
                   <div className="pt-3 border-t border-zinc-100 flex items-center justify-center py-4">
                     <span className="text-xs text-zinc-400 italic">Nenhum dado coletado neste período.</span>
                   </div>
@@ -623,12 +855,22 @@ function FarmaciasPage() {
                     <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
                       <Pencil className="size-3" /> Editar
                     </button>
-                    <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
-                      <Settings className="size-3" /> Metas de leads
-                    </button>
+                    {!isEntrada && (
+                      <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
+                        <Settings className="size-3" /> Metas de leads
+                      </button>
+                    )}
                     <button onClick={() => setDeleteTarget(p)} className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-600">
                       <Trash2 className="size-3" /> Desativar
                     </button>
+                    {isEntrada && (
+                      <button
+                        onClick={() => setAtivarTarget(p)}
+                        className="flex items-center gap-1.5 ml-auto text-[10px] font-semibold bg-amber-500 text-white px-2.5 py-1 rounded-md hover:opacity-90"
+                      >
+                        <Rocket className="size-3" /> Ativar Cliente
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -675,6 +917,16 @@ function FarmaciasPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Ativar cliente de entrada */}
+      {admin && (
+        <ModalAtivarFarmacia
+          farmacia={ativarTarget}
+          gestores={gestores}
+          onClose={() => setAtivarTarget(null)}
+          onSaved={() => setAtivarTarget(null)}
+        />
+      )}
     </AppShell>
   );
 }
