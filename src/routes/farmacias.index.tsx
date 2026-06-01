@@ -187,17 +187,21 @@ function FarmaciaDialog({
             <FormField label="Nome *">
               <input required value={form.nome} onChange={set("nome")} className="form-input" placeholder="Farmácia Central" />
             </FormField>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label="Responsável">
-                <input value={form.responsavel} onChange={set("responsavel")} className="form-input" placeholder="João Silva" />
-              </FormField>
-              <FormField label="Telefone">
-                <input value={form.telefone} onChange={set("telefone")} className="form-input" placeholder="(11) 99999-1234" />
-              </FormField>
-            </div>
-            <FormField label="Cidade">
-              <input value={form.cidade} onChange={set("cidade")} className="form-input" placeholder="São Paulo" />
-            </FormField>
+            {form.fase === "entrada" && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Responsável">
+                    <input value={form.responsavel} onChange={set("responsavel")} className="form-input" placeholder="João Silva" />
+                  </FormField>
+                  <FormField label="Telefone">
+                    <input value={form.telefone} onChange={set("telefone")} className="form-input" placeholder="(11) 99999-1234" />
+                  </FormField>
+                </div>
+                <FormField label="Cidade">
+                  <input value={form.cidade} onChange={set("cidade")} className="form-input" placeholder="São Paulo" />
+                </FormField>
+              </>
+            )}
 
             {/* Tem chatbot — sempre visível */}
             <div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl ring-1 ring-zinc-100">
@@ -707,7 +711,10 @@ function FarmaciasPage() {
               <div
                 key={p.id}
                 className={`bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer ${
-                  isEntrada ? "ring-1 ring-amber-200" : naoAtingiuMeta ? "ring-2 ring-red-500" : "ring-1 ring-black/5"
+                  isEntrada ? "ring-1 ring-amber-200"
+                  : naoAtingiuMeta ? "ring-2 ring-red-500"
+                  : !p.tem_chatbot ? "ring-1 ring-sky-200"
+                  : "ring-1 ring-black/5"
                 }`}
                 onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
               >
@@ -747,6 +754,11 @@ function FarmaciasPage() {
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
                         {alertLabel(p.nivel_alerta)}
                       </span>
+                      {!p.tem_chatbot && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-sky-50 text-sky-600 ring-1 ring-sky-200">
+                          Sem ChatBot
+                        </span>
+                      )}
                       <PeriodBadge dias={period} />
                     </div>
                   )}
