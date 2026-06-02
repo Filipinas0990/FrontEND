@@ -785,3 +785,79 @@ export function getAcoesForFarmacia(farmaciaId: number, mes?: string): Promise<A
   const q = mes ? `?mes=${mes}` : ""
   return req(`/api/farmacias/${farmaciaId}/acoes${q}`)
 }
+
+// ── Gerenciador de Reuniões ────────────────────────────────────────────────
+
+export interface GerenciadorReuniaoItem {
+  id: number
+  titulo: string
+  data_reuniao: string
+  duracao_minutos: number
+  status: ReuniaoStatusAPI
+  observacoes: string | null
+  gestor_id: number | null
+  gestor_nome: string | null
+}
+
+export interface GerenciadorFarmaciaCom {
+  farmacia_id: number
+  farmacia_nome: string
+  cidade: string | null
+  responsavel: string | null
+  telefone: string | null
+  gestor_id: number | null
+  gestor_nome: string | null
+  nivel_alerta: string
+  total_reunioes: number
+  realizadas: number
+  confirmadas: number
+  agendadas: number
+  reunioes: GerenciadorReuniaoItem[]
+}
+
+export interface GerenciadorFarmaciaSem {
+  farmacia_id: number
+  farmacia_nome: string
+  cidade: string | null
+  responsavel: string | null
+  telefone: string | null
+  gestor_id: number | null
+  gestor_nome: string | null
+  nivel_alerta: string
+}
+
+export interface GerenciadorMensal {
+  mes: string
+  total_farmacias_ativas: number
+  farmacias_com_reuniao: number
+  farmacias_sem_reuniao: number
+  taxa_cobertura: number
+  com_reuniao: GerenciadorFarmaciaCom[]
+  sem_reuniao: GerenciadorFarmaciaSem[]
+}
+
+export interface CoberturaHistoricoMes {
+  mes: string
+  total_farmacias: number
+  farmacias_com_reuniao: number
+  farmacias_sem_reuniao: number
+  taxa_cobertura: number
+  total_reunioes: number
+  realizadas: number
+  confirmadas: number
+  agendadas: number
+}
+
+export interface CoberturaMensal {
+  total_farmacias_ativas: number
+  historico: CoberturaHistoricoMes[]
+}
+
+export function getGerenciadorMensal(mes?: string): Promise<GerenciadorMensal> {
+  const q = mes ? `?mes=${mes}` : ""
+  return req(`/api/reunioes/gerenciador-mensal${q}`)
+}
+
+export function getCoberturaMensal(meses = 6): Promise<CoberturaMensal> {
+  return req(`/api/reunioes/cobertura-mensal?meses=${meses}`)
+}

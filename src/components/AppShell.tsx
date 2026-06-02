@@ -17,6 +17,7 @@ import {
   XCircle,
   Megaphone,
   Clock,
+  BarChart3,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -407,16 +408,17 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
   const isPipelineActive = pipelineRodando;
 
   const navItems = [
-    { icon: Newspaper,       label: "Início",       to: "/novidades" as const },
-    { icon: LayoutDashboard, label: "Painel Geral", to: "/" as const },
-    { icon: Building2,       label: "Farmácias",    to: "/farmacias" as const },
+    { icon: Newspaper,       label: "Início",         to: "/novidades" as const },
+    { icon: LayoutDashboard, label: "Painel Geral",   to: "/" as const },
+    { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const },
     ...(isAdminUser
       ? [{ icon: Clock, label: "Em Entrada", to: "/farmacias/entrada" as const }]
       : []),
-    { icon: CalendarDays,    label: "Reuniões",     to: "/reunioes" as const },
-    { icon: Megaphone,       label: "Ações",        to: "/acoes" as const },
-    { icon: Trophy,          label: "Ranking",      to: "/ranking-gestores" as const },
-    { icon: FileBarChart,    label: "Relatórios",   to: "/relatorios" as const },
+    { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const },
+    { icon: BarChart3,       label: "Gerenciador",    to: "/reunioes/gerenciador" as const },
+    { icon: Megaphone,       label: "Ações",          to: "/acoes" as const },
+    { icon: Trophy,          label: "Ranking",        to: "/ranking-gestores" as const },
+    { icon: FileBarChart,    label: "Relatórios",     to: "/relatorios" as const },
     ...(isAdminUser
       ? [{ icon: Users, label: "Gestores", to: "/gestores" as const }]
       : []),
@@ -438,7 +440,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
             <Link
               key={item.to}
               to={item.to}
-              activeOptions={{ exact: item.to === "/" || item.to === "/farmacias" }}
+              activeOptions={{ exact: ["/", "/farmacias", "/reunioes"].includes(item.to) }}
               className="flex items-center gap-2.5 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-white/75 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
             >
               <item.icon className="size-4 shrink-0" />

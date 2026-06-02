@@ -21,8 +21,10 @@ import { Route as FarmaciasRouteImport } from './routes/farmacias'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as AcoesRouteImport } from './routes/acoes'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReunioesIndexRouteImport } from './routes/reunioes.index'
 import { Route as FarmaciasIndexRouteImport } from './routes/farmacias.index'
 import { Route as AcoesIndexRouteImport } from './routes/acoes.index'
+import { Route as ReunioesGerenciadorRouteImport } from './routes/reunioes.gerenciador'
 import { Route as FarmaciasEntradaRouteImport } from './routes/farmacias.entrada'
 import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
 import { Route as AcoesIdRouteImport } from './routes/acoes.$id'
@@ -87,6 +89,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReunioesIndexRoute = ReunioesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ReunioesRoute,
+} as any)
 const FarmaciasIndexRoute = FarmaciasIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -96,6 +103,11 @@ const AcoesIndexRoute = AcoesIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AcoesRoute,
+} as any)
+const ReunioesGerenciadorRoute = ReunioesGerenciadorRouteImport.update({
+  id: '/gerenciador',
+  path: '/gerenciador',
+  getParentRoute: () => ReunioesRoute,
 } as any)
 const FarmaciasEntradaRoute = FarmaciasEntradaRouteImport.update({
   id: '/entrada',
@@ -124,13 +136,15 @@ export interface FileRoutesByFullPath {
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
-  '/reunioes': typeof ReunioesRoute
+  '/reunioes': typeof ReunioesRouteWithChildren
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
+  '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes/': typeof AcoesIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
+  '/reunioes/': typeof ReunioesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -141,13 +155,14 @@ export interface FileRoutesByTo {
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
-  '/reunioes': typeof ReunioesRoute
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
+  '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes': typeof AcoesIndexRoute
   '/farmacias': typeof FarmaciasIndexRoute
+  '/reunioes': typeof ReunioesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -161,13 +176,15 @@ export interface FileRoutesById {
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
-  '/reunioes': typeof ReunioesRoute
+  '/reunioes': typeof ReunioesRouteWithChildren
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
+  '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes/': typeof AcoesIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
+  '/reunioes/': typeof ReunioesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -187,8 +204,10 @@ export interface FileRouteTypes {
     | '/acoes/$id'
     | '/farmacias/$id'
     | '/farmacias/entrada'
+    | '/reunioes/gerenciador'
     | '/acoes/'
     | '/farmacias/'
+    | '/reunioes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -199,13 +218,14 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
-    | '/reunioes'
     | '/setup'
     | '/acoes/$id'
     | '/farmacias/$id'
     | '/farmacias/entrada'
+    | '/reunioes/gerenciador'
     | '/acoes'
     | '/farmacias'
+    | '/reunioes'
   id:
     | '__root__'
     | '/'
@@ -223,8 +243,10 @@ export interface FileRouteTypes {
     | '/acoes/$id'
     | '/farmacias/$id'
     | '/farmacias/entrada'
+    | '/reunioes/gerenciador'
     | '/acoes/'
     | '/farmacias/'
+    | '/reunioes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -238,7 +260,7 @@ export interface RootRouteChildren {
   RankingRoute: typeof RankingRoute
   RankingGestoresRoute: typeof RankingGestoresRoute
   RelatoriosRoute: typeof RelatoriosRoute
-  ReunioesRoute: typeof ReunioesRoute
+  ReunioesRoute: typeof ReunioesRouteWithChildren
   SetupRoute: typeof SetupRoute
 }
 
@@ -328,6 +350,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reunioes/': {
+      id: '/reunioes/'
+      path: '/'
+      fullPath: '/reunioes/'
+      preLoaderRoute: typeof ReunioesIndexRouteImport
+      parentRoute: typeof ReunioesRoute
+    }
     '/farmacias/': {
       id: '/farmacias/'
       path: '/'
@@ -341,6 +370,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/acoes/'
       preLoaderRoute: typeof AcoesIndexRouteImport
       parentRoute: typeof AcoesRoute
+    }
+    '/reunioes/gerenciador': {
+      id: '/reunioes/gerenciador'
+      path: '/gerenciador'
+      fullPath: '/reunioes/gerenciador'
+      preLoaderRoute: typeof ReunioesGerenciadorRouteImport
+      parentRoute: typeof ReunioesRoute
     }
     '/farmacias/entrada': {
       id: '/farmacias/entrada'
@@ -394,6 +430,20 @@ const FarmaciasRouteWithChildren = FarmaciasRoute._addFileChildren(
   FarmaciasRouteChildren,
 )
 
+interface ReunioesRouteChildren {
+  ReunioesGerenciadorRoute: typeof ReunioesGerenciadorRoute
+  ReunioesIndexRoute: typeof ReunioesIndexRoute
+}
+
+const ReunioesRouteChildren: ReunioesRouteChildren = {
+  ReunioesGerenciadorRoute: ReunioesGerenciadorRoute,
+  ReunioesIndexRoute: ReunioesIndexRoute,
+}
+
+const ReunioesRouteWithChildren = ReunioesRoute._addFileChildren(
+  ReunioesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcoesRoute: AcoesRouteWithChildren,
@@ -405,7 +455,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingRoute: RankingRoute,
   RankingGestoresRoute: RankingGestoresRoute,
   RelatoriosRoute: RelatoriosRoute,
-  ReunioesRoute: ReunioesRoute,
+  ReunioesRoute: ReunioesRouteWithChildren,
   SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport
