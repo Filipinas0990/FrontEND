@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings, Phone, MapPin, User, Rocket, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings, Phone, MapPin, User, Rocket, Eye, EyeOff, CheckCircle2, Megaphone } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -514,6 +514,7 @@ function FarmaciasPage() {
   const [query, setQuery] = useState("");
   const [faseTab, setFaseTab] = useState<"todos" | "ativo" | "entrada">("todos");
   const [filter, setFilter] = useState<"todas" | "Ativa" | "Atencao" | "Alerta">("todas");
+  const [acaoFilter, setAcaoFilter] = useState<"todos" | "com_acao" | "sem_acao" | "abre_mes" | "fecha_mes">("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
@@ -608,6 +609,14 @@ function FarmaciasPage() {
 
   const saving = createMut.isPending || updateMut.isPending;
 
+  const farmaciasFiltradas = farmacias.filter((p) => {
+    if (acaoFilter === "com_acao")  return (p.acoes_ativas?.length ?? 0) > 0;
+    if (acaoFilter === "sem_acao")  return (p.acoes_ativas?.length ?? 0) === 0;
+    if (acaoFilter === "abre_mes")  return p.acoes_ativas?.some((a) => a.tipo === "abre_mes") ?? false;
+    if (acaoFilter === "fecha_mes") return p.acoes_ativas?.some((a) => a.tipo === "fecha_mes") ?? false;
+    return true;
+  });
+
   return (
     <AppShell
       title="Farmácias"
@@ -690,6 +699,36 @@ function FarmaciasPage() {
         )}
       </div>
 
+      {/* Filtro por ação */}
+      {faseTab !== "entrada" && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-zinc-400 flex items-center gap-1">
+            <Megaphone className="size-3" /> Ações:
+          </span>
+          {(
+            [
+              { value: "todos",     label: "Todos" },
+              { value: "com_acao",  label: "Com Ação" },
+              { value: "sem_acao",  label: "Sem Ação" },
+              { value: "abre_mes",  label: "Abre Mês" },
+              { value: "fecha_mes", label: "Fecha Mês" },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setAcaoFilter(f.value)}
+              className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                acaoFilter === f.value
+                  ? "bg-brand text-white"
+                  : "bg-white text-zinc-600 ring-1 ring-black/5 hover:ring-zinc-300"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Loading */}
       {isLoading && (
         <div className="grid grid-cols-3 gap-4">
@@ -702,7 +741,7 @@ function FarmaciasPage() {
       {/* Cards */}
       {!isLoading && (
         <div className="grid grid-cols-3 gap-4">
-          {farmacias.map((p) => {
+          {farmaciasFiltradas.map((p) => {
             const isEntrada = p.fase === "entrada";
             const semDados = !isEntrada && (p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0));
             const naoAtingiuMeta = !isEntrada && !semDados && p.atingiu_meta === false;
@@ -862,6 +901,24 @@ function FarmaciasPage() {
                   </div>
                 )}
 
+                {/* Badges de ações ativas */}
+                {!isEntrada && p.acoes_ativas && p.acoes_ativas.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-zinc-100 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+                    {p.acoes_ativas.map((a) => (
+                      <button
+                        key={a.id}
+                        onClick={() => navigate({ to: "/acoes/$id", params: { id: String(a.id) } })}
+                        title={`${a.tipo} · ${a.status}`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white truncate max-w-[140px] hover:opacity-80 transition-opacity"
+                        style={{ backgroundColor: a.cor ?? "#6B7280" }}
+                      >
+                        <Megaphone className="size-2.5 shrink-0" />
+                        <span className="truncate">{a.nome}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {admin && (
                   <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
@@ -891,9 +948,9 @@ function FarmaciasPage() {
         </div>
       )}
 
-      {!isLoading && farmacias.length === 0 && (
+      {!isLoading && farmaciasFiltradas.length === 0 && (
         <div className="text-center py-16 text-zinc-500 text-sm">
-          Nenhuma farmácia encontrada.
+          {acaoFilter !== "todos" ? "Nenhuma farmácia com este filtro de ação." : "Nenhuma farmácia encontrada."}
         </div>
       )}
 

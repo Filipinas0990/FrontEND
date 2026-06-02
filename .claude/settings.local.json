@@ -51,7 +51,14 @@
       "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"usePeriod\\\\|PeriodSelector\\\\|PeriodBadge\" src/routes/farmacias.\\\\$id.tsx | head -10)",
       "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && head -20 src/routes/farmacias.\\\\$id.tsx)",
       "Bash(cd \"/c/Users/Grupo Symbol Digital/Desktop/FRONT-END\" && grep -n \"ATENDIMENTOS POR CANAL\\\\|Atendimentos por Canal\\\\|CanaisCards\\\\|canais\\\\.length\" src/routes/farmacias.\\\\$id.tsx | head -10)",
-      "Bash(grep 'farmacias.$id\\\\|farmacias$')"
+      "Bash(grep 'farmacias.$id\\\\|farmacias$')",
+      "Bash(npx vite *)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Grupo Symbol Digital\\\\.claude\\\\projects\\\\c--Users-Grupo-Symbol-Digital-Desktop-FRONT-END\\\\memory\")",
+      "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\")",
+      "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\AUTOMAÇÃO\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Grupo Symbol Digital\\.claude\\projects\\c--Users-Grupo-Symbol-Digital-Desktop-FRONT-END"
     ]
   }
 }

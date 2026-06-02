@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import {
   ArrowLeft, Users, Search, BarChart2, MessageCircle,
-  ShoppingCart, DollarSign, TrendingUp, X, Maximize2, Settings,
+  ShoppingCart, DollarSign, TrendingUp, X, Maximize2, Settings, Megaphone,
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { getFarmacias, setFarmaciaMeta, type CanalData } from "@/lib/api";
+import { getFarmacias, setFarmaciaMeta, getAcoesForFarmacia, type CanalData } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
 import { FarmaciaComparativoPanel } from "@/components/FarmaciaComparativoPanel";
 import { usePeriod } from "@/contexts/PeriodContext";
@@ -468,6 +468,9 @@ function FarmaciaDetailPage() {
         />
       )}
 
+      {/* ── Ações de Marketing ── */}
+      <AcoesFarmaciaSection farmaciaId={farmaciaId} />
+
       {/* Dialog — editar metas de leads */}
       {admin && (
         <Dialog open={editLeadsOpen} onOpenChange={setEditLeadsOpen}>
@@ -530,6 +533,115 @@ function FarmaciaDetailPage() {
         </Dialog>
       )}
     </AppShell>
+  );
+}
+
+// ── Ações de Marketing da Farmácia ─────────────────────────────────────────
+
+const MESES_FULL_FA = [
+  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+];
+
+const STATUS_DOT: Record<string, string> = {
+  planejada:    "#F59E0B",
+  em_andamento: "#3B82F6",
+  concluida:    "#10B981",
+  cancelada:    "#9CA3AF",
+};
+
+const TIPO_LABELS_FA: Record<string, string> = {
+  abre_mes: "Abre Mês", fecha_mes: "Fecha Mês", campanha: "Campanha",
+  promocao: "Promoção", evento: "Evento", outro: "Outro",
+};
+
+function AcoesFarmaciaSection({ farmaciaId }: { farmaciaId: number }) {
+  const { data: acoes = [], isLoading } = useQuery({
+    queryKey: ["acoes-farmacia", farmaciaId],
+    queryFn: () => getAcoesForFarmacia(farmaciaId),
+    staleTime: 60_000,
+  });
+
+  type MesGrupo = { key: string; label: string; items: typeof acoes };
+  const grupos: MesGrupo[] = [];
+  for (const a of [...acoes].sort((x, y) => y.mes_referencia.localeCompare(x.mes_referencia))) {
+    let g = grupos.find((g) => g.key === a.mes_referencia);
+    if (!g) {
+      const [y, m] = a.mes_referencia.split("-").map(Number);
+      g = { key: a.mes_referencia, label: `${MESES_FULL_FA[m - 1]} ${y}`, items: [] };
+      grupos.push(g);
+    }
+    g.items.push(a);
+  }
+
+  return (
+    <section className="space-y-4">
+      <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+        <Megaphone className="size-3.5" /> Ações de Marketing
+      </h3>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-12 bg-white rounded-xl ring-1 ring-black/5 animate-pulse" />
+          ))}
+        </div>
+      ) : acoes.length === 0 ? (
+        <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm px-5 py-8 text-center text-sm text-zinc-400">
+          Nenhuma ação de marketing registrada para esta farmácia.
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {grupos.map((g) => (
+            <div key={g.key}>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">{g.label}</p>
+              <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm divide-y divide-zinc-50">
+                {g.items.map((a) => {
+                  const cor = a.cor ?? "#6B7280";
+                  const dot = STATUS_DOT[a.status] ?? "#6B7280";
+                  const isCancelada = a.status === "cancelada";
+                  return (
+                    <Link
+                      key={a.id}
+                      to="/acoes/$id"
+                      params={{ id: String(a.id) }}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50/60 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                    >
+                      <span
+                        className="size-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: isCancelada ? "#9CA3AF" : cor }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold truncate ${isCancelada ? "line-through text-zinc-400" : "text-zinc-800"}`}>
+                          {a.nome}
+                        </p>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          {TIPO_LABELS_FA[a.tipo] ?? a.tipo}
+                        </p>
+                      </div>
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 shrink-0"
+                        style={{
+                          backgroundColor: dot + "15",
+                          color: dot,
+                          borderColor: dot + "40",
+                        }}
+                      >
+                        <span className="size-1.5 rounded-full" style={{ backgroundColor: dot }} />
+                        {a.status === "em_andamento" ? "Em Andamento"
+                          : a.status === "planejada" ? "Planejada"
+                          : a.status === "concluida" ? "Concluída"
+                          : "Cancelada"}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

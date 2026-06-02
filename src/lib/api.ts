@@ -74,6 +74,14 @@ export interface PainelData {
   ultima_atualizacao: string
 }
 
+export interface AcaoAtiva {
+  id: number
+  nome: string
+  tipo: string
+  status: string
+  cor: string | null
+}
+
 export interface Farmacia {
   id: number
   nome: string
@@ -106,6 +114,7 @@ export interface Farmacia {
   atingiu_meta: boolean | null
   percentual_meta_receita: number | null
   percentual_meta_vendas: number | null
+  acoes_ativas?: AcaoAtiva[]
 }
 
 export interface RankingGestor {
@@ -638,4 +647,141 @@ export function listarBloqueios(mes?: string): Promise<BloqueioAgenda[]> {
 
 export function removerBloqueio(id: number): Promise<{ mensagem: string }> {
   return req(`/api/agenda/bloqueios/${id}`, { method: "DELETE" })
+}
+
+// ── Ações de Marketing ─────────────────────────────────────────────────────
+
+export type AcaoStatus = "planejada" | "em_andamento" | "concluida" | "cancelada"
+
+export interface AcaoMarketing {
+  id: number
+  nome: string
+  tipo: string
+  descricao: string | null
+  mes_referencia: string
+  status: AcaoStatus
+  cor: string | null
+  criado_por_id: number | null
+  criado_por_nome: string | null
+  criado_em: string
+  atualizado_em: string
+  total_farmacias: number
+}
+
+export interface ParticipacaoFarmacia {
+  participacao_id: number
+  farmacia_id: number
+  farmacia_nome: string
+  cidade: string | null
+  responsavel: string | null
+  telefone: string | null
+  gestor_id: number | null
+  gestor_nome: string | null
+  nivel_alerta: string
+  observacoes: string | null
+  adicionado_em: string
+}
+
+export interface AcaoDetalhe extends AcaoMarketing {
+  farmacias: ParticipacaoFarmacia[]
+}
+
+export interface AcaoResumo {
+  mes: string
+  total_acoes: number
+  farmacias_com_acao: number
+  por_status: {
+    planejadas: number
+    em_andamento: number
+    concluidas: number
+    canceladas: number
+  }
+  por_tipo: { tipo: string; quantidade: number }[]
+  acoes: {
+    id: number
+    nome: string
+    tipo: string
+    status: AcaoStatus
+    cor: string | null
+    total_farmacias: number
+  }[]
+}
+
+export interface AcaoFarmaciaEntry extends AcaoMarketing {
+  observacoes: string | null
+  adicionado_em: string
+}
+
+export function getAcoes(params?: { mes?: string; status?: string; tipo?: string }): Promise<AcaoMarketing[]> {
+  const q = new URLSearchParams()
+  if (params?.mes) q.set("mes", params.mes)
+  if (params?.status) q.set("status", params.status)
+  if (params?.tipo) q.set("tipo", params.tipo)
+  const qs = q.toString()
+  return req(`/api/acoes${qs ? `?${qs}` : ""}`)
+}
+
+export function getAcaoResumo(mes?: string): Promise<AcaoResumo> {
+  const q = mes ? `?mes=${mes}` : ""
+  return req(`/api/acoes/resumo${q}`)
+}
+
+export function criarAcao(data: {
+  nome: string
+  tipo: string
+  descricao?: string
+  mes_referencia: string
+  status?: AcaoStatus
+  cor?: string
+}): Promise<AcaoMarketing> {
+  return req("/api/acoes", { method: "POST", body: JSON.stringify(data) })
+}
+
+export function getAcao(id: number): Promise<AcaoDetalhe> {
+  return req(`/api/acoes/${id}`)
+}
+
+export function editarAcao(
+  id: number,
+  data: Partial<{
+    nome: string
+    tipo: string
+    descricao: string | null
+    mes_referencia: string
+    status: AcaoStatus
+    cor: string | null
+  }>,
+): Promise<AcaoMarketing> {
+  return req(`/api/acoes/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export function cancelarAcaoMarketing(id: number): Promise<{ mensagem: string; id: number }> {
+  return req(`/api/acoes/${id}`, { method: "DELETE" })
+}
+
+export function adicionarFarmaciasAcao(
+  id: number,
+  data: { farmacia_ids: number[]; observacoes?: string },
+): Promise<{ mensagem: string; adicionadas: number; total_farmacias: number }> {
+  return req(`/api/acoes/${id}/farmacias`, { method: "POST", body: JSON.stringify(data) })
+}
+
+export function removerFarmaciaAcao(id: number, farmaciaId: number): Promise<{ mensagem: string }> {
+  return req(`/api/acoes/${id}/farmacias/${farmaciaId}`, { method: "DELETE" })
+}
+
+export function atualizarObservacoesAcao(
+  id: number,
+  farmaciaId: number,
+  observacoes: string | null,
+): Promise<{ mensagem: string }> {
+  return req(`/api/acoes/${id}/farmacias/${farmaciaId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ observacoes }),
+  })
+}
+
+export function getAcoesForFarmacia(farmaciaId: number, mes?: string): Promise<AcaoFarmaciaEntry[]> {
+  const q = mes ? `?mes=${mes}` : ""
+  return req(`/api/farmacias/${farmaciaId}/acoes${q}`)
 }
