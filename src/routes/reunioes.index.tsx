@@ -71,6 +71,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { GerenciadorContent } from "./reunioes.gerenciador";
 
 // ── Rota ───────────────────────────────────────────────────────────────────
 
@@ -2682,13 +2683,14 @@ function AgendaView({ isAdmin }: { isAdmin: boolean }) {
 
 // ── ViewTab ────────────────────────────────────────────────────────────────
 
-type ViewTab = "dashboard" | "reunioes" | "clientes" | "agenda";
+type ViewTab = "dashboard" | "reunioes" | "clientes" | "agenda" | "gerenciador";
 
 const VIEW_TABS: { value: ViewTab; label: string }[] = [
-  { value: "dashboard", label: "Dashboard" },
-  { value: "reunioes",  label: "Reuniões"  },
-  { value: "clientes",  label: "Clientes"  },
-  { value: "agenda",    label: "📅 Agenda" },
+  { value: "dashboard",   label: "Dashboard"         },
+  { value: "reunioes",    label: "Reuniões"           },
+  { value: "clientes",    label: "Clientes"           },
+  { value: "agenda",      label: "📅 Agenda"          },
+  { value: "gerenciador", label: "📊 Gerenciador"     },
 ];
 
 function ReunioesPage() {
@@ -2697,6 +2699,10 @@ function ReunioesPage() {
 
   // View tab
   const [viewTab, setViewTab] = useState<ViewTab>("dashboard");
+  const [gerenciadorMes, setGerenciadorMes] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   // Modais / drawer
   const [modalAgendar, setModalAgendar] = useState<{ aberto: boolean; farmaciaId?: number; farmaciaNome?: string }>({ aberto: false });
@@ -2847,6 +2853,11 @@ function ReunioesPage() {
       {/* ── Tab: Agenda ── */}
       {viewTab === "agenda" && (
         <AgendaView isAdmin={isAdmin} />
+      )}
+
+      {/* ── Tab: Gerenciador ── */}
+      {viewTab === "gerenciador" && (
+        <GerenciadorContent mes={gerenciadorMes} onMesChange={setGerenciadorMes} />
       )}
 
       {/* ── Modais / Drawer (sempre montados) ── */}

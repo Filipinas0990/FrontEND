@@ -635,21 +635,14 @@ function AbaSemReuniao({
   );
 }
 
-// ── GerenciadorPage ──────────────────────────────────────────────────────────
+// ── GerenciadorContent (componente reutilizável, sem AppShell) ───────────────
 
 type Aba = "evolucao" | "com" | "sem";
 
-function GerenciadorPage() {
-  const navigate = useNavigate();
-  const { mes: mesParam } = Route.useSearch();
-  const [mes, setMes] = useState(mesParam ?? mesAtual());
+export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesChange: (m: string) => void }) {
   const [aba, setAba] = useState<Aba>("evolucao");
   const [agendarTarget, setAgendarTarget] = useState<{ id: number; nome: string } | null>(null);
   const qc = useQueryClient();
-
-  useEffect(() => {
-    navigate({ to: "/reunioes/gerenciador", search: { mes }, replace: true });
-  }, [mes]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["gerenciador", mes],
@@ -658,35 +651,18 @@ function GerenciadorPage() {
   });
 
   if (isError) return (
-    <AppShell title="Gerenciador de Reuniões">
-      <div className="text-center py-20 space-y-3">
-        <p className="text-sm text-zinc-500">Erro ao carregar dados.</p>
-        <button onClick={() => refetch()} className="text-sm font-medium text-brand hover:underline">
-          Tentar novamente
-        </button>
-      </div>
-    </AppShell>
+    <div className="text-center py-20 space-y-3">
+      <p className="text-sm text-zinc-500">Erro ao carregar dados.</p>
+      <button onClick={() => refetch()} className="text-sm font-medium text-brand hover:underline">
+        Tentar novamente
+      </button>
+    </div>
   );
 
   const kpis = [
-    {
-      label: "Farmácias Ativas",
-      value: data?.total_farmacias_ativas ?? 0,
-      bg: "bg-zinc-50",
-      icon: <Building2 className="size-5 text-zinc-500" />,
-    },
-    {
-      label: "Com Reunião",
-      value: data?.farmacias_com_reuniao ?? 0,
-      bg: "bg-emerald-50",
-      icon: <CheckCircle2 className="size-5 text-emerald-500" />,
-    },
-    {
-      label: "Sem Reunião",
-      value: data?.farmacias_sem_reuniao ?? 0,
-      bg: "bg-amber-50",
-      icon: <Clock className="size-5 text-amber-500" />,
-    },
+    { label: "Farmácias Ativas", value: data?.total_farmacias_ativas ?? 0,    bg: "bg-zinc-50",    icon: <Building2    className="size-5 text-zinc-500"   /> },
+    { label: "Com Reunião",      value: data?.farmacias_com_reuniao ?? 0,      bg: "bg-emerald-50", icon: <CheckCircle2 className="size-5 text-emerald-500" /> },
+    { label: "Sem Reunião",      value: data?.farmacias_sem_reuniao ?? 0,      bg: "bg-amber-50",   icon: <Clock        className="size-5 text-amber-500"   /> },
     {
       label: "Cobertura",
       value: data ? `${data.taxa_cobertura.toFixed(1)}%` : "—",
@@ -698,12 +674,27 @@ function GerenciadorPage() {
   const coberturaTotal = data?.taxa_cobertura === 100;
 
   return (
-    <AppShell
-      title="Gerenciador de Reuniões"
-      headerRight={
-        <MonthPicker value={mes} onChange={setMes} />
-      }
-    >
+    <>
+      {/* Navegação de mês */}
+      <div className="flex items-center gap-2 bg-white rounded-xl ring-1 ring-black/5 shadow-sm px-4 py-3 self-start">
+        <button
+          onClick={() => onMesChange(addMes(mes, -1))}
+          className="size-8 rounded-lg bg-zinc-50 hover:bg-zinc-100 ring-1 ring-zinc-200 grid place-items-center text-zinc-600 transition-colors"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <span className="text-sm font-semibold text-zinc-900 min-w-[140px] text-center">
+          {fmtMesLabel(mes)}
+        </span>
+        <button
+          onClick={() => { if (mes < mesAtual()) onMesChange(addMes(mes, 1)); }}
+          disabled={mes >= mesAtual()}
+          className="size-8 rounded-lg bg-zinc-50 hover:bg-zinc-100 ring-1 ring-zinc-200 grid place-items-center text-zinc-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+
       {/* Celebração 100% */}
       {coberturaTotal && !isLoading && (
         <div className="bg-emerald-50 rounded-xl ring-1 ring-emerald-200 px-5 py-3 flex items-center gap-3">
@@ -731,7 +722,7 @@ function GerenciadorPage() {
         ))}
       </section>
 
-      {/* Abas */}
+      {/* Abas internas */}
       <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl overflow-x-auto">
         {([
           { v: "evolucao", l: "📊 Evolução" },
@@ -743,9 +734,7 @@ function GerenciadorPage() {
             onClick={() => setAba(a.v)}
             className={[
               "px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-all",
-              aba === a.v
-                ? "bg-white text-zinc-900 shadow-sm"
-                : "text-zinc-500 hover:text-zinc-800",
+              aba === a.v ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800",
             ].join(" ")}
           >
             {a.l}
@@ -763,19 +752,13 @@ function GerenciadorPage() {
       ) : (
         <>
           {aba === "evolucao" && (
-            <AbaEvolucao mes={mes} onMesChange={(m) => { setMes(m); setAba("com"); }} />
+            <AbaEvolucao mes={mes} onMesChange={(m) => { onMesChange(m); setAba("com"); }} />
           )}
           {aba === "com" && data && (
-            <AbaComReuniao
-              farmacias={data.com_reuniao}
-              onAgendar={(id, nome) => setAgendarTarget({ id, nome })}
-            />
+            <AbaComReuniao farmacias={data.com_reuniao} onAgendar={(id, nome) => setAgendarTarget({ id, nome })} />
           )}
           {aba === "sem" && data && (
-            <AbaSemReuniao
-              farmacias={data.sem_reuniao}
-              onAgendar={(id, nome) => setAgendarTarget({ id, nome })}
-            />
+            <AbaSemReuniao farmacias={data.sem_reuniao} onAgendar={(id, nome) => setAgendarTarget({ id, nome })} />
           )}
         </>
       )}
@@ -790,6 +773,24 @@ function GerenciadorPage() {
           setAgendarTarget(null);
         }}
       />
+    </>
+  );
+}
+
+// ── GerenciadorPage (rota direta /reunioes/gerenciador) ──────────────────────
+
+function GerenciadorPage() {
+  const navigate = useNavigate();
+  const { mes: mesParam } = Route.useSearch();
+  const [mes, setMes] = useState(mesParam ?? mesAtual());
+
+  useEffect(() => {
+    navigate({ to: "/reunioes/gerenciador", search: { mes }, replace: true });
+  }, [mes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <AppShell title="Gerenciador de Reuniões">
+      <GerenciadorContent mes={mes} onMesChange={setMes} />
     </AppShell>
   );
 }

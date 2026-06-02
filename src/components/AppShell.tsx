@@ -415,7 +415,6 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
       ? [{ icon: Clock, label: "Em Entrada", to: "/farmacias/entrada" as const }]
       : []),
     { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const },
-    { icon: BarChart3,       label: "Gerenciador",    to: "/reunioes/gerenciador" as const, subItem: true },
     { icon: Megaphone,       label: "Ações",          to: "/acoes" as const },
     { icon: Trophy,          label: "Ranking",        to: "/ranking-gestores" as const },
     { icon: FileBarChart,    label: "Relatórios",     to: "/relatorios" as const },
@@ -436,29 +435,17 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
         </div>
 
         <nav className="flex-1 px-4 space-y-0.5">
-          {navItems.map((item) =>
-            item.subItem ? (
-              <div key={item.to} className="ml-3 border-l border-white/20 pl-2">
-                <Link
-                  to={item.to}
-                  className="flex items-center gap-2 py-2 px-2.5 text-xs font-medium rounded-lg transition-colors text-white/60 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
-                >
-                  <item.icon className="size-3.5 shrink-0" />
-                  {item.label}
-                </Link>
-              </div>
-            ) : (
-              <Link
-                key={item.to}
-                to={item.to}
-                activeOptions={{ exact: ["/", "/farmacias", "/reunioes"].includes(item.to) }}
-                className="flex items-center gap-2.5 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-white/75 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
-              >
-                <item.icon className="size-4 shrink-0" />
-                {item.label}
-              </Link>
-            )
-          )}
+          {navItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              activeOptions={{ exact: ["/", "/farmacias", "/reunioes"].includes(item.to) }}
+              className="flex items-center gap-2.5 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-white/75 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
+            >
+              <item.icon className="size-4 shrink-0" />
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="p-4 border-t border-white/15">

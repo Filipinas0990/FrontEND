@@ -517,6 +517,7 @@ function FarmaciasPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
+  const [ativarTarget, setAtivarTarget] = useState<Farmacia | null>(null);
 
   const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ["farmacias", filter, query, period],
