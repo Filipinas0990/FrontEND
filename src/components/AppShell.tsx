@@ -438,7 +438,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
             <Link
               key={item.to}
               to={item.to}
-              activeOptions={{ exact: item.to === "/" }}
+              activeOptions={{ exact: item.to === "/" || item.to === "/farmacias" }}
               className="flex items-center gap-2.5 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-white/75 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
             >
               <item.icon className="size-4 shrink-0" />
