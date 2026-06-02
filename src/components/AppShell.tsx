@@ -469,7 +469,7 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
         <header className="h-16 border-b border-zinc-200 bg-white px-8 flex items-center justify-between sticky top-0 z-10">
           <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
           <div className="flex items-center gap-4">
-            {headerRight ?? (
+            {headerRight !== undefined ? headerRight : (
               isAdminUser ? (
                 <button
                   onClick={() => setModalRodar(true)}

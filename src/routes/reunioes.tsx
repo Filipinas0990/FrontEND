@@ -2790,7 +2790,7 @@ function ReunioesPage() {
           >
             <Plus className="size-3.5" /> Nova Reunião
           </button>
-        ) : undefined
+        ) : null
       }
     >
       {/* Tabs de navegação */}
