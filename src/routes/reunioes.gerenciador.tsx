@@ -659,90 +659,130 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
     </div>
   );
 
-  const kpis = [
-    { label: "Farmácias Ativas", value: data?.total_farmacias_ativas ?? 0,    bg: "bg-zinc-50",    icon: <Building2    className="size-5 text-zinc-500"   /> },
-    { label: "Com Reunião",      value: data?.farmacias_com_reuniao ?? 0,      bg: "bg-emerald-50", icon: <CheckCircle2 className="size-5 text-emerald-500" /> },
-    { label: "Sem Reunião",      value: data?.farmacias_sem_reuniao ?? 0,      bg: "bg-amber-50",   icon: <Clock        className="size-5 text-amber-500"   /> },
-    {
-      label: "Cobertura",
-      value: data ? `${data.taxa_cobertura.toFixed(1)}%` : "—",
-      bg: data && data.taxa_cobertura === 100 ? "bg-emerald-50" : "bg-blue-50",
-      icon: <BarChart2 className="size-5 text-blue-500" />,
-    },
-  ];
+  const cobertura   = data?.taxa_cobertura ?? 0;
+  const total       = data?.total_farmacias_ativas ?? 0;
+  const comReuniao  = data?.farmacias_com_reuniao ?? 0;
+  const semReuniao  = data?.farmacias_sem_reuniao ?? 0;
 
-  const coberturaTotal = data?.taxa_cobertura === 100;
+  const coberturaColor =
+    cobertura === 100 ? "text-emerald-600" :
+    cobertura >= 80   ? "text-emerald-600" :
+    cobertura >= 50   ? "text-amber-600"   : "text-red-500";
+
+  const barColor =
+    cobertura === 100 ? "bg-emerald-500" :
+    cobertura >= 80   ? "bg-emerald-500" :
+    cobertura >= 50   ? "bg-amber-500"   : "bg-red-500";
+
+  const statusLabel =
+    cobertura === 100 ? "🎉 Meta atingida! Todas as farmácias tiveram reunião." :
+    cobertura >= 80   ? "✅ Cobertura alta — quase lá!" :
+    cobertura >= 50   ? "⚠️ Cobertura moderada — há espaço para melhorar." :
+                        "🔴 Cobertura baixa — ação necessária.";
 
   return (
     <>
-      {/* Navegação de mês */}
-      <div className="flex items-center gap-2 bg-white rounded-xl ring-1 ring-black/5 shadow-sm px-4 py-3 self-start">
-        <button
-          onClick={() => onMesChange(addMes(mes, -1))}
-          className="size-8 rounded-lg bg-zinc-50 hover:bg-zinc-100 ring-1 ring-zinc-200 grid place-items-center text-zinc-600 transition-colors"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <span className="text-sm font-semibold text-zinc-900 min-w-[140px] text-center">
-          {fmtMesLabel(mes)}
-        </span>
-        <button
-          onClick={() => { if (mes < mesAtual()) onMesChange(addMes(mes, 1)); }}
-          disabled={mes >= mesAtual()}
-          className="size-8 rounded-lg bg-zinc-50 hover:bg-zinc-100 ring-1 ring-zinc-200 grid place-items-center text-zinc-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <ChevronRight className="size-4" />
-        </button>
+      {/* ── Card principal: mês + cobertura ── */}
+      <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+        {/* Cabeçalho */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-zinc-100">
+          <div>
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Cobertura de Reuniões</p>
+            <p className="text-base font-bold text-zinc-900 mt-0.5">{fmtMesLabel(mes)}</p>
+          </div>
+          {/* Navegação de mês */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => onMesChange(addMes(mes, -1))}
+              className="size-8 rounded-lg bg-zinc-50 hover:bg-zinc-100 ring-1 ring-zinc-200 grid place-items-center text-zinc-600 transition-colors"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              onClick={() => { if (mes < mesAtual()) onMesChange(addMes(mes, 1)); }}
+              disabled={mes >= mesAtual()}
+              className="size-8 rounded-lg bg-zinc-50 hover:bg-zinc-100 ring-1 ring-zinc-200 grid place-items-center text-zinc-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Métricas */}
+        <div className="px-6 py-5 grid grid-cols-3 divide-x divide-zinc-100">
+          {/* Total */}
+          <div className="pr-6">
+            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Total ativas</p>
+            {isLoading
+              ? <div className="h-8 w-12 bg-zinc-100 rounded animate-pulse mt-1" />
+              : <p className="text-3xl font-bold text-zinc-800 mt-1">{total}</p>}
+            <p className="text-xs text-zinc-400 mt-1">farmácias</p>
+          </div>
+          {/* Com reunião */}
+          <div className="px-6">
+            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Tiveram reunião</p>
+            {isLoading
+              ? <div className="h-8 w-12 bg-zinc-100 rounded animate-pulse mt-1" />
+              : <p className="text-3xl font-bold text-emerald-600 mt-1">{comReuniao}</p>}
+            <p className="text-xs text-zinc-400 mt-1">
+              {!isLoading && total > 0 ? `${((comReuniao / total) * 100).toFixed(0)}% do total` : "—"}
+            </p>
+          </div>
+          {/* Sem reunião */}
+          <div className="pl-6">
+            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Sem reunião</p>
+            {isLoading
+              ? <div className="h-8 w-12 bg-zinc-100 rounded animate-pulse mt-1" />
+              : <p className={`text-3xl font-bold mt-1 ${semReuniao === 0 ? "text-emerald-600" : semReuniao > total * 0.5 ? "text-red-500" : "text-amber-600"}`}>
+                  {semReuniao}
+                </p>}
+            <p className="text-xs text-zinc-400 mt-1">
+              {!isLoading && total > 0 ? `${((semReuniao / total) * 100).toFixed(0)}% do total` : "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* Barra de cobertura */}
+        <div className="px-6 pb-5 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-zinc-500 font-medium">Cobertura geral</p>
+            {isLoading
+              ? <div className="h-4 w-12 bg-zinc-100 rounded animate-pulse" />
+              : <span className={`text-sm font-bold ${coberturaColor}`}>{cobertura.toFixed(1)}%</span>}
+          </div>
+          <div className="h-2.5 w-full bg-zinc-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${barColor}`}
+              style={{ width: isLoading ? "0%" : `${Math.min(cobertura, 100)}%` }}
+            />
+          </div>
+          {!isLoading && (
+            <p className="text-xs text-zinc-500">{statusLabel}</p>
+          )}
+        </div>
       </div>
 
-      {/* Celebração 100% */}
-      {coberturaTotal && !isLoading && (
-        <div className="bg-emerald-50 rounded-xl ring-1 ring-emerald-200 px-5 py-3 flex items-center gap-3">
-          <span className="text-xl">🎉</span>
-          <p className="text-sm font-semibold text-emerald-800">
-            Todas as farmácias tiveram reunião em {fmtMesLabel(mes)}!
-          </p>
-        </div>
-      )}
-
-      {/* KPIs */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((k) => (
-          <div key={k.label} className={`${k.bg} rounded-xl ring-1 ring-black/5 shadow-sm p-5 flex items-center gap-4 transition-opacity ${isLoading ? "opacity-60" : ""}`}>
-            <div className="size-10 rounded-xl bg-white/70 grid place-items-center shadow-sm shrink-0">
-              {k.icon}
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-zinc-900">
-                {isLoading ? <span className="inline-block h-6 w-10 bg-zinc-200 rounded animate-pulse" /> : k.value}
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5 leading-tight">{k.label}</p>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      {/* Abas internas */}
+      {/* ── Tabs ── */}
       <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl overflow-x-auto">
         {([
-          { v: "evolucao", l: "📊 Evolução" },
-          { v: "com",      l: `✅ Com Reunião${data ? ` (${data.farmacias_com_reuniao})` : ""}` },
-          { v: "sem",      l: `⚠️ Sem Reunião${data ? ` (${data.farmacias_sem_reuniao})` : ""}` },
+          { v: "evolucao", icon: <BarChart2 className="size-3.5" />, l: "Evolução Histórica" },
+          { v: "com",      icon: <CheckCircle2 className="size-3.5" />, l: `Com Reunião${data ? ` · ${comReuniao}` : ""}` },
+          { v: "sem",      icon: <Clock className="size-3.5" />,        l: `Sem Reunião${data ? ` · ${semReuniao}` : ""}` },
         ] as const).map((a) => (
           <button
             key={a.v}
             onClick={() => setAba(a.v)}
             className={[
-              "px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-all",
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-all",
               aba === a.v ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800",
             ].join(" ")}
           >
-            {a.l}
+            {a.icon}{a.l}
           </button>
         ))}
       </div>
 
-      {/* Conteúdo */}
+      {/* ── Conteúdo ── */}
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
