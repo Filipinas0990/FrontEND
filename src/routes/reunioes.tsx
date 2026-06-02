@@ -616,8 +616,8 @@ function ModalAgendarReuniao({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, open, farmaciaIdPreset]);
 
-  // Limpa o erro 409 quando o usuário altera data ou hora
-  useEffect(() => { setErroConflito409(null); }, [form.data, form.hora]);
+  // Limpa o erro 409 quando o usuário altera data, hora ou duração
+  useEffect(() => { setErroConflito409(null); }, [form.data, form.hora, form.duracao_minutos]);
 
   const { conflito, verificando } = useVerificarConflito(
     form.data,
@@ -702,7 +702,9 @@ function ModalAgendarReuniao({
   }
 
   const saving = criarMut.isPending || editarMut.isPending;
-  const hayConflicto = conflito?.conflito === true || erroConflito409?.conflito === true;
+  // Bloqueia submit apenas em conflito definitivo: dia fechado pelo admin OU rejeição 409 do servidor.
+  // O pré-check de sobreposição é só um aviso — o backend é o árbitro final.
+  const hayConflicto = conflito?.tipo === "bloqueio" || erroConflito409?.conflito === true;
   const conflitoAtivo = erroConflito409 ?? conflito;
 
   return (
@@ -2781,12 +2783,14 @@ function ReunioesPage() {
     <AppShell
       title="Reuniões com Clientes"
       headerRight={
-        <button
-          onClick={() => { setEditando(null); setModalAgendar({ aberto: true }); }}
-          className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
-        >
-          <Plus className="size-3.5" /> Nova Reunião
-        </button>
+        viewTab === "clientes" ? (
+          <button
+            onClick={() => { setEditando(null); setModalAgendar({ aberto: true }); }}
+            className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
+          >
+            <Plus className="size-3.5" /> Nova Reunião
+          </button>
+        ) : undefined
       }
     >
       {/* Tabs de navegação */}
