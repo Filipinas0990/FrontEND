@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   XCircle,
   Megaphone,
+  Clock,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -409,6 +410,9 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
     { icon: Newspaper,       label: "Início",       to: "/novidades" as const },
     { icon: LayoutDashboard, label: "Painel Geral", to: "/" as const },
     { icon: Building2,       label: "Farmácias",    to: "/farmacias" as const },
+    ...(isAdminUser
+      ? [{ icon: Clock, label: "Em Entrada", to: "/farmacias/entrada" as const }]
+      : []),
     { icon: CalendarDays,    label: "Reuniões",     to: "/reunioes" as const },
     { icon: Megaphone,       label: "Ações",        to: "/acoes" as const },
     { icon: Trophy,          label: "Ranking",      to: "/ranking-gestores" as const },

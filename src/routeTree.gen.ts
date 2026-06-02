@@ -23,6 +23,7 @@ import { Route as AcoesRouteImport } from './routes/acoes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FarmaciasIndexRouteImport } from './routes/farmacias.index'
 import { Route as AcoesIndexRouteImport } from './routes/acoes.index'
+import { Route as FarmaciasEntradaRouteImport } from './routes/farmacias.entrada'
 import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
 import { Route as AcoesIdRouteImport } from './routes/acoes.$id'
 
@@ -96,6 +97,11 @@ const AcoesIndexRoute = AcoesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AcoesRoute,
 } as any)
+const FarmaciasEntradaRoute = FarmaciasEntradaRouteImport.update({
+  id: '/entrada',
+  path: '/entrada',
+  getParentRoute: () => FarmaciasRoute,
+} as any)
 const FarmaciasIdRoute = FarmaciasIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias/entrada': typeof FarmaciasEntradaRoute
   '/acoes/': typeof AcoesIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
 }
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias/entrada': typeof FarmaciasEntradaRoute
   '/acoes': typeof AcoesIndexRoute
   '/farmacias': typeof FarmaciasIndexRoute
 }
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
+  '/farmacias/entrada': typeof FarmaciasEntradaRoute
   '/acoes/': typeof AcoesIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
 }
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/acoes/$id'
     | '/farmacias/$id'
+    | '/farmacias/entrada'
     | '/acoes/'
     | '/farmacias/'
   fileRoutesByTo: FileRoutesByTo
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/acoes/$id'
     | '/farmacias/$id'
+    | '/farmacias/entrada'
     | '/acoes'
     | '/farmacias'
   id:
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/acoes/$id'
     | '/farmacias/$id'
+    | '/farmacias/entrada'
     | '/acoes/'
     | '/farmacias/'
   fileRoutesById: FileRoutesById
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcoesIndexRouteImport
       parentRoute: typeof AcoesRoute
     }
+    '/farmacias/entrada': {
+      id: '/farmacias/entrada'
+      path: '/entrada'
+      fullPath: '/farmacias/entrada'
+      preLoaderRoute: typeof FarmaciasEntradaRouteImport
+      parentRoute: typeof FarmaciasRoute
+    }
     '/farmacias/$id': {
       id: '/farmacias/$id'
       path: '/$id'
@@ -361,11 +380,13 @@ const AcoesRouteWithChildren = AcoesRoute._addFileChildren(AcoesRouteChildren)
 
 interface FarmaciasRouteChildren {
   FarmaciasIdRoute: typeof FarmaciasIdRoute
+  FarmaciasEntradaRoute: typeof FarmaciasEntradaRoute
   FarmaciasIndexRoute: typeof FarmaciasIndexRoute
 }
 
 const FarmaciasRouteChildren: FarmaciasRouteChildren = {
   FarmaciasIdRoute: FarmaciasIdRoute,
+  FarmaciasEntradaRoute: FarmaciasEntradaRoute,
   FarmaciasIndexRoute: FarmaciasIndexRoute,
 }
 

@@ -512,22 +512,20 @@ function FarmaciasPage() {
   const pipelineErros = ultimoResultado?.farmaciasComErro ?? [];
 
   const [query, setQuery] = useState("");
-  const [faseTab, setFaseTab] = useState<"todos" | "ativo" | "entrada">("todos");
   const [filter, setFilter] = useState<"todas" | "Ativa" | "Atencao" | "Alerta">("todas");
   const [acaoFilter, setAcaoFilter] = useState<"todos" | "com_acao" | "sem_acao" | "abre_mes" | "fecha_mes">("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
-  const [ativarTarget, setAtivarTarget] = useState<Farmacia | null>(null);
 
   const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["farmacias", filter, query, period, faseTab],
+    queryKey: ["farmacias", filter, query, period],
     queryFn: () =>
       getFarmacias({
         status: filter !== "todas" ? filter : undefined,
         busca: query || undefined,
-        dias: faseTab !== "entrada" ? period : undefined,
-        fase: faseTab !== "todos" ? faseTab : undefined,
+        dias: period,
+        fase: "ativo",
       }),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -648,31 +646,14 @@ function FarmaciasPage() {
       }
     >
       {/* Seletor de período */}
-      {faseTab !== "entrada" && (
-        <PeriodSelector
-          value={period}
-          onChange={setPeriod}
-          loading={isFetching && !isLoading}
-        />
-      )}
+      <PeriodSelector
+        value={period}
+        onChange={setPeriod}
+        loading={isFetching && !isLoading}
+      />
 
       {/* Filters */}
       <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex flex-wrap items-center gap-3">
-        {admin && (
-          <div className="flex gap-1 bg-zinc-50 p-1 rounded-md">
-            {(["todos", "ativo", "entrada"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFaseTab(t)}
-                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  faseTab === t ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
-                }`}
-              >
-                {t === "todos" ? "Todos" : t === "ativo" ? "Ativos" : "Em Entrada"}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-zinc-50 rounded-md border border-zinc-100">
           <Search className="size-4 text-zinc-400" />
           <input
@@ -682,29 +663,24 @@ function FarmaciasPage() {
             className="bg-transparent outline-none text-sm flex-1"
           />
         </div>
-        {faseTab !== "entrada" && (
-          <div className="flex gap-1 bg-zinc-50 p-1 rounded-md">
-            {(["todas", "Ativa", "Atencao", "Alerta"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors capitalize ${
-                  filter === f ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
-                }`}
-              >
-                {f === "Atencao" ? "Atenção" : f}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex gap-1 bg-zinc-50 p-1 rounded-md">
+          {(["todas", "Ativa", "Atencao", "Alerta"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors capitalize ${
+                filter === f ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
+              }`}
+            >
+              {f === "Atencao" ? "Atenção" : f}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Filtro por ação */}
-      {faseTab !== "entrada" && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-zinc-400 flex items-center gap-1">
-            <Megaphone className="size-3" /> Ações:
-          </span>
+      <div className="flex items-center gap-2">
+          <Megaphone className="size-3 text-zinc-300 shrink-0" />
           {(
             [
               { value: "todos",     label: "Todos" },
@@ -713,21 +689,22 @@ function FarmaciasPage() {
               { value: "abre_mes",  label: "Abre Mês" },
               { value: "fecha_mes", label: "Fecha Mês" },
             ] as const
-          ).map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setAcaoFilter(f.value)}
-              className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
-                acaoFilter === f.value
-                  ? "bg-brand text-white"
-                  : "bg-white text-zinc-600 ring-1 ring-black/5 hover:ring-zinc-300"
-              }`}
-            >
-              {f.label}
-            </button>
+          ).map((f, i) => (
+            <span key={f.value} className="flex items-center gap-2">
+              {i > 0 && <span className="text-zinc-200 select-none">·</span>}
+              <button
+                onClick={() => setAcaoFilter(f.value)}
+                className={`text-xs transition-colors ${
+                  acaoFilter === f.value
+                    ? "text-zinc-800 font-semibold"
+                    : "text-zinc-400 hover:text-zinc-600 font-medium"
+                }`}
+              >
+                {f.label}
+              </button>
+            </span>
           ))}
         </div>
-      )}
 
       {/* Loading */}
       {isLoading && (
@@ -987,15 +964,6 @@ function FarmaciasPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Ativar cliente de entrada */}
-      {admin && (
-        <ModalAtivarFarmacia
-          farmacia={ativarTarget}
-          gestores={gestores}
-          onClose={() => setAtivarTarget(null)}
-          onSaved={() => setAtivarTarget(null)}
-        />
-      )}
     </AppShell>
   );
 }
