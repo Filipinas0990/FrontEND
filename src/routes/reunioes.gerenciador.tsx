@@ -404,13 +404,19 @@ function CardComReuniao({
                   {f.total_reunioes} {f.total_reunioes === 1 ? "reunião" : "reuniões"}
                 </span>
                 {f.realizadas > 0 && (
-                  <span className="text-[10px] text-emerald-600 font-medium">✅ {f.realizadas} realizada{f.realizadas > 1 ? "s" : ""}</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+                    <CheckCircle2 className="size-3" />{f.realizadas} realizada{f.realizadas > 1 ? "s" : ""}
+                  </span>
                 )}
                 {f.confirmadas > 0 && (
-                  <span className="text-[10px] text-blue-600 font-medium">📅 {f.confirmadas} confirmada{f.confirmadas > 1 ? "s" : ""}</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                    <CalendarDays className="size-3" />{f.confirmadas} confirmada{f.confirmadas > 1 ? "s" : ""}
+                  </span>
                 )}
                 {f.agendadas > 0 && (
-                  <span className="text-[10px] text-amber-600 font-medium">🕐 {f.agendadas} agendada{f.agendadas > 1 ? "s" : ""}</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-medium">
+                    <Clock className="size-3" />{f.agendadas} agendada{f.agendadas > 1 ? "s" : ""}
+                  </span>
                 )}
               </div>
             </div>
@@ -632,7 +638,7 @@ function AbaSemReuniao({
         <div className="bg-white rounded-xl ring-1 ring-black/5 py-12 text-center">
           <CheckCircle2 className="size-10 text-emerald-300 mx-auto mb-3" />
           <p className="text-sm font-medium text-zinc-600">
-            {farmacias.length === 0 ? "🎉 Todas as farmácias tiveram reunião!" : "Nenhuma farmácia para este filtro."}
+            {farmacias.length === 0 ? "Todas as farmácias tiveram reunião!" : "Nenhuma farmácia para este filtro."}
           </p>
         </div>
       ) : (
@@ -722,11 +728,11 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
     cobertura >= 80   ? "bg-emerald-500" :
     cobertura >= 50   ? "bg-amber-500"   : "bg-red-500";
 
-  const statusLabel =
-    cobertura === 100 ? "🎉 Meta atingida! Todas as farmácias tiveram reunião." :
-    cobertura >= 80   ? "✅ Cobertura alta — quase lá!" :
-    cobertura >= 50   ? "⚠️ Cobertura moderada — há espaço para melhorar." :
-                        "🔴 Cobertura baixa — ação necessária.";
+  const statusInfo =
+    cobertura === 100 ? { text: "Meta atingida! Todas as farmácias tiveram reunião.", dot: "bg-emerald-500" } :
+    cobertura >= 80   ? { text: "Cobertura alta — quase lá!",                         dot: "bg-emerald-500" } :
+    cobertura >= 50   ? { text: "Cobertura moderada — há espaço para melhorar.",      dot: "bg-amber-400"  } :
+                        { text: "Cobertura baixa — ação necessária.",                 dot: "bg-red-500"    };
 
   return (
     <>
@@ -815,7 +821,10 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
             />
           </div>
           {!isLoading && (
-            <p className="text-xs text-zinc-500">{statusLabel}</p>
+            <div className="flex items-center gap-1.5">
+              <span className={`size-1.5 rounded-full shrink-0 ${statusInfo.dot}`} />
+              <p className="text-xs text-zinc-500">{statusInfo.text}</p>
+            </div>
           )}
         </div>
       </div>
