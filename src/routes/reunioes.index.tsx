@@ -1984,13 +1984,10 @@ function ClientesView({
       </div>
 
       <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-zinc-100 grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-4">
+        <div className="px-5 py-3.5 border-b border-zinc-100 grid grid-cols-[1fr_auto_auto] items-center gap-6">
           <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Farmácia</p>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Este mês</p>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Realizadas</p>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Agendadas</p>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Canceladas</p>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center hidden sm:block">Ação</p>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center w-20">Realizadas</p>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center w-20">Agendadas</p>
         </div>
         <div className="divide-y divide-zinc-50">
           {rows.length === 0 ? (
@@ -2002,7 +1999,7 @@ function ClientesView({
               <div
                 key={row.id}
                 onClick={() => { setHistoricoFarmacia({ id: row.id, nome: row.nome }); setExpandedId(null); }}
-                className="px-5 py-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-4 hover:bg-zinc-50/60 transition-colors cursor-pointer"
+                className="px-5 py-4 grid grid-cols-[1fr_auto_auto] items-center gap-6 hover:bg-zinc-50/60 transition-colors cursor-pointer"
               >
                 {/* Nome + próxima */}
                 <div className="flex items-center gap-3 min-w-0">
@@ -2021,27 +2018,15 @@ function ClientesView({
                   </div>
                 </div>
 
-                {/* Stats */}
-                <div className="text-center hidden sm:block">
-                  <p className="text-sm font-bold text-zinc-900">{row.totalMes}</p>
-                </div>
-                <div className="text-center hidden sm:block">
+                {/* Realizadas */}
+                <div className="text-center w-20">
                   <p className="text-sm font-bold text-emerald-600">{row.realizadas}</p>
                 </div>
-                <div className="text-center hidden sm:block">
-                  <p className="text-sm font-bold text-amber-600">{row.futuras}</p>
-                </div>
-                <div className="text-center hidden sm:block">
-                  <p className="text-sm font-bold text-red-500">{row.canceladas}</p>
-                </div>
 
-                {/* Ação */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); onAgendar(row.id, row.nome); }}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand/5 text-brand ring-1 ring-brand/20 rounded-lg hover:bg-brand/10 shrink-0"
-                >
-                  <Plus className="size-3.5" /> Agendar
-                </button>
+                {/* Agendadas */}
+                <div className="text-center w-20">
+                  <p className="text-sm font-bold text-amber-500">{row.futuras}</p>
+                </div>
               </div>
             ))
           )}
@@ -2068,6 +2053,15 @@ function ClientesView({
                   </div>
                 </div>
               </SheetHeader>
+
+              <div className="py-3 border-b border-zinc-100">
+                <button
+                  onClick={() => { onAgendar(historicoFarmacia.id, historicoFarmacia.nome); setHistoricoFarmacia(null); }}
+                  className="flex items-center gap-1.5 w-full justify-center text-sm font-medium text-brand hover:opacity-80 px-4 py-2 rounded-lg bg-brand/5 ring-1 ring-brand/10"
+                >
+                  <Plus className="size-3.5" /> Nova Reunião
+                </button>
+              </div>
 
               <div className="py-4 space-y-2">
                 {historicoLista.length === 0 ? (
