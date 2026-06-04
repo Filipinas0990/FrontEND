@@ -55,7 +55,8 @@
       "Bash(npx vite *)",
       "Bash(mkdir -p \"C:\\\\Users\\\\Grupo Symbol Digital\\\\.claude\\\\projects\\\\c--Users-Grupo-Symbol-Digital-Desktop-FRONT-END\\\\memory\")",
       "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\")",
-      "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\AUTOMAÇÃO\")"
+      "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\AUTOMAÇÃO\")",
+      "PowerShell(head -50)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Grupo Symbol Digital\\.claude\\projects\\c--Users-Grupo-Symbol-Digital-Desktop-FRONT-END"

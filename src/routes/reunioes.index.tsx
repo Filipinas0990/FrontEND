@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   CalendarDays, Plus, X, Clock, CheckCircle2, XCircle,
   Building2, Search, Pencil, Trash2, AlertCircle, Trophy,
-  ExternalLink, MapPin, Timer, RefreshCw, Calendar,
+  ExternalLink, MapPin, Timer, RefreshCw, Calendar, BarChart2,
   ChevronDown, ChevronUp, Lock, AlertTriangle, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -2685,12 +2685,12 @@ function AgendaView({ isAdmin }: { isAdmin: boolean }) {
 
 type ViewTab = "dashboard" | "reunioes" | "clientes" | "agenda" | "gerenciador";
 
-const VIEW_TABS: { value: ViewTab; label: string }[] = [
-  { value: "dashboard",   label: "Dashboard"         },
-  { value: "reunioes",    label: "Reuniões"           },
-  { value: "clientes",    label: "Clientes"           },
-  { value: "agenda",      label: "📅 Agenda"          },
-  { value: "gerenciador", label: "📊 Gerenciador"     },
+const VIEW_TABS: { value: ViewTab; label: string; icon?: React.ReactNode }[] = [
+  { value: "dashboard",   label: "Dashboard"    },
+  { value: "reunioes",    label: "Reuniões"     },
+  { value: "clientes",    label: "Clientes"     },
+  { value: "agenda",      label: "Agenda",      icon: <CalendarDays className="size-3.5" /> },
+  { value: "gerenciador", label: "Gerenciador", icon: <BarChart2    className="size-3.5" /> },
 ];
 
 function ReunioesPage() {
@@ -2715,7 +2715,7 @@ function ReunioesPage() {
     const params = new URLSearchParams(window.location.search);
     const google = params.get("google");
     if (google === "connected") {
-      toast.success("✅ Google Agenda conectado com sucesso!");
+      toast.success("Google Agenda conectado com sucesso!");
       qc.invalidateQueries({ queryKey: ["google-status"] });
       window.history.replaceState({}, "", "/reunioes");
     } else if (google === "error") {
@@ -2764,7 +2764,7 @@ function ReunioesPage() {
     if (googleLink) {
       toast.success("Reunião agendada!", {
         action: {
-          label: "📅 Adicionar ao Google Agenda",
+          label: "Adicionar ao Google Agenda",
           onClick: () => window.open(googleLink, "_blank"),
         },
         duration: 8000,
@@ -2806,13 +2806,13 @@ function ReunioesPage() {
             key={t.value}
             onClick={() => setViewTab(t.value)}
             className={[
-              "px-4 py-1.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
+              "flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
               viewTab === t.value
                 ? "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5"
                 : "text-zinc-500 hover:text-zinc-800",
             ].join(" ")}
           >
-            {t.label}
+            {t.icon}{t.label}
           </button>
         ))}
       </div>
