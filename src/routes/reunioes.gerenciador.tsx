@@ -465,7 +465,7 @@ function AbaComReuniao({
   onAgendar: (id: number, nome: string) => void;
 }) {
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<"" | "realizadas" | "confirmadas" | "agendadas">("");
+  const [filtroStatus, setFiltroStatus] = useState<"" | "realizadas" | "confirmadas">("");
 
   const filtradas = farmacias.filter((f) => {
     const q = busca.toLowerCase();
@@ -474,8 +474,7 @@ function AbaComReuniao({
       (f.gestor_nome ?? "").toLowerCase().includes(q);
     const matchS = !filtroStatus
       || (filtroStatus === "realizadas" && f.realizadas > 0)
-      || (filtroStatus === "confirmadas" && f.confirmadas > 0)
-      || (filtroStatus === "agendadas" && f.agendadas > 0);
+      || (filtroStatus === "confirmadas" && f.confirmadas > 0);
     return matchQ && matchS;
   });
 
@@ -497,7 +496,6 @@ function AbaComReuniao({
             { v: "",           l: "Todas" },
             { v: "realizadas", l: "Realizadas" },
             { v: "confirmadas",l: "Confirmadas" },
-            { v: "agendadas",  l: "Agendadas" },
           ] as const).map((o) => (
             <button
               key={o.v}
@@ -513,6 +511,55 @@ function AbaComReuniao({
       {filtradas.length === 0 ? (
         <div className="bg-white rounded-xl ring-1 ring-black/5 py-12 text-center text-sm text-zinc-400">
           {farmacias.length === 0 ? "Nenhuma farmácia teve reunião neste mês." : "Nenhuma farmácia para este filtro."}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtradas.map((f) => (
+            <CardComReuniao key={f.farmacia_id} f={f} onAgendar={onAgendar} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Aba Agendadas ────────────────────────────────────────────────────────────
+
+function AbaAgendadas({
+  farmacias,
+  onAgendar,
+}: {
+  farmacias: GerenciadorFarmaciaCom[];
+  onAgendar: (id: number, nome: string) => void;
+}) {
+  const [busca, setBusca] = useState("");
+
+  const filtradas = farmacias.filter((f) => {
+    const q = busca.toLowerCase();
+    return !q || f.farmacia_nome.toLowerCase().includes(q) ||
+      (f.cidade ?? "").toLowerCase().includes(q) ||
+      (f.gestor_nome ?? "").toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm flex-1 min-w-[200px]">
+          <Search className="size-4 text-zinc-400 shrink-0" />
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome, cidade ou gestor..."
+            className="bg-transparent outline-none text-sm flex-1"
+          />
+          {busca && <button onClick={() => setBusca("")}><X className="size-3.5 text-zinc-400 hover:text-zinc-700" /></button>}
+        </div>
+        <span className="text-xs text-zinc-400 font-medium">{filtradas.length} farmácia{filtradas.length !== 1 ? "s" : ""}</span>
+      </div>
+
+      {filtradas.length === 0 ? (
+        <div className="bg-white rounded-xl ring-1 ring-black/5 py-12 text-center text-sm text-zinc-400">
+          {farmacias.length === 0 ? "Nenhuma farmácia com reunião agendada neste mês." : "Nenhuma farmácia para este filtro."}
         </div>
       ) : (
         <div className="space-y-3">
@@ -637,7 +684,7 @@ function AbaSemReuniao({
 
 // ── GerenciadorContent (componente reutilizável, sem AppShell) ───────────────
 
-type Aba = "evolucao" | "com" | "sem";
+type Aba = "evolucao" | "com" | "agendadas" | "sem";
 
 export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesChange: (m: string) => void }) {
   const [aba, setAba] = useState<Aba>("evolucao");
@@ -661,8 +708,9 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
 
   const cobertura   = data?.taxa_cobertura ?? 0;
   const total       = data?.total_farmacias_ativas ?? 0;
-  const comReuniao  = data?.farmacias_com_reuniao ?? 0;
-  const semReuniao  = data?.farmacias_sem_reuniao ?? 0;
+  const comReuniao     = data?.com_reuniao.filter(f => f.realizadas > 0).length ?? 0;
+  const totalAgendadas = data?.com_reuniao.filter(f => f.agendadas > 0).length ?? 0;
+  const semReuniao     = data?.farmacias_sem_reuniao ?? 0;
 
   const coberturaColor =
     cobertura === 100 ? "text-emerald-600" :
@@ -709,7 +757,7 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
         </div>
 
         {/* Métricas */}
-        <div className="px-6 py-5 grid grid-cols-3 divide-x divide-zinc-100">
+        <div className="px-6 py-5 grid grid-cols-4 divide-x divide-zinc-100">
           {/* Total */}
           <div className="pr-6">
             <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Total ativas</p>
@@ -726,6 +774,16 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
               : <p className="text-3xl font-bold text-emerald-600 mt-1">{comReuniao}</p>}
             <p className="text-xs text-zinc-400 mt-1">
               {!isLoading && total > 0 ? `${((comReuniao / total) * 100).toFixed(0)}% do total` : "—"}
+            </p>
+          </div>
+          {/* Agendadas */}
+          <div className="px-6">
+            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Agendadas</p>
+            {isLoading
+              ? <div className="h-8 w-12 bg-zinc-100 rounded animate-pulse mt-1" />
+              : <p className="text-3xl font-bold text-amber-500 mt-1">{totalAgendadas}</p>}
+            <p className="text-xs text-zinc-400 mt-1">
+              {!isLoading && total > 0 ? `${((totalAgendadas / total) * 100).toFixed(0)}% do total` : "—"}
             </p>
           </div>
           {/* Sem reunião */}
@@ -765,9 +823,10 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
       {/* ── Tabs ── */}
       <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl overflow-x-auto">
         {([
-          { v: "evolucao", icon: <BarChart2 className="size-3.5" />, l: "Evolução Histórica" },
-          { v: "com",      icon: <CheckCircle2 className="size-3.5" />, l: `Com Reunião${data ? ` · ${comReuniao}` : ""}` },
-          { v: "sem",      icon: <Clock className="size-3.5" />,        l: `Sem Reunião${data ? ` · ${semReuniao}` : ""}` },
+          { v: "evolucao",  icon: <BarChart2 className="size-3.5" />,     l: "Evolução Histórica" },
+          { v: "com",       icon: <CheckCircle2 className="size-3.5" />,  l: `Concluídas${data ? ` · ${comReuniao}` : ""}` },
+          { v: "agendadas", icon: <CalendarDays className="size-3.5" />,  l: `Agendadas${data ? ` · ${totalAgendadas}` : ""}` },
+          { v: "sem",       icon: <Clock className="size-3.5" />,         l: `Sem Reunião${data ? ` · ${semReuniao}` : ""}` },
         ] as const).map((a) => (
           <button
             key={a.v}
@@ -795,7 +854,10 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
             <AbaEvolucao mes={mes} onMesChange={(m) => { onMesChange(m); setAba("com"); }} />
           )}
           {aba === "com" && data && (
-            <AbaComReuniao farmacias={data.com_reuniao} onAgendar={(id, nome) => setAgendarTarget({ id, nome })} />
+            <AbaComReuniao farmacias={data.com_reuniao.filter(f => f.realizadas > 0)} onAgendar={(id, nome) => setAgendarTarget({ id, nome })} />
+          )}
+          {aba === "agendadas" && data && (
+            <AbaAgendadas farmacias={data.com_reuniao.filter(f => f.agendadas > 0)} onAgendar={(id, nome) => setAgendarTarget({ id, nome })} />
           )}
           {aba === "sem" && data && (
             <AbaSemReuniao farmacias={data.sem_reuniao} onAgendar={(id, nome) => setAgendarTarget({ id, nome })} />
