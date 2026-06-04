@@ -457,20 +457,27 @@ function CardComReuniao({
   f,
   onAgendar,
   onVer,
+  agendadaStyle,
 }: {
   f: GerenciadorFarmaciaCom;
   onAgendar: (id: number, nome: string) => void;
   onVer?: (f: GerenciadorFarmaciaCom) => void;
+  agendadaStyle?: boolean;
 }) {
   return (
     <div
-      className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden hover:ring-brand/20 hover:shadow-md transition-all cursor-pointer"
+      className={[
+        "rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer",
+        agendadaStyle
+          ? "bg-amber-50/60 ring-1 ring-amber-200 hover:ring-amber-300"
+          : "bg-white ring-1 ring-black/5 hover:ring-brand/20",
+      ].join(" ")}
       onClick={() => onVer?.(f)}
     >
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className={`size-2.5 rounded-full shrink-0 mt-1.5 ${alertDot(f.nivel_alerta)}`} />
+            <div className={`size-2.5 rounded-full shrink-0 mt-1.5 ${agendadaStyle ? "bg-amber-400" : alertDot(f.nivel_alerta)}`} />
             <div className="flex-1 min-w-0">
               <Link
                 to="/farmacias/$id"
@@ -644,7 +651,7 @@ function AbaAgendadas({
       ) : (
         <div className="space-y-3">
           {filtradas.map((f) => (
-            <CardComReuniao key={f.farmacia_id} f={f} onAgendar={onAgendar} onVer={setSelectedFarmacia} />
+            <CardComReuniao key={f.farmacia_id} f={f} onAgendar={onAgendar} onVer={setSelectedFarmacia} agendadaStyle />
           ))}
         </div>
       )}
