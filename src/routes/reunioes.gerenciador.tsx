@@ -371,17 +371,102 @@ function AbaEvolucao({ mes, onMesChange }: { mes: string; onMesChange: (m: strin
 
 // ── Aba Com Reunião ──────────────────────────────────────────────────────────
 
+function ModalReunioesFarmacia({
+  farmacia,
+  filtroStatus,
+  onOpenChange,
+  onAgendar,
+}: {
+  farmacia: GerenciadorFarmaciaCom | null;
+  filtroStatus: "realizada" | "agendada";
+  onOpenChange: (open: boolean) => void;
+  onAgendar: (id: number, nome: string) => void;
+}) {
+  const reunioes = farmacia
+    ? farmacia.reunioes.filter((r) =>
+        filtroStatus === "realizada"
+          ? r.status === "realizada"
+          : r.status === "agendada" || r.status === "confirmada"
+      )
+    : [];
+
+  return (
+    <Dialog open={!!farmacia} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div className="size-9 rounded-lg bg-brand/10 grid place-items-center text-brand text-xs font-bold shrink-0">
+              {farmacia?.farmacia_nome.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-zinc-900 leading-tight truncate">{farmacia?.farmacia_nome}</p>
+              {farmacia?.cidade && <p className="text-xs text-zinc-400 font-normal mt-0.5">{farmacia.cidade}</p>}
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="mt-1 space-y-2">
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+            {filtroStatus === "realizada" ? "Reuniões realizadas" : "Reuniões pendentes"} · {reunioes.length}
+          </p>
+          {reunioes.length === 0 ? (
+            <div className="py-10 text-center text-sm text-zinc-400">
+              Nenhuma reunião para exibir.
+            </div>
+          ) : (
+            reunioes.map((r) => {
+              const cfg = STATUS_CFG[r.status];
+              const Icon = cfg.icon;
+              return (
+                <div key={r.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-50 ring-1 ring-zinc-100">
+                  <Icon className="size-4 shrink-0" style={{ color: cfg.color }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-zinc-800 truncate">{r.titulo}</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {fmtData(r.data_reuniao)} às {fmtHora(r.data_reuniao)}
+                      {r.duracao_minutos > 0 && ` · ${r.duracao_minutos}min`}
+                    </p>
+                    {r.observacoes && <p className="text-xs text-zinc-500 mt-1">{r.observacoes}</p>}
+                  </div>
+                  <span
+                    className="text-[11px] font-semibold shrink-0 px-2 py-0.5 rounded-full"
+                    style={{ color: cfg.color, backgroundColor: `${cfg.color}18` }}
+                  >
+                    {cfg.label}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <DialogFooter className="mt-2">
+          <button
+            onClick={() => { onOpenChange(false); onAgendar(farmacia!.farmacia_id, farmacia!.farmacia_nome); }}
+            className="flex items-center gap-1.5 text-sm font-medium text-brand hover:opacity-80 px-4 py-2 rounded-lg bg-brand/5 ring-1 ring-brand/10"
+          >
+            <Plus className="size-3.5" /> Nova Reunião
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CardComReuniao({
   f,
   onAgendar,
+  onVer,
 }: {
   f: GerenciadorFarmaciaCom;
   onAgendar: (id: number, nome: string) => void;
+  onVer?: (f: GerenciadorFarmaciaCom) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
-    <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+    <div
+      className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden hover:ring-brand/20 hover:shadow-md transition-all cursor-pointer"
+      onClick={() => onVer?.(f)}
+    >
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -423,41 +508,21 @@ function CardComReuniao({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => onAgendar(f.farmacia_id, f.farmacia_nome)}
+              onClick={(e) => { e.stopPropagation(); onAgendar(f.farmacia_id, f.farmacia_nome); }}
               className="flex items-center gap-1 text-xs font-medium text-brand hover:opacity-80 px-2.5 py-1.5 rounded-lg bg-brand/5 ring-1 ring-brand/10"
             >
               <Plus className="size-3" /> Reunião
             </button>
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="size-7 rounded-lg bg-zinc-50 ring-1 ring-zinc-100 grid place-items-center text-zinc-400 hover:text-zinc-700"
-            >
-              {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-            </button>
+            {onVer && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onVer(f); }}
+                className="size-7 rounded-lg bg-zinc-50 ring-1 ring-zinc-100 grid place-items-center text-zinc-400 hover:text-zinc-700"
+              >
+                <ChevronRight className="size-3.5" />
+              </button>
+            )}
           </div>
         </div>
-
-        {expanded && (
-          <div className="mt-4 pt-4 border-t border-zinc-50 space-y-2">
-            {f.reunioes.map((r) => {
-              const cfg = STATUS_CFG[r.status];
-              const Icon = cfg.icon;
-              return (
-                <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-zinc-50 ring-1 ring-zinc-100">
-                  <Icon className="size-3.5 shrink-0" style={{ color: cfg.color }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-zinc-800 truncate">{r.titulo}</p>
-                    <p className="text-[10px] text-zinc-400">
-                      {fmtData(r.data_reuniao)} às {fmtHora(r.data_reuniao)}
-                      {r.duracao_minutos > 0 && ` · ${r.duracao_minutos}min`}
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-semibold shrink-0" style={{ color: cfg.color }}>{cfg.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -472,6 +537,7 @@ function AbaComReuniao({
 }) {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"" | "realizadas" | "confirmadas">("");
+  const [selectedFarmacia, setSelectedFarmacia] = useState<GerenciadorFarmaciaCom | null>(null);
 
   const filtradas = farmacias.filter((f) => {
     const q = busca.toLowerCase();
@@ -521,10 +587,17 @@ function AbaComReuniao({
       ) : (
         <div className="space-y-3">
           {filtradas.map((f) => (
-            <CardComReuniao key={f.farmacia_id} f={f} onAgendar={onAgendar} />
+            <CardComReuniao key={f.farmacia_id} f={f} onAgendar={onAgendar} onVer={setSelectedFarmacia} />
           ))}
         </div>
       )}
+
+      <ModalReunioesFarmacia
+        farmacia={selectedFarmacia}
+        filtroStatus="realizada"
+        onOpenChange={(v) => { if (!v) setSelectedFarmacia(null); }}
+        onAgendar={onAgendar}
+      />
     </div>
   );
 }
@@ -539,6 +612,7 @@ function AbaAgendadas({
   onAgendar: (id: number, nome: string) => void;
 }) {
   const [busca, setBusca] = useState("");
+  const [selectedFarmacia, setSelectedFarmacia] = useState<GerenciadorFarmaciaCom | null>(null);
 
   const filtradas = farmacias.filter((f) => {
     const q = busca.toLowerCase();
@@ -570,10 +644,17 @@ function AbaAgendadas({
       ) : (
         <div className="space-y-3">
           {filtradas.map((f) => (
-            <CardComReuniao key={f.farmacia_id} f={f} onAgendar={onAgendar} />
+            <CardComReuniao key={f.farmacia_id} f={f} onAgendar={onAgendar} onVer={setSelectedFarmacia} />
           ))}
         </div>
       )}
+
+      <ModalReunioesFarmacia
+        farmacia={selectedFarmacia}
+        filtroStatus="agendada"
+        onOpenChange={(v) => { if (!v) setSelectedFarmacia(null); }}
+        onAgendar={onAgendar}
+      />
     </div>
   );
 }
