@@ -27,6 +27,7 @@ import { getToken, getUser, clearAuth } from "@/lib/auth";
 import {
   getPreviewPipeline,
   getGestores,
+  getWhatsAppStatus,
   type PipelinePreview,
 } from "@/lib/api";
 import { usePipelineContext } from "@/contexts/PipelineContext";
@@ -407,21 +408,36 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
 
   const isPipelineActive = pipelineRodando;
 
+  const { data: whatsappStatus } = useQuery({
+    queryKey: ["whatsapp-status"],
+    queryFn: getWhatsAppStatus,
+    staleTime: 5 * 60_000,
+    retry: false,
+    enabled: !!getToken(),
+  });
+
   const navItems = [
-    { icon: Newspaper,       label: "Início",         to: "/novidades" as const },
-    { icon: LayoutDashboard, label: "Painel Geral",   to: "/" as const },
-    { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const },
+    { icon: Newspaper,       label: "Início",         to: "/novidades" as const, badge: undefined as ReactNode },
+    { icon: LayoutDashboard, label: "Painel Geral",   to: "/" as const,          badge: undefined as ReactNode },
+    { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const, badge: undefined as ReactNode },
     ...(isAdminUser
-      ? [{ icon: Clock, label: "Em Entrada", to: "/farmacias/entrada" as const }]
+      ? [{ icon: Clock, label: "Em Entrada", to: "/farmacias/entrada" as const, badge: undefined as ReactNode }]
       : []),
-    { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const },
-    { icon: Megaphone,       label: "Ações",          to: "/acoes" as const },
-    { icon: Trophy,          label: "Ranking",        to: "/ranking-gestores" as const },
-    { icon: FileBarChart,    label: "Relatórios",     to: "/relatorios" as const },
+    { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const,        badge: undefined as ReactNode },
+    { icon: Megaphone,       label: "Ações",          to: "/acoes" as const,           badge: undefined as ReactNode },
+    { icon: Trophy,          label: "Ranking",        to: "/ranking-gestores" as const, badge: undefined as ReactNode },
+    { icon: FileBarChart,    label: "Relatórios",     to: "/relatorios" as const,      badge: undefined as ReactNode },
     ...(isAdminUser
-      ? [{ icon: Users, label: "Gestores", to: "/gestores" as const }]
+      ? [{ icon: Users, label: "Gestores", to: "/gestores" as const, badge: undefined as ReactNode }]
       : []),
-    { icon: Settings, label: "Configurações", to: "/configuracoes" as const },
+    {
+      icon: Settings,
+      label: "Configurações",
+      to: "/configuracoes" as const,
+      badge: whatsappStatus?.conectado
+        ? <span className="size-2 rounded-full bg-emerald-400 shrink-0" title="WhatsApp conectado" />
+        : undefined,
+    },
   ];
 
   return (
@@ -443,7 +459,8 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
               className="flex items-center gap-2.5 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-white/75 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
             >
               <item.icon className="size-4 shrink-0" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge}
             </Link>
           ))}
         </nav>

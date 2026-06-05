@@ -861,3 +861,48 @@ export function getGerenciadorMensal(mes?: string): Promise<GerenciadorMensal> {
 export function getCoberturaMensal(meses = 6): Promise<CoberturaMensal> {
   return req(`/api/reunioes/cobertura-mensal?meses=${meses}`)
 }
+
+// ── WhatsApp ────────────────────────────────────────────────────────────────
+
+export interface WhatsAppStatus {
+  conectado: boolean
+  status: "open" | "connecting" | "close"
+  instancia: string | null
+  numero: string | null
+  configurado: boolean
+}
+
+export interface WhatsAppConnectResponse {
+  instancia: string
+  status: "connecting"
+  qr_code: string | null
+}
+
+export interface WhatsAppQrResponse {
+  status: "open" | "connecting" | "close"
+  qr_code: string | null
+  instancia: string
+}
+
+export function getWhatsAppStatus(): Promise<WhatsAppStatus> {
+  return req("/api/whatsapp/status")
+}
+
+export function connectWhatsApp(instance_name: string): Promise<WhatsAppConnectResponse> {
+  return req("/api/whatsapp/connect", {
+    method: "POST",
+    body: JSON.stringify({ instance_name }),
+  })
+}
+
+export function getWhatsAppQrCode(): Promise<WhatsAppQrResponse> {
+  return req("/api/whatsapp/qrcode")
+}
+
+export function disconnectWhatsApp(): Promise<{ mensagem: string }> {
+  return req("/api/whatsapp/disconnect", { method: "DELETE" })
+}
+
+export function deleteWhatsAppInstance(): Promise<{ mensagem: string }> {
+  return req("/api/whatsapp/instance", { method: "DELETE" })
+}

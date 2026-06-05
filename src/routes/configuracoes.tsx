@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Key, Database, Bell, User } from "lucide-react";
+import { Key, Database, Bell, User, MessageSquareMore } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { WhatsAppSection } from "@/components/WhatsAppSection";
 
 export const Route = createFileRoute("/configuracoes")({
   component: ConfigPage,
@@ -12,14 +13,7 @@ function ConfigPage() {
   const [showKey, setShowKey] = useState(false);
 
   return (
-    <AppShell
-      title="Configurações"
-      headerRight={
-        <button className="px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90">
-          Salvar Alterações
-        </button>
-      }
-    >
+    <AppShell title="Configurações">
       <Section icon={User} title="Conta da Agência" desc="Informações públicas da sua agência.">
         <Field label="Nome da Agência" defaultValue="Agência Alpha" />
         <Field label="E-mail Principal" defaultValue="contato@agenciaalpha.com.br" />
@@ -46,11 +40,29 @@ function ConfigPage() {
         <Toggle label="WhatsApp quando ROAS cair abaixo de 2x" defaultChecked />
         <Toggle label="Resumo semanal por e-mail" defaultChecked={false} />
       </Section>
+
+      <Section
+        icon={MessageSquareMore}
+        title="WhatsApp"
+        desc="Notificações automáticas de reunião enviadas às farmácias."
+      >
+        <WhatsAppSection />
+      </Section>
     </AppShell>
   );
 }
 
-function Section({ icon: Icon, title, desc, children }: { icon: typeof Key; title: string; desc: string; children: React.ReactNode }) {
+function Section({
+  icon: Icon,
+  title,
+  desc,
+  children,
+}: {
+  icon: typeof Key;
+  title: string;
+  desc: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
       <div className="p-6 border-b border-zinc-100 flex items-start gap-3">
@@ -67,7 +79,15 @@ function Section({ icon: Icon, title, desc, children }: { icon: typeof Key; titl
   );
 }
 
-function Field({ label, defaultValue, type = "text" }: { label: string; defaultValue: string; type?: string }) {
+function Field({
+  label,
+  defaultValue,
+  type = "text",
+}: {
+  label: string;
+  defaultValue: string;
+  type?: string;
+}) {
   return (
     <div className="grid grid-cols-3 gap-4 items-center">
       <label className="text-xs font-medium text-zinc-700">{label}</label>
@@ -80,7 +100,13 @@ function Field({ label, defaultValue, type = "text" }: { label: string; defaultV
   );
 }
 
-function Toggle({ label, defaultChecked }: { label: string; defaultChecked: boolean }) {
+function Toggle({
+  label,
+  defaultChecked,
+}: {
+  label: string;
+  defaultChecked: boolean;
+}) {
   const [on, setOn] = useState(defaultChecked);
   return (
     <div className="flex items-center justify-between">
@@ -89,7 +115,9 @@ function Toggle({ label, defaultChecked }: { label: string; defaultChecked: bool
         onClick={() => setOn(!on)}
         className={`relative w-10 h-6 rounded-full transition-colors ${on ? "bg-brand" : "bg-zinc-200"}`}
       >
-        <div className={`absolute top-0.5 size-5 bg-white rounded-full shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
+        <div
+          className={`absolute top-0.5 size-5 bg-white rounded-full shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`}
+        />
       </button>
     </div>
   );

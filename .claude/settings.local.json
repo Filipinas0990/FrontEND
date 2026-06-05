@@ -56,7 +56,8 @@
       "Bash(mkdir -p \"C:\\\\Users\\\\Grupo Symbol Digital\\\\.claude\\\\projects\\\\c--Users-Grupo-Symbol-Digital-Desktop-FRONT-END\\\\memory\")",
       "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\")",
       "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\AUTOMAÇÃO\")",
-      "PowerShell(head -50)"
+      "PowerShell(head -50)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('MessageSquareMore' in l\\)\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\Grupo Symbol Digital\\.claude\\projects\\c--Users-Grupo-Symbol-Digital-Desktop-FRONT-END"
