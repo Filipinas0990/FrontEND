@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, MessageSquareMore } from "lucide-react"
+import { RefreshCw, CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { getUser } from "@/lib/auth"
 import {
@@ -8,7 +8,6 @@ import {
   connectWhatsApp,
   getWhatsAppQrCode,
   disconnectWhatsApp,
-  getFarmacias,
   type WhatsAppStatus,
 } from "@/lib/api"
 import {
@@ -72,15 +71,6 @@ export function WhatsAppSection() {
     staleTime: 30_000,
     retry: false,
   })
-
-  const { data: farmacias = [] } = useQuery({
-    queryKey: ["farmacias"],
-    queryFn: () => getFarmacias(),
-    staleTime: 5 * 60_000,
-    enabled: statusData?.conectado === true,
-  })
-
-  const semTelefone = farmacias.filter((f) => f.fase === "ativo" && !f.telefone).length
 
   const [modalState, setModalState] = useState<ModalState>("none")
   const [instanceName, setInstanceName] = useState("pharmaflow")
@@ -216,19 +206,8 @@ export function WhatsAppSection() {
             )}
 
             <p className="text-sm text-zinc-500">
-              As farmácias receberão uma mensagem de WhatsApp 5 horas antes de cada reunião agendada.
+              O número de WhatsApp é configurado individualmente em cada reunião agendada.
             </p>
-
-            {semTelefone > 0 && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                <AlertTriangle className="size-4 text-amber-500 mt-0.5 shrink-0" />
-                <p className="text-amber-700">
-                  <strong>{semTelefone} farmácia{semTelefone > 1 ? "s" : ""}</strong>{" "}
-                  ativa{semTelefone > 1 ? "s" : ""} sem telefone cadastrado e não{" "}
-                  {semTelefone > 1 ? "receberão" : "receberá"} notificações.
-                </p>
-              </div>
-            )}
 
             {isAdmin && (
               <button
