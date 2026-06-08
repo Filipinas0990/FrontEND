@@ -288,7 +288,7 @@ function AbaEvolucao({ mes, onMesChange }: { mes: string; onMesChange: (m: strin
   const chartData = historico.map((h) => ({
     mes: fmtMesAbrev(h.mes),
     mesKey: h.mes,
-    com: h.farmacias_com_reuniao,
+    com: h.realizadas,
     sem: h.farmacias_sem_reuniao,
     taxa: h.taxa_cobertura,
   }));
@@ -802,7 +802,7 @@ export function GerenciadorContent({ mes, onMesChange }: { mes: string; onMesCha
 
   const cobertura   = data?.taxa_cobertura ?? 0;
   const total       = data?.total_farmacias_ativas ?? 0;
-  const comReuniao     = data?.farmacias_com_reuniao ?? 0;
+  const comReuniao     = data?.com_reuniao.filter(f => f.realizadas > 0).length ?? 0;
   const totalAgendadas = data?.com_reuniao.filter(f => f.agendadas > 0).length ?? 0;
   const semReuniao     = data?.farmacias_sem_reuniao ?? 0;
 
