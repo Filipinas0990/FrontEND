@@ -57,7 +57,8 @@
       "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\")",
       "Bash(dir \"C:\\\\Users\\\\Grupo Symbol Digital\\\\Desktop\\\\AUTOMAÇÃO\")",
       "PowerShell(head -50)",
-      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('MessageSquareMore' in l\\)\")"
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('MessageSquareMore' in l\\)\")",
+      "Bash(xargs grep -l \"cobertura\\\\|Cobertura\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\Grupo Symbol Digital\\.claude\\projects\\c--Users-Grupo-Symbol-Digital-Desktop-FRONT-END"
