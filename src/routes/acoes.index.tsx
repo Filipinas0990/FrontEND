@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import {
   Megaphone, Plus, ChevronLeft, ChevronRight, Building2,
-  RefreshCw, Pencil, XCircle, CheckCircle2, ChevronDown,
+  RefreshCw, Pencil, XCircle, CheckCircle2, ChevronDown, Rocket,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -520,12 +520,20 @@ function AcoesPage() {
       title="Ações de Marketing"
       headerRight={
         admin ? (
-          <button
-            onClick={() => { setEditTarget(null); setModalOpen(true); }}
-            className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
-          >
-            <Plus className="size-3.5" /> Nova Ação
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate({ to: "/campanhas/nova" })}
+              className="flex items-center gap-2 py-2 px-3 text-sm font-medium border border-brand text-brand rounded-md hover:bg-brand/5"
+            >
+              <Rocket className="size-3.5" /> Nova Campanha
+            </button>
+            <button
+              onClick={() => { setEditTarget(null); setModalOpen(true); }}
+              className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
+            >
+              <Plus className="size-3.5" /> Nova Ação
+            </button>
+          </div>
         ) : undefined
       }
     >

@@ -906,3 +906,144 @@ export function disconnectWhatsApp(): Promise<{ mensagem: string }> {
 export function deleteWhatsAppInstance(): Promise<{ mensagem: string }> {
   return req("/api/whatsapp/instance", { method: "DELETE" })
 }
+
+// ── Automação de Anúncios (Meta Ads) ──────────────────────────────────────────
+
+export type CampanhaStatus =
+  | "aguardando_confirmacao"
+  | "publicada"
+  | "cancelada"
+  | "erro"
+
+export interface CampanhaMeta {
+  id:              number
+  farmaciaId:      number
+  farmaciaInfo:    string
+  status:          CampanhaStatus
+  clienteNome:     string | null
+  objetivo:        string | null
+  orcamentoDiario: number | null  // centavos
+  dataInicio:      string | null
+  dataFim:         string | null
+  metaCampanhaId:  string | null
+  criadoEm:        string
+}
+
+export function enviarMensagemAds(
+  texto: string,
+  imagem_base64?: string,
+): Promise<{ resposta: string }> {
+  return req("/api/ads/chat", {
+    method: "POST",
+    body: JSON.stringify({ texto, imagem_base64 }),
+  })
+}
+
+export function getCampanhasMeta(): Promise<CampanhaMeta[]> {
+  return req("/api/ads/campanhas")
+}
+
+export function cadastrarTokenMeta(data: {
+  farmacia_id:   number
+  access_token:  string
+  ad_account_id: string
+  page_id:       string
+}): Promise<{ ok: boolean }> {
+  return req("/api/ads/tokens", { method: "POST", body: JSON.stringify(data) })
+}
+
+// ── Contas de anúncios (Meta) ──────────────────────────────────────────────────
+
+export interface ContaAnuncio {
+  id: string          // "act_123456789"
+  accountId: string   // "123456789"
+  nome: string        // nome da conta de anúncio
+  cliente: string     // nome do Business Manager dono
+  moeda: string       // "BRL"
+  status: string      // rótulo legível (Ativa, Desativada...)
+  ativa: boolean
+  temPagamento: boolean    // tem forma de pagamento configurada
+  formaPagamento: string   // ex: "Saldo disponível (R$816,04 BRL)"
+}
+
+/** Lista TODAS as contas de anúncios acessíveis pelo token Meta do servidor. */
+export function getContasAnuncio(): Promise<{ contas: ContaAnuncio[] }> {
+  return req("/api/ads/contas")
+}
+
+// ── Publicação de campanha ─────────────────────────────────────────────────────
+
+export interface PublicarCampanhaResultado {
+  campanhaId: string
+  conjuntoId: string
+  anuncioId: string
+  linkGerenciador: string
+  copyUsada: { textoPrincipal: string; titulo: string; descricao: string }
+  avisos: string[]
+}
+
+/** Envia o JSON do wizard (+ PNGs) para criar a campanha ativa no Meta. */
+export function publicarCampanha(payload: unknown): Promise<PublicarCampanhaResultado> {
+  return req("/api/campanhas/criar", { method: "POST", body: JSON.stringify(payload) })
+}
+
+// ── Catálogo de produtos (fluxo Criativos e Campanhas) ─────────────────────────
+
+export interface ProdutoEntrada {
+  nome: string
+  preco?: string
+}
+
+export interface ProdutoIdentificado {
+  nome: string
+  preco: string
+  status: "encontrado" | "nao_encontrado"
+  imagem: string | null      // data URI pronta para <img src>
+  catalogoId: number | null
+}
+
+/** Envia a lista lida da planilha e recebe cada produto casado com a imagem do catálogo. */
+export function identificarCatalogo(
+  produtos: ProdutoEntrada[],
+): Promise<{ produtos: ProdutoIdentificado[] }> {
+  return req("/api/catalogo/identificar", {
+    method: "POST",
+    body: JSON.stringify({ produtos }),
+  })
+}
+
+/** Total de produtos no catálogo. */
+export function getCatalogoStatus(): Promise<{ total: number }> {
+  return req("/api/catalogo/status")
+}
+
+export interface CatalogoProdutoItem {
+  id: number
+  nome: string
+  criadoEm: string | null
+}
+
+/** Lista os produtos do catálogo (sem imagem). */
+export function listarCatalogoProdutos(): Promise<{ produtos: CatalogoProdutoItem[] }> {
+  return req("/api/catalogo/produtos")
+}
+
+/** Monta a URL da imagem de um produto (com token na query para usar em <img src>). */
+export function catalogoImagemUrl(id: number): string {
+  const token = getToken()
+  return `${BASE_URL}/api/catalogo/produtos/${id}/imagem${token ? `?token=${token}` : ""}`
+}
+
+/** Cadastra/atualiza um produto do catálogo com sua imagem (base64 data URI ou puro). */
+export function cadastrarCatalogoProduto(data: {
+  nome: string
+  imagem_b64: string
+  mime?: string
+}): Promise<{ ok: boolean }> {
+  return req("/api/catalogo/produtos", { method: "POST", body: JSON.stringify(data) })
+}
+
+/** Remove um produto do catálogo. */
+export function deletarCatalogoProduto(id: number): Promise<{ ok: boolean }> {
+  return req(`/api/catalogo/produtos/${id}`, { method: "DELETE" })
+}

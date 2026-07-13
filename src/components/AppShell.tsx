@@ -2,8 +2,8 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Building2,
-  FileBarChart,
-  Settings,
+  LineChart,
+  SlidersHorizontal,
   Activity,
   Play,
   LogOut,
@@ -11,13 +11,13 @@ import {
   Trophy,
   CalendarDays,
   RefreshCw,
-  Newspaper,
+  Home,
   CheckCircle2,
   AlertTriangle,
   XCircle,
   Megaphone,
-  Clock,
-  BarChart3,
+  UserPlus,
+  Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -363,9 +363,10 @@ interface AppShellProps {
   title: string;
   children: ReactNode;
   headerRight?: ReactNode;
+  hideHeader?: boolean;
 }
 
-export function AppShell({ title, children, headerRight }: AppShellProps) {
+export function AppShell({ title, children, headerRight, hideHeader }: AppShellProps) {
   const navigate = useNavigate();
   const [user, setUser] = useState(() => getUser());
 
@@ -417,21 +418,22 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
   });
 
   const navItems = [
-    { icon: Newspaper,       label: "Início",         to: "/novidades" as const, badge: undefined as ReactNode },
-    { icon: LayoutDashboard, label: "Painel Geral",   to: "/" as const,          badge: undefined as ReactNode },
-    { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const, badge: undefined as ReactNode },
+    { icon: Home,            label: "Início",         to: "/novidades" as const,        badge: undefined as ReactNode },
+    { icon: LayoutDashboard, label: "Painel Geral",   to: "/" as const,                 badge: undefined as ReactNode },
+    { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const,        badge: undefined as ReactNode },
     ...(isAdminUser
-      ? [{ icon: Clock, label: "Em Entrada", to: "/farmacias/entrada" as const, badge: undefined as ReactNode }]
+      ? [{ icon: UserPlus, label: "Em Entrada", to: "/farmacias/entrada" as const, badge: undefined as ReactNode }]
       : []),
-    { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const,        badge: undefined as ReactNode },
-    { icon: Megaphone,       label: "Ações",          to: "/acoes" as const,           badge: undefined as ReactNode },
-    { icon: Trophy,          label: "Ranking",        to: "/ranking-gestores" as const, badge: undefined as ReactNode },
-    { icon: FileBarChart,    label: "Relatórios",     to: "/relatorios" as const,      badge: undefined as ReactNode },
+    { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const,         badge: undefined as ReactNode },
+   // { icon: Zap,             label: "Ações",          to: "/acoes" as const,            badge: undefined as ReactNode },
+    { icon: Megaphone,       label: "Anúncios",       to: "/anuncios" as const,         badge: undefined as ReactNode },
+    //{ icon: Trophy,          label: "Ranking",        to: "/ranking-gestores" as const, badge: undefined as ReactNode },
+    { icon: LineChart,       label: "Relatórios",     to: "/relatorios" as const,       badge: undefined as ReactNode },
     ...(isAdminUser
       ? [{ icon: Users, label: "Gestores", to: "/gestores" as const, badge: undefined as ReactNode }]
       : []),
     {
-      icon: Settings,
+      icon: SlidersHorizontal,
       label: "Configurações",
       to: "/configuracoes" as const,
       badge: whatsappStatus?.conectado
@@ -443,22 +445,22 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
   return (
     <div className="flex min-h-screen bg-neutral-50 text-zinc-900 font-sans">
       <aside className="w-52 bg-brand flex flex-col sticky top-0 h-screen">
-        <div className="p-6 flex items-center gap-3">
-          <div className="size-8 bg-white/20 rounded-lg grid place-items-center text-white">
-            <Activity className="size-4" strokeWidth={2.5} />
+        <div className="px-5 py-5 flex items-center gap-3 border-b border-white/15">
+          <div className="size-9 bg-white/20 rounded-xl grid place-items-center text-white shadow-inner">
+            <Activity className="size-[18px]" strokeWidth={2.5} />
           </div>
-          <span className="font-semibold tracking-tight text-white">GrupoSymbol</span>
+          <span className="font-bold tracking-tight text-white text-[15px]">GrupoSymbol</span>
         </div>
 
-        <nav className="flex-1 px-4 space-y-0.5">
+        <nav className="flex-1 px-3 pt-3 space-y-0.5">
           {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
               activeOptions={{ exact: ["/", "/farmacias", "/reunioes"].includes(item.to) }}
-              className="flex items-center gap-2.5 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-white/75 hover:bg-white/10 hover:text-white data-[status=active]:bg-white/20 data-[status=active]:text-white"
+              className="flex items-center gap-3 py-2.5 px-3 text-sm font-medium rounded-xl transition-all duration-150 text-white/70 hover:bg-white/10 hover:text-white data-[status=active]:bg-white data-[status=active]:text-brand data-[status=active]:shadow-sm"
             >
-              <item.icon className="size-4 shrink-0" />
+              <item.icon className="size-[18px] shrink-0" />
               <span className="flex-1">{item.label}</span>
               {item.badge}
             </Link>
@@ -490,23 +492,14 @@ export function AppShell({ title, children, headerRight }: AppShellProps) {
       </aside>
 
       <main className="flex-1 overflow-y-auto">
-        <header className="h-16 border-b border-zinc-200 bg-white px-8 flex items-center justify-between sticky top-0 z-10">
-          <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
-          <div className="flex items-center gap-4">
-            {headerRight !== undefined ? headerRight : (
-              isAdminUser ? (
-                <button
-                  onClick={() => setModalRodar(true)}
-                  className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 transition-opacity disabled:opacity-60"
-                >
-                  {isPipelineActive
-                    ? <><RefreshCw className="size-3.5 animate-spin" /> Rodando...</>
-                    : <><Play className="size-3.5" fill="currentColor" /> Rodar Agora</>}
-                </button>
-              ) : null
-            )}
-          </div>
-        </header>
+        {!hideHeader && (
+          <header className="h-16 border-b border-zinc-200 bg-white px-8 flex items-center justify-between sticky top-0 z-10">
+            <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
+            <div className="flex items-center gap-4">
+              {headerRight !== undefined ? headerRight : null}
+            </div>
+          </header>
+        )}
         <div className="p-8 max-w-7xl mx-auto space-y-8">{children}</div>
       </main>
 

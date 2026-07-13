@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Key, Database, Bell, User, MessageSquareMore } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Key, Database, Bell, User, MessageSquareMore, Images, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { WhatsAppSection } from "@/components/WhatsAppSection";
+import { BancoImagensModal } from "@/components/BancoImagensModal";
+import { getCatalogoStatus } from "@/lib/api";
 
 export const Route = createFileRoute("/configuracoes")({
   component: ConfigPage,
@@ -11,6 +14,12 @@ export const Route = createFileRoute("/configuracoes")({
 
 function ConfigPage() {
   const [showKey, setShowKey] = useState(false);
+  const [showBancoImagens, setShowBancoImagens] = useState(false);
+
+  const { data: catalogo } = useQuery({
+    queryKey: ["catalogo-status"],
+    queryFn: getCatalogoStatus,
+  });
 
   return (
     <AppShell title="Configurações">
@@ -18,6 +27,26 @@ function ConfigPage() {
         <Field label="Nome da Agência" defaultValue="Agência Alpha" />
         <Field label="E-mail Principal" defaultValue="contato@agenciaalpha.com.br" />
         <Field label="Fuso Horário" defaultValue="America/Sao_Paulo" />
+      </Section>
+
+      <Section
+        icon={Images}
+        title="Banco de Imagens"
+        desc="Fotos dos produtos usadas para gerar os criativos automaticamente."
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-zinc-600">
+            {catalogo
+              ? <><span className="font-semibold text-zinc-900">{catalogo.total}</span> imagem(ns) no banco</>
+              : "Carregando..."}
+          </p>
+          <button
+            onClick={() => setShowBancoImagens(true)}
+            className="bg-brand hover:bg-brand/90 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm"
+          >
+            <UploadCloud className="size-4" /> Subir imagens
+          </button>
+        </div>
       </Section>
 
       <Section icon={Key} title="Integrações de API" desc="Tokens utilizados pelo script Python para coletar dados.">
@@ -48,6 +77,8 @@ function ConfigPage() {
       >
         <WhatsAppSection />
       </Section>
+
+      {showBancoImagens && <BancoImagensModal onClose={() => setShowBancoImagens(false)} />}
     </AppShell>
   );
 }

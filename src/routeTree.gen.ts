@@ -19,6 +19,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as AnunciosRouteImport } from './routes/anuncios'
 import { Route as AcoesRouteImport } from './routes/acoes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ReunioesIndexRouteImport } from './routes/reunioes.index'
@@ -27,6 +28,7 @@ import { Route as AcoesIndexRouteImport } from './routes/acoes.index'
 import { Route as ReunioesGerenciadorRouteImport } from './routes/reunioes.gerenciador'
 import { Route as FarmaciasEntradaRouteImport } from './routes/farmacias.entrada'
 import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
+import { Route as CampanhasNovaRouteImport } from './routes/campanhas.nova'
 import { Route as AcoesIdRouteImport } from './routes/acoes.$id'
 
 const SetupRoute = SetupRouteImport.update({
@@ -79,6 +81,11 @@ const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnunciosRoute = AnunciosRouteImport.update({
+  id: '/anuncios',
+  path: '/anuncios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AcoesRoute = AcoesRouteImport.update({
   id: '/acoes',
   path: '/acoes',
@@ -119,6 +126,11 @@ const FarmaciasIdRoute = FarmaciasIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => FarmaciasRoute,
 } as any)
+const CampanhasNovaRoute = CampanhasNovaRouteImport.update({
+  id: '/campanhas/nova',
+  path: '/campanhas/nova',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AcoesIdRoute = AcoesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -128,6 +140,7 @@ const AcoesIdRoute = AcoesIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acoes': typeof AcoesRouteWithChildren
+  '/anuncios': typeof AnunciosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
@@ -139,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/reunioes': typeof ReunioesRouteWithChildren
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
+  '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
@@ -148,6 +162,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/anuncios': typeof AnunciosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
@@ -157,6 +172,7 @@ export interface FileRoutesByTo {
   '/relatorios': typeof RelatoriosRoute
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
+  '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
@@ -168,6 +184,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/acoes': typeof AcoesRouteWithChildren
+  '/anuncios': typeof AnunciosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
@@ -179,6 +196,7 @@ export interface FileRoutesById {
   '/reunioes': typeof ReunioesRouteWithChildren
   '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
+  '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
@@ -191,6 +209,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/acoes'
+    | '/anuncios'
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
@@ -202,6 +221,7 @@ export interface FileRouteTypes {
     | '/reunioes'
     | '/setup'
     | '/acoes/$id'
+    | '/campanhas/nova'
     | '/farmacias/$id'
     | '/farmacias/entrada'
     | '/reunioes/gerenciador'
@@ -211,6 +231,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/anuncios'
     | '/configuracoes'
     | '/gestores'
     | '/login'
@@ -220,6 +241,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/setup'
     | '/acoes/$id'
+    | '/campanhas/nova'
     | '/farmacias/$id'
     | '/farmacias/entrada'
     | '/reunioes/gerenciador'
@@ -230,6 +252,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/acoes'
+    | '/anuncios'
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
@@ -241,6 +264,7 @@ export interface FileRouteTypes {
     | '/reunioes'
     | '/setup'
     | '/acoes/$id'
+    | '/campanhas/nova'
     | '/farmacias/$id'
     | '/farmacias/entrada'
     | '/reunioes/gerenciador'
@@ -252,6 +276,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcoesRoute: typeof AcoesRouteWithChildren
+  AnunciosRoute: typeof AnunciosRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
   GestoresRoute: typeof GestoresRoute
@@ -262,6 +287,7 @@ export interface RootRouteChildren {
   RelatoriosRoute: typeof RelatoriosRoute
   ReunioesRoute: typeof ReunioesRouteWithChildren
   SetupRoute: typeof SetupRoute
+  CampanhasNovaRoute: typeof CampanhasNovaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -336,6 +362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/anuncios': {
+      id: '/anuncios'
+      path: '/anuncios'
+      fullPath: '/anuncios'
+      preLoaderRoute: typeof AnunciosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/acoes': {
       id: '/acoes'
       path: '/acoes'
@@ -392,6 +425,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FarmaciasIdRouteImport
       parentRoute: typeof FarmaciasRoute
     }
+    '/campanhas/nova': {
+      id: '/campanhas/nova'
+      path: '/campanhas/nova'
+      fullPath: '/campanhas/nova'
+      preLoaderRoute: typeof CampanhasNovaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/acoes/$id': {
       id: '/acoes/$id'
       path: '/$id'
@@ -447,6 +487,7 @@ const ReunioesRouteWithChildren = ReunioesRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcoesRoute: AcoesRouteWithChildren,
+  AnunciosRoute: AnunciosRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   FarmaciasRoute: FarmaciasRouteWithChildren,
   GestoresRoute: GestoresRoute,
@@ -457,6 +498,7 @@ const rootRouteChildren: RootRouteChildren = {
   RelatoriosRoute: RelatoriosRoute,
   ReunioesRoute: ReunioesRouteWithChildren,
   SetupRoute: SetupRoute,
+  CampanhasNovaRoute: CampanhasNovaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

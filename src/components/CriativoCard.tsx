@@ -1,0 +1,167 @@
+import { ImageIcon } from "lucide-react";
+
+// Layout = o design (elementos). Enquadramento = a proporção (formato).
+export type LayoutCriativo = "azul" | "banner";
+export type Enquadramento = "4:5" | "1:1" | "9:16";
+
+const ASPECTO: Record<Enquadramento, string> = {
+  "4:5":  "aspect-[4/5]",
+  "1:1":  "aspect-square",
+  "9:16": "aspect-[9/16]",
+};
+
+export interface CriativoDados {
+  nome: string;
+  preco: string;
+  imagem?: string | null;
+  localizacao: string;      // nome da farmácia / localização (barra inferior — layout azul)
+  layout: LayoutCriativo;
+  enquadramento: Enquadramento;
+  titulo?: string;          // título do topo (layout banner) — ex: "FECHA MÊS"
+  subtitulo?: string;       // datas/subtítulo (layout banner) — ex: "DIAS 29 A 31"
+}
+
+// ── Azul da referência (modelos 1 e 2, com brilho) ────────────────────────────
+const AZUL_GRADIENTE = "linear-gradient(180deg, #3f74dd 0%, #0a2c78 100%)";
+const AZUL_BORDA = "2px solid rgba(205, 226, 255, 0.95)";
+const AZUL_BRILHO = "0 0 18px rgba(90, 150, 255, 0.75), inset 0 1px 0 rgba(255,255,255,0.28)";
+
+const estiloAzul: React.CSSProperties = {
+  background: AZUL_GRADIENTE,
+  border: AZUL_BORDA,
+  boxShadow: AZUL_BRILHO,
+};
+
+// ── Cores do Modelo 3 (Banner Oferta) ─────────────────────────────────────────
+const NAVY = "#1f3f9e";
+const VERM = "#d61f27";
+
+// Mostra só o valor (sem "R$"); vazio vira "0,00"
+function valorPreco(preco: string): string {
+  const v = preco.replace(/r\$\s*/i, "").replace(/—/g, "").trim();
+  return v || "0,00";
+}
+
+function Imagem({ imagem, nome, className }: { imagem?: string | null; nome: string; className?: string }) {
+  return imagem
+    ? <img src={imagem} alt={nome} className={className} />
+    : <div className={`grid place-items-center bg-zinc-100 ${className}`}><ImageIcon className="size-8 text-zinc-300" /></div>;
+}
+
+// ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
+function ModeloBanner({ nome, preco, imagem, titulo, subtitulo }: CriativoDados) {
+  return (
+    <>
+      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+
+      {/* Título (faixa azul no topo) */}
+      <div className="absolute top-[13%] left-[5%] right-[5%]">
+        <div className="rounded-full py-[2.5%] px-[4%] text-center"
+             style={{ background: NAVY, border: "3px solid #fff", boxShadow: "0 4px 12px rgba(0,0,0,.18)" }}>
+          <span className="block text-white font-black uppercase leading-none tracking-tight"
+                style={{ fontSize: "clamp(18px, 13cqw, 92px)" }}>
+            {titulo || "FECHA MÊS"}
+          </span>
+        </div>
+      </div>
+
+      {/* Subtítulo / datas (pílula branca) */}
+      <div className="absolute top-[24.5%] left-[15%] right-[15%]">
+        <div className="rounded-full py-[1.4%] px-[3%] text-center bg-white"
+             style={{ boxShadow: "0 3px 8px rgba(0,0,0,.14)" }}>
+          <span className="block font-black uppercase leading-none tracking-tight"
+                style={{ color: VERM, fontSize: "clamp(11px, 6cqw, 42px)" }}>
+            {subtitulo || "DIAS 00 A 00"}
+          </span>
+        </div>
+      </div>
+
+      {/* Preço (bloco embaixo-direita) */}
+      <div className="absolute bottom-[6%] right-[4%] w-[46%] flex flex-col items-center">
+        <div className="rounded-full px-[7%] py-[1.6%] relative z-10"
+             style={{ background: NAVY, border: "2px solid #fff", marginBottom: "-4%" }}>
+          <span className="block text-white font-black uppercase leading-none"
+                style={{ fontSize: "clamp(10px, 5cqw, 34px)" }}>
+            POR APENAS
+          </span>
+        </div>
+        <div className="w-full rounded-xl px-[4%] pt-[7%] pb-[4%] text-center" style={{ background: VERM }}>
+          <span className="text-white font-black leading-none inline-flex items-start justify-center"
+                style={{ fontSize: "clamp(30px, 21cqw, 140px)" }}>
+            <span style={{ fontSize: "0.42em" }} className="mt-[0.35em] mr-[0.05em]">R$</span>
+            {valorPreco(preco)}
+          </span>
+        </div>
+      </div>
+
+      {/* Rodapé vermelho/azul */}
+      <div className="absolute bottom-0 left-0 right-0 flex" style={{ height: "1.6%" }}>
+        <div className="w-1/2" style={{ background: VERM }} />
+        <div className="w-1/2" style={{ background: NAVY }} />
+      </div>
+    </>
+  );
+}
+
+// ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
+function ModeloAzul({ nome, preco, imagem, localizacao }: CriativoDados) {
+  const farmacia = localizacao || "Sua Farmácia";
+  return (
+    <>
+      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+
+      {/* Pílula de preço no topo */}
+      <div className="absolute top-[5%] left-[5%] w-[60%]">
+        <div className="rounded-[1.4rem] px-[4%] py-[3.5%] text-center" style={estiloAzul}>
+          <span className="block text-white font-black uppercase leading-none tracking-tight"
+                style={{ fontSize: "clamp(14px, 8.5cqw, 44px)" }}>
+            POR R${valorPreco(preco)}
+          </span>
+        </div>
+      </div>
+
+      {/* Barra inferior: farmácia */}
+      <div className="absolute bottom-[5%] left-[6%] right-[6%]">
+        <div className="rounded-[1.4rem] flex items-center justify-center px-[5%] py-[3.5%]" style={estiloAzul}>
+          <span className="text-white font-black uppercase leading-tight tracking-tight break-words text-center"
+                style={{ fontSize: "clamp(12px, 6cqw, 32px)" }}>
+            {farmacia}
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Criativo de oferta. `layout` define o design (azul | banner) e
+ * `enquadramento` define a proporção (4:5 | 1:1 | 9:16).
+ */
+export function CriativoCard(props: CriativoDados) {
+  return (
+    <div
+      className={`relative w-full ${ASPECTO[props.enquadramento]} rounded-xl overflow-hidden bg-zinc-200`}
+      style={{ containerType: "inline-size" }}
+    >
+      {props.layout === "banner" ? <ModeloBanner {...props} /> : <ModeloAzul {...props} />}
+    </div>
+  );
+}
+
+// Miniatura usada nos seletores do modal (layout e enquadramento)
+export function ModeloThumb({ layout, enquadramento = "4:5" }: { layout: LayoutCriativo; enquadramento?: Enquadramento }) {
+  return (
+    <div className="w-full pointer-events-none" style={{ containerType: "inline-size" }}>
+      <CriativoCard
+        layout={layout}
+        enquadramento={enquadramento}
+        nome="Produto exemplo"
+        preco="9,90"
+        imagem={null}
+        localizacao="Sua Farmácia"
+        titulo="FECHA MÊS"
+        subtitulo="DIAS 29 A 31"
+      />
+    </div>
+  );
+}
