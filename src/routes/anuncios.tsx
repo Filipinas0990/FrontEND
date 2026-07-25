@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CriativosModal, type CriativosConfig } from "@/components/CriativosModal";
+import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
+import { OfertasClientesButton } from "@/components/OfertasClientesButton";
 import { CriativoCard } from "@/components/CriativoCard";
 import { exportarCriativoPng, baixarPng } from "@/lib/exportarCriativo";
 import { identificarCatalogo, type ProdutoIdentificado } from "@/lib/api";
@@ -92,6 +94,7 @@ function CriativosCampanhasPage() {
 
   // Etapa 3: modal de criativos + config gerada
   const [showCriativos, setShowCriativos] = useState(false);
+  const [showDisparo, setShowDisparo] = useState(false);
   const [criativosConfig, setCriativosConfig] = useState<CriativosConfig | null>(salvo.criativosConfig ?? null);
   const [exportando, setExportando] = useState(false);
 
@@ -267,12 +270,15 @@ function CriativosCampanhasPage() {
           <h1 className="text-3xl font-bold text-zinc-900">Criativos e Campanhas</h1>
           <p className="text-zinc-500 mt-1">Fluxo guiado para montar peças e publicar ações</p>
         </div>
-        <button
-          onClick={novoFluxo}
-          className="bg-brand hover:bg-brand/90 text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
-        >
-          <Plus className="size-4" /> Novo Fluxo
-        </button>
+        <div className="flex items-center gap-3">
+          <OfertasClientesButton />
+          <button
+            onClick={novoFluxo}
+            className="bg-brand hover:bg-brand/90 text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
+          >
+            <Plus className="size-4" /> Novo Fluxo
+          </button>
+        </div>
       </div>
 
       {/* ── ETAPA 1 ──────────────────────────────────────────────────────────── */}
@@ -551,7 +557,10 @@ function CriativosCampanhasPage() {
                     ? <><Loader2 className="size-4 animate-spin" /> Preparando criativos...</>
                     : <><PlusCircle className="size-4" /> Subir na Campanha</>}
                 </button>
-                <button className="flex-1 border border-brand text-brand hover:bg-brand/5 font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition">
+                <button
+                  onClick={() => setShowDisparo(true)}
+                  className="flex-1 border border-brand text-brand hover:bg-brand/5 font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition"
+                >
                   <Send className="size-4" /> Enviar no Grupo de Ofertas
                 </button>
               </div>
@@ -567,6 +576,16 @@ function CriativosCampanhasPage() {
           configInicial={criativosConfig ?? undefined}
           onConcluir={concluirCriativos}
           onClose={() => setShowCriativos(false)}
+        />
+      )}
+
+      {/* Wizard de disparo, aberto pelo botão da etapa final (criativos prontos).
+          O disparo por cliente vive na tela cheia /ofertas-clientes. */}
+      {showDisparo && (
+        <EnviarGrupoWizard
+          produtos={produtosEncontrados.map((p) => ({ id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem }))}
+          criativosConfig={criativosConfig ?? undefined}
+          onClose={() => setShowDisparo(false)}
         />
       )}
 

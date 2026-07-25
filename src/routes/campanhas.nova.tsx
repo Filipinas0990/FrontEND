@@ -12,7 +12,13 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { CriativoCard, type LayoutCriativo, type Enquadramento } from "@/components/CriativoCard";
 import { exportarCriativoPng, baixarPng } from "@/lib/exportarCriativo";
-import { getContasAnuncio, publicarCampanha, type ContaAnuncio, type PublicarCampanhaResultado } from "@/lib/api";
+import {
+  Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios,
+  type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado,
+} from "@/lib/api";
 
 export const Route = createFileRoute("/campanhas/nova")({
   component: NovaCampanhaPage,
@@ -21,24 +27,33 @@ export const Route = createFileRoute("/campanhas/nova")({
 
 // ── Etapas do wizard ──────────────────────────────────────────────────────────
 
-const ETAPAS = [
-  { n: 1, titulo: "Cliente",      sub: "Selecione o cliente" },
-  { n: 2, titulo: "Configuração", sub: "Defina o objetivo" },
-  { n: 3, titulo: "Público",      sub: "Defina o público" },
-  { n: 4, titulo: "Criativos",    sub: "Selecione os criativos" },
-  { n: 5, titulo: "Revisão",      sub: "Revise e publique" },
-] as const;
+/** "nova" = cria campanha do zero. "conjunto" = parte de um conjunto que já roda. */
+type Modo = "nova" | "conjunto";
+
+const ETAPAS = (modo: Modo) => [
+  { n: 1, titulo: "Cliente",   sub: "Selecione o cliente" },
+  modo === "nova"
+    ? { n: 2, titulo: "Configuração", sub: "Defina o objetivo" }
+    : { n: 2, titulo: "Conjunto",     sub: "Escolha o conjunto" },
+  { n: 3, titulo: "Público",   sub: modo === "nova" ? "Defina o público" : "Revise o público" },
+  { n: 4, titulo: "Criativos", sub: "Selecione os criativos" },
+  { n: 5, titulo: "Revisão",   sub: "Revise e publique" },
+];
 
 // Subtítulo do cabeçalho por etapa
-const SUBTITULOS: Record<number, string> = {
+const SUBTITULOS = (modo: Modo): Record<number, string> => ({
   1: "Selecione o cliente que receberá esta campanha",
-  2: "Defina o objetivo da campanha",
-  3: "Defina o público e os posicionamentos da campanha",
+  2: modo === "nova"
+    ? "Defina o objetivo da campanha"
+    : "Escolha o conjunto que servirá de base para os novos anúncios",
+  3: modo === "nova"
+    ? "Defina o público e os posicionamentos da campanha"
+    : "Revise as configurações herdadas do conjunto",
   4: "Selecione os criativos e gere as copys da campanha",
   5: "Revise tudo e publique",
-};
+});
 
-const TOTAL = ETAPAS.length;
+const TOTAL = 5;
 
 const POR_PAGINA = 5;
 
@@ -61,11 +76,11 @@ const OBJETIVOS: Objetivo[] = [
 
 // ── Timeline (stepper) ─────────────────────────────────────────────────────────
 
-function Stepper({ atual }: { atual: number }) {
+function Stepper({ atual, modo }: { atual: number; modo: Modo }) {
   return (
     <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm px-6 py-6 mb-6">
       <div className="flex items-start">
-        {ETAPAS.map((e, i) => {
+        {ETAPAS(modo).map((e, i) => {
           const completa = e.n < atual;
           const ativa = e.n === atual;
           return (
@@ -105,12 +120,14 @@ function Stepper({ atual }: { atual: number }) {
 // ── Etapa 1: seleção de cliente ────────────────────────────────────────────────
 
 function EtapaCliente({
-  selecionado, onSelect, nome, onNomeChange,
+  selecionado, onSelect, nome, onNomeChange, pedirNome,
 }: {
   selecionado: string | null;
   onSelect: (c: ContaAnuncio) => void;
   nome: string;
   onNomeChange: (v: string) => void;
+  /** No modo "conjunto" a campanha já existe — não há nome a definir. */
+  pedirNome: boolean;
 }) {
   const [busca, setBusca] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -243,7 +260,7 @@ function EtapaCliente({
       )}
 
       {/* Nome da campanha */}
-      <div className="mt-6 pt-6 border-t border-zinc-100">
+      <div className={`mt-6 pt-6 border-t border-zinc-100 ${pedirNome ? "" : "hidden"}`}>
         <label className="block">
           <span className="text-sm font-semibold text-zinc-800">Nome da campanha</span>
           <p className="text-xs text-zinc-500 mb-2">Como a campanha vai aparecer no Gerenciador de Anúncios.</p>
@@ -261,6 +278,140 @@ function EtapaCliente({
 
 function iniciaisCliente(nome: string): string {
   return nome.split(" ").slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+}
+
+// ── Modal: campanha nova ou partir de um conjunto existente? ──────────────────
+
+function ModalEscolhaFluxo({ conta, onEscolher }: {
+  conta: ContaAnuncio;
+  onEscolher: (m: Modo) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div className="px-6 pt-6 pb-5 text-center">
+          <div className="size-12 rounded-full bg-brand/10 grid place-items-center mx-auto mb-4">
+            <Rocket className="size-6 text-brand" />
+          </div>
+          <h3 className="text-lg font-bold text-zinc-900">Criar uma nova campanha?</h3>
+          <p className="text-sm text-zinc-500 mt-1.5">
+            Para <b className="text-zinc-700">{conta.nome}</b>.
+          </p>
+          <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
+            Escolhendo “Não”, você parte de um conjunto que já está rodando:
+            revisa as configurações dele e sobe só os criativos novos.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 px-6 pb-6">
+          <button
+            onClick={() => onEscolher("conjunto")}
+            className="px-4 py-3 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition"
+          >
+            Não, usar um conjunto
+          </button>
+          <button
+            onClick={() => onEscolher("nova")}
+            className="px-4 py-3 rounded-lg bg-brand hover:bg-brand/90 text-white text-sm font-semibold transition shadow-sm"
+          >
+            Sim, criar nova
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Etapa 2 (modo "conjunto"): escolher o conjunto de origem ──────────────────
+
+function EtapaConjunto({ contaId, selecionado, onSelect }: {
+  contaId: string;
+  selecionado: string | null;
+  onSelect: (c: ConjuntoMeta) => void;
+}) {
+  const [busca, setBusca] = useState("");
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["conjuntos-conta", contaId],
+    queryFn: () => getConjuntosDaConta(contaId),
+  });
+
+  const b = busca.toLowerCase();
+  const conjuntos = (data?.conjuntos ?? []).filter(
+    (c) => c.nome.toLowerCase().includes(b) || c.campanhaNome.toLowerCase().includes(b),
+  );
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-zinc-900">De qual conjunto vamos partir?</h2>
+      <p className="text-sm text-zinc-500 mt-1 mb-5">
+        As configurações dele (público, orçamento, destino) serão herdadas. O conjunto
+        original continua rodando intacto — criamos uma cópia para os anúncios novos.
+      </p>
+
+      <div className="relative mb-4">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por conjunto ou campanha..."
+          className="w-full pl-11 pr-4 py-3 text-sm bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-12 text-zinc-400">
+          <Loader2 className="size-5 animate-spin" /> Carregando conjuntos do Meta...
+        </div>
+      ) : error ? (
+        <p className="py-12 text-center text-sm text-red-600">{(error as Error).message}</p>
+      ) : conjuntos.length === 0 ? (
+        <p className="py-12 text-center text-sm text-zinc-400">
+          {busca ? "Nenhum conjunto bate com a busca." : "Esta conta não tem conjuntos ativos."}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {conjuntos.map((c) => {
+            const ativo = selecionado === c.id;
+            return (
+              <button
+                key={c.id}
+                onClick={() => onSelect(c)}
+                className={`w-full flex items-center gap-4 p-4 rounded-xl border text-left transition ${
+                  ativo ? "border-brand ring-1 ring-brand" : "border-zinc-200 hover:border-zinc-300"
+                }`}
+              >
+                <span className={`shrink-0 size-5 rounded-full border-2 grid place-items-center ${ativo ? "border-brand" : "border-zinc-300"}`}>
+                  {ativo && <span className="size-2.5 rounded-full bg-brand" />}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-zinc-900 truncate">{c.nome}</p>
+                  {c.campanhaNome && (
+                    <p className="text-xs text-zinc-400 mt-0.5 truncate">em {c.campanhaNome}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-zinc-500">
+                    <span className="inline-flex items-center gap-1"><Wallet className="size-3" />{brl(c.orcamentoDiario)}/dia</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="size-3" />{c.generos}
+                      {c.idadeMin !== null && ` · ${c.idadeMin}–${c.idadeMax}`}
+                    </span>
+                    {c.destinoWhatsapp && (
+                      <span className="inline-flex items-center gap-1 text-emerald-600">
+                        <MessageCircle className="size-3" />WhatsApp
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
+                  c.ativa ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                }`}>
+                  {c.status}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Etapa 2: objetivo da campanha ─────────────────────────────────────────────
@@ -405,35 +556,19 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
 
         {/* Idade */}
         <div className="mt-6">
-          <p className="font-semibold text-zinc-800 text-sm">Qual faixa etária é o seu alvo?</p>
-          <p className="text-xs text-zinc-500 mb-3">Selecione a idade mínima e máxima.</p>
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className="text-xs font-medium text-zinc-500">Idade mínima</span>
-              <select
-                value={valor.idadeMin}
-                onChange={(e) => set({ idadeMin: Math.min(Number(e.target.value), valor.idadeMax) })}
-                className="mt-1 w-full px-3 py-2.5 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-              >
-                {IDADES.filter((a) => a <= valor.idadeMax).map((a) => <option key={a} value={a}>{labelIdade(a)}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-zinc-500">Idade máxima</span>
-              <select
-                value={valor.idadeMax}
-                onChange={(e) => set({ idadeMax: Math.max(Number(e.target.value), valor.idadeMin) })}
-                className="mt-1 w-full px-3 py-2.5 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-              >
-                {IDADES.filter((a) => a >= valor.idadeMin).map((a) => <option key={a} value={a}>{labelIdade(a)}</option>)}
-              </select>
-            </label>
+          <div className="flex items-baseline justify-between gap-3">
+            <div>
+              <p className="font-semibold text-zinc-800 text-sm">Qual faixa etária é o seu alvo?</p>
+              <p className="text-xs text-zinc-500">Arraste as bolinhas para definir a idade mínima e máxima.</p>
+            </div>
+            <span className="shrink-0 text-sm font-bold text-brand bg-brand/5 border border-brand/10 rounded-lg px-3 py-1.5">
+              {labelIdade(valor.idadeMin)} a {labelIdade(valor.idadeMax)} anos
+            </span>
           </div>
-          <p className="text-[11px] text-zinc-400 mt-3">Faixas disponíveis: 18, 20, 25, 30, 35… até 65+</p>
 
           {/* Slider duplo */}
           <SliderPrimitive.Root
-            className="relative flex items-center select-none touch-none w-full h-5 mt-2"
+            className="relative flex items-center select-none touch-none w-full h-5 mt-6"
             min={0}
             max={IDADES.length - 1}
             step={1}
@@ -530,19 +665,7 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
       <BlocoNumerado n={3} titulo="Orçamento e período" desc="Defina quanto investir por dia e quando a campanha vai rodar.">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Orçamento diário */}
-          <label className="block">
-            <span className="text-xs font-medium text-zinc-500">Orçamento diário</span>
-            <div className="mt-1 flex items-center gap-1 border border-zinc-200 rounded-lg px-3 focus-within:ring-2 focus-within:ring-brand/20 focus-within:border-brand">
-              <span className="text-sm font-semibold text-zinc-400">R$</span>
-              <input
-                type="number" min={5} step={1}
-                value={valor.orcamentoDiario}
-                onChange={(e) => set({ orcamentoDiario: Math.max(0, Number(e.target.value)) })}
-                className="w-full py-2.5 text-sm text-zinc-800 focus:outline-none bg-transparent"
-              />
-            </div>
-            <span className="text-[11px] text-zinc-400 mt-1 block">Mínimo recomendado: R$ 5/dia.</span>
-          </label>
+          <CampoOrcamento valor={valor.orcamentoDiario} onChange={(v) => set({ orcamentoDiario: v })} />
 
           {/* Data de início */}
           <label className="block">
@@ -574,9 +697,58 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
   );
 }
 
-// Formata reais para exibição
+// ── Formatação de moeda (pt-BR) ───────────────────────────────────────────────
+
+const FMT_BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const FMT_NUM = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Formata reais para exibição — R$ 1.234,56
 function brl(v: number): string {
-  return `R$ ${v.toFixed(2).replace(".", ",")}`;
+  return FMT_BRL.format(v);
+}
+
+const ORCAMENTO_MINIMO = 5;
+
+/**
+ * Campo de orçamento com máscara automática de moeda.
+ * O gestor digita só números e o valor é formatado como reais na hora
+ * (ex: 2000 → 20,00). Nunca fica em estado vazio ou inválido.
+ */
+function CampoOrcamento({ valor, onChange }: { valor: number; onChange: (reais: number) => void }) {
+  const [texto, setTexto] = useState(() => FMT_NUM.format(valor));
+  const abaixoDoMinimo = valor < ORCAMENTO_MINIMO;
+
+  function digitar(bruto: string) {
+    // Só os dígitos importam; os 2 últimos são os centavos. Teto evita overflow visual.
+    const centavos = Number(bruto.replace(/\D/g, "").slice(0, 9));
+    const reais = centavos / 100;
+    setTexto(FMT_NUM.format(reais));
+    onChange(reais);
+  }
+
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-zinc-500">Orçamento diário</span>
+      <div className={`mt-1 flex items-center gap-1 border rounded-lg px-3 transition focus-within:ring-2 ${
+        abaixoDoMinimo
+          ? "border-red-300 focus-within:ring-red-100 focus-within:border-red-400"
+          : "border-zinc-200 focus-within:ring-brand/20 focus-within:border-brand"
+      }`}>
+        <span className="text-sm font-semibold text-zinc-400">R$</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={texto}
+          onChange={(e) => digitar(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          className="w-full py-2.5 text-sm text-zinc-800 text-right tabular-nums focus:outline-none bg-transparent"
+        />
+      </div>
+      <span className={`text-[11px] mt-1 block ${abaixoDoMinimo ? "text-red-500" : "text-zinc-400"}`}>
+        {abaixoDoMinimo ? `O Meta exige no mínimo ${brl(ORCAMENTO_MINIMO)}/dia.` : `Serão investidos ${brl(valor)} por dia.`}
+      </span>
+    </label>
+  );
 }
 
 function ResumoItem({ icon: Icon, rotulo, valor }: { icon: typeof Users; rotulo: string; valor: string }) {
@@ -917,16 +1089,35 @@ function OpcoesCopy({ rotulo, opcoes, selecionado, onSelect, vazio }: {
 
 // ── Etapa 5: revisão — mostra o JSON detalhado que irá para a IA ──────────────
 
-function EtapaRevisao({ payload, resultado }: { payload: object; resultado: PublicarCampanhaResultado | null }) {
+function EtapaRevisao({ payload, resultado, modo }: {
+  payload: object;
+  resultado: PublicarCampanhaResultado | NovosAnunciosResultado | null;
+  modo: Modo;
+}) {
   if (resultado) {
+    const novaCampanha = "campanhaId" in resultado;
     return (
       <div>
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-start gap-3">
           <CheckCircle2 className="size-6 text-emerald-600 shrink-0" />
           <div className="min-w-0">
-            <p className="font-bold text-emerald-900">Campanha criada no Meta! 🎉</p>
+            <p className="font-bold text-emerald-900">
+              {novaCampanha ? "Campanha criada no Meta! 🎉" : "Novos anúncios publicados! 🎉"}
+            </p>
             <p className="text-sm text-emerald-700 mt-1">
-              ID: <span className="font-mono">{resultado.campanhaId}</span> — está <b>ativa</b>.
+              {novaCampanha ? (
+                <>ID: <span className="font-mono">{resultado.campanhaId}</span> — está <b>ativa</b>.</>
+              ) : (
+                <>
+                  Cópia do conjunto: <span className="font-mono">{resultado.conjuntoId}</span> —
+                  criada <b>pausada</b>. O conjunto original segue rodando intacto.
+                </>
+              )}
+            </p>
+            <p className="text-sm text-emerald-700 mt-1">
+              {resultado.anuncioIds.length === 1
+                ? "1 anúncio criado no conjunto."
+                : `${resultado.anuncioIds.length} anúncios criados no mesmo conjunto — o Meta vai rotacionar e entregar mais o que performar melhor.`}
             </p>
             <a
               href={resultado.linkGerenciador} target="_blank" rel="noopener noreferrer"
@@ -958,7 +1149,9 @@ function EtapaRevisao({ payload, resultado }: { payload: object; resultado: Publ
     <div>
       <h2 className="text-xl font-bold text-zinc-900">Revise antes de publicar</h2>
       <p className="text-sm text-zinc-500 mt-1 mb-5">
-        Estas são todas as informações que o sistema enviará para a IA criar a campanha.
+        {modo === "conjunto"
+          ? "Vamos criar uma cópia do conjunto escolhido com estas configurações e subir os criativos novos dentro dela. O conjunto original não será alterado."
+          : "Estas são todas as informações que o sistema enviará ao Meta para criar a campanha."}
       </p>
       <div className="rounded-xl border border-zinc-200 bg-zinc-900 overflow-hidden">
         <div className="px-4 py-2 border-b border-zinc-700 flex items-center justify-between">
@@ -975,6 +1168,12 @@ function EtapaRevisao({ payload, resultado }: { payload: object; resultado: Publ
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
+// Nome sugerido a partir da conta ("BM02 - Fulano" → "Fulano — Ofertas")
+function sugerirNomeCampanha(c: ContaAnuncio): string {
+  const base = (c.cliente || c.nome || "Campanha").replace(/^BM\d+\s*-\s*/i, "").trim();
+  return `${base} — Ofertas`;
+}
+
 function NovaCampanhaPage() {
   const navigate = useNavigate();
   const [passo, setPasso] = useState(1);
@@ -984,34 +1183,93 @@ function NovaCampanhaPage() {
   const [nomeCampanha, setNomeCampanha] = useState("");
   const [objetivo, setObjetivo] = useState<Objetivo | null>(null);
 
-  // Ao selecionar a conta, sugere um nome (se ainda não foi digitado)
+  // Fluxo escolhido no modal que abre logo após selecionar o cliente.
+  const [modo, setModo] = useState<Modo>("nova");
+  const [perguntando, setPerguntando] = useState<ContaAnuncio | null>(null);
+  const [conjunto, setConjunto] = useState<ConjuntoMeta | null>(null);
+
+  // Ao selecionar a conta, sugere um nome e pergunta qual fluxo seguir
   function selecionarConta(c: ContaAnuncio) {
     setCliente(c);
-    if (!nomeCampanha.trim()) {
-      const base = (c.cliente || c.nome || "Campanha").replace(/^BM\d+\s*-\s*/i, "").trim();
-      setNomeCampanha(`${base} — Ofertas`);
-    }
+    if (!nomeCampanha.trim()) setNomeCampanha(sugerirNomeCampanha(c));
+    setPerguntando(c);
+  }
+
+  /** Conjunto escolhido: herda as configurações dele na etapa de público. */
+  function selecionarConjunto(c: ConjuntoMeta) {
+    setConjunto(c);
+    setPublico((p) => ({
+      ...p,
+      genero:          c.genero,
+      idadeMin:        c.idadeMin ?? p.idadeMin,
+      idadeMax:        c.idadeMax ?? p.idadeMax,
+      orcamentoDiario: c.orcamentoDiario || p.orcamentoDiario,
+      dataInicio:      c.dataInicio || p.dataInicio,
+      dataFim:         c.dataFim || "",
+    }));
   }
   const [publico, setPublico] = useState<Publico>(PUBLICO_PADRAO);
   const [criativosData, setCriativosData] = useState<CriativosResultado>(CRIATIVOS_DATA_VAZIO);
 
   const [publicando, setPublicando] = useState(false);
-  const [resultado, setResultado] = useState<PublicarCampanhaResultado | null>(null);
+  const [resultado, setResultado] = useState<PublicarCampanhaResultado | NovosAnunciosResultado | null>(null);
+  const [confirmarAberto, setConfirmarAberto] = useState(false);
 
   const progresso = Math.round((passo / TOTAL) * 100);
 
   async function publicar() {
     if (publicando) return;
+    setConfirmarAberto(false);
     setPublicando(true);
     try {
-      const r = await publicarCampanha(montarPayload(true));
-      setResultado(r);
-      toast.success("Campanha criada no Meta!");
+      if (modo === "conjunto" && conjunto) {
+        const r = await publicarNovosAnuncios(conjunto.id, montarPayloadConjunto());
+        setResultado(r);
+        toast.success("Novos anúncios publicados!");
+      } else {
+        const r = await publicarCampanha(montarPayload(true));
+        setResultado(r);
+        toast.success("Campanha criada no Meta!");
+      }
     } catch (err) {
-      toast.error((err as Error)?.message ?? "Erro ao publicar a campanha.");
+      toast.error((err as Error)?.message ?? "Erro ao publicar.");
     } finally {
       setPublicando(false);
     }
+  }
+
+  /** Payload do modo "conjunto": cópia do conjunto + configs revisadas + criativos. */
+  function montarPayloadConjunto() {
+    return {
+      conta: cliente && {
+        id: cliente.id, nome: cliente.nome, cliente: cliente.cliente,
+      },
+      conjuntoOrigem:  conjunto && { id: conjunto.id, nome: conjunto.nome, campanha: conjunto.campanhaNome },
+      nomeConjunto:    conjunto?.nome,
+      destinoWhatsapp: conjunto?.destinoWhatsapp ?? false,
+      publico: {
+        genero:   publico.genero,
+        idadeMin: publico.idadeMin,
+        idadeMax: publico.idadeMax,
+      },
+      orcamento: {
+        diarioReais:    publico.orcamentoDiario,
+        diarioCentavos: Math.round(publico.orcamentoDiario * 100),
+        dataInicio:     publico.dataInicio,
+        dataFim:        publico.dataFim || null,
+      },
+      criativos: {
+        itens: criativosData.selecionados.map((c) => ({
+          nome: c.nome, preco: c.preco, pngBase64: c.pngBase64,
+        })),
+        copy: {
+          textoPrincipal: criativosData.textoPrincipal,
+          titulo:         criativosData.titulo,
+          descricao:      criativosData.descricao,
+        },
+      },
+      ativar: false,   // a cópia nasce pausada para o gestor conferir
+    };
   }
 
   // Monta o JSON da campanha. incluirPng=true anexa os PNGs (para publicar);
@@ -1059,9 +1317,12 @@ function NovaCampanhaPage() {
   }
 
   function podeAvancar(): boolean {
-    if (passo === 1) return cliente !== null && nomeCampanha.trim().length > 0;
-    if (passo === 2) return objetivo !== null;
-    if (passo === 3) return publico.orcamentoDiario >= 5 && publico.dataInicio !== "";
+    if (passo === 1) {
+      if (cliente === null) return false;
+      return modo === "conjunto" || nomeCampanha.trim().length > 0;
+    }
+    if (passo === 2) return modo === "conjunto" ? conjunto !== null : objetivo !== null;
+    if (passo === 3) return publico.orcamentoDiario >= ORCAMENTO_MINIMO && publico.dataInicio !== "";
     if (passo === 4) return criativosData.selecionados.length > 0;
     return true;
   }
@@ -1080,28 +1341,57 @@ function NovaCampanhaPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Nova Campanha</h1>
-          <p className="text-zinc-500 mt-1">{SUBTITULOS[passo]}</p>
+          <h1 className="text-2xl font-bold text-zinc-900">Campanhas</h1>
+          <p className="text-zinc-500 mt-1">{SUBTITULOS(modo)[passo]}</p>
         </div>
         <button
-          onClick={() => navigate({ to: "/acoes" })}
+          onClick={() => navigate({ to: "/anuncios" })}
           className="flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
         >
-          <ArrowLeft className="size-4" /> Voltar para Ações
+          <ArrowLeft className="size-4" /> Voltar
         </button>
       </div>
 
       {/* Timeline */}
-      <Stepper atual={passo} />
+      <Stepper atual={passo} modo={modo} />
 
       {/* Conteúdo da etapa */}
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6 md:p-8 mb-6">
-        {passo === 1 && <EtapaCliente selecionado={cliente?.id ?? null} onSelect={selecionarConta} nome={nomeCampanha} onNomeChange={setNomeCampanha} />}
-        {passo === 2 && <EtapaObjetivo selecionado={objetivo?.codigo ?? null} onSelect={setObjetivo} />}
+        {passo === 1 && (
+          <EtapaCliente
+            selecionado={cliente?.id ?? null}
+            onSelect={selecionarConta}
+            nome={nomeCampanha}
+            onNomeChange={setNomeCampanha}
+            pedirNome={modo === "nova"}
+          />
+        )}
+        {passo === 2 && (modo === "conjunto"
+          ? <EtapaConjunto contaId={cliente!.id} selecionado={conjunto?.id ?? null} onSelect={selecionarConjunto} />
+          : <EtapaObjetivo selecionado={objetivo?.codigo ?? null} onSelect={setObjetivo} />)}
         {passo === 3 && <EtapaPublico valor={publico} onChange={setPublico} />}
         {passo === 4 && <EtapaCriativos onChange={setCriativosData} />}
-        {passo === 5 && <EtapaRevisao payload={montarPayload()} resultado={resultado} />}
+        {passo === 5 && (
+          <EtapaRevisao
+            payload={modo === "conjunto" ? montarPayloadConjunto() : montarPayload()}
+            resultado={resultado}
+            modo={modo}
+          />
+        )}
       </div>
+
+      {perguntando && (
+        <ModalEscolhaFluxo
+          conta={perguntando}
+          onEscolher={(m) => {
+            setModo(m);
+            setPerguntando(null);
+            // "Não" já pula para a escolha do conjunto — o cliente foi definido
+            // no clique que abriu este modal, não há mais nada a fazer na etapa 1.
+            if (m === "conjunto") setPasso(2);
+          }}
+        />
+      )}
 
       {/* Footer com progresso */}
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm px-6 py-4 flex items-center gap-4 sticky bottom-4">
@@ -1125,7 +1415,7 @@ function NovaCampanhaPage() {
             </button>
           )}
           <button
-            onClick={() => navigate({ to: "/acoes" })}
+            onClick={() => navigate({ to: "/anuncios" })}
             className="px-4 py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 transition"
           >
             Cancelar
@@ -1140,7 +1430,7 @@ function NovaCampanhaPage() {
             </button>
           ) : (
             <button
-              onClick={publicar}
+              onClick={() => setConfirmarAberto(true)}
               disabled={publicando || resultado !== null}
               className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
             >
@@ -1153,6 +1443,33 @@ function NovaCampanhaPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={confirmarAberto} onOpenChange={setConfirmarAberto}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Tem certeza que deseja publicar essas alterações?</DialogTitle>
+            <DialogDescription>
+              {modo === "conjunto"
+                ? "Uma cópia do conjunto será criada no Meta com os novos anúncios."
+                : "A campanha será criada no Meta e entrará no ar."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => setConfirmarAberto(false)}
+              className="px-4 py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={publicar}
+              className="bg-brand hover:bg-brand/90 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 transition shadow-sm"
+            >
+              <Rocket className="size-4" /> Sim, publicar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

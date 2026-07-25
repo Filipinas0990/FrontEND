@@ -7,7 +7,6 @@ import {
   Activity,
   Play,
   LogOut,
-  Users,
   Trophy,
   CalendarDays,
   RefreshCw,
@@ -16,7 +15,6 @@ import {
   AlertTriangle,
   XCircle,
   Megaphone,
-  UserPlus,
   Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +26,7 @@ import {
   getPreviewPipeline,
   getGestores,
   getWhatsAppStatus,
+  getOfertasPendentes,
   type PipelinePreview,
 } from "@/lib/api";
 import { usePipelineContext } from "@/contexts/PipelineContext";
@@ -417,21 +416,39 @@ export function AppShell({ title, children, headerRight, hideHeader }: AppShellP
     enabled: !!getToken(),
   });
 
+  // Pedidos de oferta que os donos das farmácias enviaram e ainda não viraram disparo
+  const { data: ofertasPendentes } = useQuery({
+    queryKey: ["ofertas-pendentes"],
+    queryFn: getOfertasPendentes,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    retry: false,
+    enabled: !!getToken(),
+  });
+
+  const totalPendentes = ofertasPendentes?.total ?? 0;
+
   const navItems = [
     { icon: Home,            label: "Início",         to: "/novidades" as const,        badge: undefined as ReactNode },
     { icon: LayoutDashboard, label: "Painel Geral",   to: "/" as const,                 badge: undefined as ReactNode },
+    // "Em Entrada" saiu da sidebar — agora é uma aba dentro de Farmácias (FarmaciasTabs)
     { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const,        badge: undefined as ReactNode },
-    ...(isAdminUser
-      ? [{ icon: UserPlus, label: "Em Entrada", to: "/farmacias/entrada" as const, badge: undefined as ReactNode }]
-      : []),
     { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const,         badge: undefined as ReactNode },
    // { icon: Zap,             label: "Ações",          to: "/acoes" as const,            badge: undefined as ReactNode },
-    { icon: Megaphone,       label: "Anúncios",       to: "/anuncios" as const,         badge: undefined as ReactNode },
+    {
+      icon: Megaphone,
+      label: "Anúncios",
+      to: "/anuncios" as const,
+      badge: totalPendentes > 0
+        ? <span
+            title={`${totalPendentes} cliente(s) enviaram lista de ofertas`}
+            className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-amber-400 text-brand text-[11px] font-bold grid place-items-center shrink-0"
+          >{totalPendentes}</span>
+        : undefined as ReactNode,
+    },
     //{ icon: Trophy,          label: "Ranking",        to: "/ranking-gestores" as const, badge: undefined as ReactNode },
     { icon: LineChart,       label: "Relatórios",     to: "/relatorios" as const,       badge: undefined as ReactNode },
-    ...(isAdminUser
-      ? [{ icon: Users, label: "Gestores", to: "/gestores" as const, badge: undefined as ReactNode }]
-      : []),
+    // "Gestores" saiu da sidebar — agora é um card dentro de Configurações
     {
       icon: SlidersHorizontal,
       label: "Configurações",

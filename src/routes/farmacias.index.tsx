@@ -4,6 +4,7 @@ import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Sett
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { FarmaciasTabs } from "@/components/FarmaciasTabs";
 import { usePeriod } from "@/contexts/PeriodContext";
 import { PeriodSelector } from "@/components/PeriodSelector";
 import { PeriodBadge } from "@/components/PeriodBadge";
@@ -646,6 +647,8 @@ function FarmaciasPage() {
         </div>
       }
     >
+      <FarmaciasTabs />
+
       {/* Seletor de período */}
       <PeriodSelector
         value={period}

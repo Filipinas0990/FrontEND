@@ -1,13 +1,8 @@
 import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, UploadCloud, Trash2, Loader2, ImageIcon, Check } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { X, UploadCloud, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
-import {
-  listarCatalogoProdutos,
-  cadastrarCatalogoProduto,
-  deletarCatalogoProduto,
-  catalogoImagemUrl,
-} from "@/lib/api";
+import { cadastrarCatalogoProduto } from "@/lib/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -31,7 +26,7 @@ interface ArquivoPendente {
   preview: string;
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
+// ── Modal (somente upload — a listagem fica na tela /banco-imagens) ─────────────
 
 export function BancoImagensModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -39,24 +34,6 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
   const [pendentes, setPendentes] = useState<ArquivoPendente[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [arrastando, setArrastando] = useState(false);
-
-  // Lista de produtos já no banco
-  const { data, isLoading } = useQuery({
-    queryKey: ["catalogo-produtos"],
-    queryFn: listarCatalogoProdutos,
-  });
-  const produtos = data?.produtos ?? [];
-
-  // Excluir produto
-  const excluir = useMutation({
-    mutationFn: (id: number) => deletarCatalogoProduto(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["catalogo-produtos"] });
-      qc.invalidateQueries({ queryKey: ["catalogo-status"] });
-      toast.success("Imagem removida do banco.");
-    },
-    onError: () => toast.error("Erro ao remover imagem."),
-  });
 
   // ── Seleção de arquivos ─────────────────────────────────────────────────────
 
@@ -122,7 +99,10 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
     setPendentes([]);
     qc.invalidateQueries({ queryKey: ["catalogo-produtos"] });
     qc.invalidateQueries({ queryKey: ["catalogo-status"] });
-    if (ok > 0) toast.success(`${ok} imagem(ns) salva(s) no banco!`);
+    if (ok > 0) {
+      toast.success(`${ok} imagem(ns) salva(s) no banco!`);
+      onClose();
+    }
   }
 
   return (
@@ -131,13 +111,13 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
           <div>
-            <h2 className="text-lg font-bold text-zinc-900">Banco de Imagens</h2>
+            <h2 className="text-lg font-bold text-zinc-900">Adicionar Imagens</h2>
             <p className="text-xs text-zinc-500 mt-0.5">
               Suba as fotos dos produtos para usar nos criativos.
             </p>
@@ -214,50 +194,6 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           )}
-
-          {/* Imagens já no banco */}
-          <div>
-            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
-              No banco {produtos.length > 0 && `(${produtos.length})`}
-            </p>
-            {isLoading ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-zinc-400">
-                <Loader2 className="size-5 animate-spin" /> Carregando...
-              </div>
-            ) : produtos.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8 text-zinc-400">
-                <ImageIcon className="size-8 text-zinc-300" />
-                <p className="text-sm">Nenhuma imagem no banco ainda.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {produtos.map((prod) => (
-                  <div key={prod.id} className="group relative border border-zinc-200 rounded-xl overflow-hidden bg-white">
-                    <div className="aspect-square bg-zinc-100 grid place-items-center">
-                      <img
-                        src={catalogoImagemUrl(prod.id)}
-                        alt={prod.nome}
-                        className="size-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                    <div className="p-2">
-                      <p className="text-xs font-medium text-zinc-700 truncate" title={prod.nome}>{prod.nome}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (confirm(`Remover "${prod.nome}" do banco?`)) excluir.mutate(prod.id);
-                      }}
-                      className="absolute top-1.5 right-1.5 size-7 rounded-lg bg-white/90 border border-zinc-200 grid place-items-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white hover:border-red-500 transition"
-                      title="Remover"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

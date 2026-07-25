@@ -7,6 +7,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { FarmaciasTabs } from "@/components/FarmaciasTabs";
 import {
   getFarmacias, getGestores, createFarmacia, updateFarmacia,
   deleteFarmacia, ativarFarmacia, type Farmacia, type Gestor,
@@ -384,7 +385,7 @@ function EntradaPage() {
 
   return (
     <AppShell
-      title="Clientes em Entrada"
+      title="Farmácias"
       headerRight={
         <div className="flex items-center gap-2">
           {isFetching && !isLoading && (
@@ -408,6 +409,8 @@ function EntradaPage() {
         </div>
       }
     >
+      <FarmaciasTabs />
+
       {/* Barra de aviso */}
       <div className="bg-amber-50 rounded-xl ring-1 ring-amber-200 px-4 py-3 flex items-center gap-3">
         <Clock className="size-4 text-amber-500 shrink-0" />

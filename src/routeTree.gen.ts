@@ -14,11 +14,14 @@ import { Route as ReunioesRouteImport } from './routes/reunioes'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as RankingGestoresRouteImport } from './routes/ranking-gestores'
 import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as OfertasClientesRouteImport } from './routes/ofertas-clientes'
 import { Route as NovidadesRouteImport } from './routes/novidades'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as ConexoesRouteImport } from './routes/conexoes'
+import { Route as BancoImagensRouteImport } from './routes/banco-imagens'
 import { Route as AnunciosRouteImport } from './routes/anuncios'
 import { Route as AcoesRouteImport } from './routes/acoes'
 import { Route as IndexRouteImport } from './routes/index'
@@ -26,6 +29,7 @@ import { Route as ReunioesIndexRouteImport } from './routes/reunioes.index'
 import { Route as FarmaciasIndexRouteImport } from './routes/farmacias.index'
 import { Route as AcoesIndexRouteImport } from './routes/acoes.index'
 import { Route as ReunioesGerenciadorRouteImport } from './routes/reunioes.gerenciador'
+import { Route as OfertasTokenRouteImport } from './routes/ofertas.$token'
 import { Route as FarmaciasEntradaRouteImport } from './routes/farmacias.entrada'
 import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
 import { Route as CampanhasNovaRouteImport } from './routes/campanhas.nova'
@@ -56,6 +60,11 @@ const RankingRoute = RankingRouteImport.update({
   path: '/ranking',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OfertasClientesRoute = OfertasClientesRouteImport.update({
+  id: '/ofertas-clientes',
+  path: '/ofertas-clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NovidadesRoute = NovidadesRouteImport.update({
   id: '/novidades',
   path: '/novidades',
@@ -79,6 +88,16 @@ const FarmaciasRoute = FarmaciasRouteImport.update({
 const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   id: '/configuracoes',
   path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConexoesRoute = ConexoesRouteImport.update({
+  id: '/conexoes',
+  path: '/conexoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BancoImagensRoute = BancoImagensRouteImport.update({
+  id: '/banco-imagens',
+  path: '/banco-imagens',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnunciosRoute = AnunciosRouteImport.update({
@@ -116,6 +135,11 @@ const ReunioesGerenciadorRoute = ReunioesGerenciadorRouteImport.update({
   path: '/gerenciador',
   getParentRoute: () => ReunioesRoute,
 } as any)
+const OfertasTokenRoute = OfertasTokenRouteImport.update({
+  id: '/ofertas/$token',
+  path: '/ofertas/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FarmaciasEntradaRoute = FarmaciasEntradaRouteImport.update({
   id: '/entrada',
   path: '/entrada',
@@ -141,11 +165,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acoes': typeof AcoesRouteWithChildren
   '/anuncios': typeof AnunciosRoute
+  '/banco-imagens': typeof BancoImagensRoute
+  '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
+  '/ofertas-clientes': typeof OfertasClientesRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -155,6 +182,7 @@ export interface FileRoutesByFullPath {
   '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
+  '/ofertas/$token': typeof OfertasTokenRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes/': typeof AcoesIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
@@ -163,10 +191,13 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anuncios': typeof AnunciosRoute
+  '/banco-imagens': typeof BancoImagensRoute
+  '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
+  '/ofertas-clientes': typeof OfertasClientesRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -175,6 +206,7 @@ export interface FileRoutesByTo {
   '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
+  '/ofertas/$token': typeof OfertasTokenRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes': typeof AcoesIndexRoute
   '/farmacias': typeof FarmaciasIndexRoute
@@ -185,11 +217,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/acoes': typeof AcoesRouteWithChildren
   '/anuncios': typeof AnunciosRoute
+  '/banco-imagens': typeof BancoImagensRoute
+  '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
+  '/ofertas-clientes': typeof OfertasClientesRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -199,6 +234,7 @@ export interface FileRoutesById {
   '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
   '/farmacias/entrada': typeof FarmaciasEntradaRoute
+  '/ofertas/$token': typeof OfertasTokenRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes/': typeof AcoesIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
@@ -210,11 +246,14 @@ export interface FileRouteTypes {
     | '/'
     | '/acoes'
     | '/anuncios'
+    | '/banco-imagens'
+    | '/conexoes'
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
     | '/login'
     | '/novidades'
+    | '/ofertas-clientes'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -224,6 +263,7 @@ export interface FileRouteTypes {
     | '/campanhas/nova'
     | '/farmacias/$id'
     | '/farmacias/entrada'
+    | '/ofertas/$token'
     | '/reunioes/gerenciador'
     | '/acoes/'
     | '/farmacias/'
@@ -232,10 +272,13 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/anuncios'
+    | '/banco-imagens'
+    | '/conexoes'
     | '/configuracoes'
     | '/gestores'
     | '/login'
     | '/novidades'
+    | '/ofertas-clientes'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -244,6 +287,7 @@ export interface FileRouteTypes {
     | '/campanhas/nova'
     | '/farmacias/$id'
     | '/farmacias/entrada'
+    | '/ofertas/$token'
     | '/reunioes/gerenciador'
     | '/acoes'
     | '/farmacias'
@@ -253,11 +297,14 @@ export interface FileRouteTypes {
     | '/'
     | '/acoes'
     | '/anuncios'
+    | '/banco-imagens'
+    | '/conexoes'
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
     | '/login'
     | '/novidades'
+    | '/ofertas-clientes'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -267,6 +314,7 @@ export interface FileRouteTypes {
     | '/campanhas/nova'
     | '/farmacias/$id'
     | '/farmacias/entrada'
+    | '/ofertas/$token'
     | '/reunioes/gerenciador'
     | '/acoes/'
     | '/farmacias/'
@@ -277,17 +325,21 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcoesRoute: typeof AcoesRouteWithChildren
   AnunciosRoute: typeof AnunciosRoute
+  BancoImagensRoute: typeof BancoImagensRoute
+  ConexoesRoute: typeof ConexoesRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
   GestoresRoute: typeof GestoresRoute
   LoginRoute: typeof LoginRoute
   NovidadesRoute: typeof NovidadesRoute
+  OfertasClientesRoute: typeof OfertasClientesRoute
   RankingRoute: typeof RankingRoute
   RankingGestoresRoute: typeof RankingGestoresRoute
   RelatoriosRoute: typeof RelatoriosRoute
   ReunioesRoute: typeof ReunioesRouteWithChildren
   SetupRoute: typeof SetupRoute
   CampanhasNovaRoute: typeof CampanhasNovaRoute
+  OfertasTokenRoute: typeof OfertasTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -327,6 +379,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RankingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ofertas-clientes': {
+      id: '/ofertas-clientes'
+      path: '/ofertas-clientes'
+      fullPath: '/ofertas-clientes'
+      preLoaderRoute: typeof OfertasClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/novidades': {
       id: '/novidades'
       path: '/novidades'
@@ -360,6 +419,20 @@ declare module '@tanstack/react-router' {
       path: '/configuracoes'
       fullPath: '/configuracoes'
       preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conexoes': {
+      id: '/conexoes'
+      path: '/conexoes'
+      fullPath: '/conexoes'
+      preLoaderRoute: typeof ConexoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/banco-imagens': {
+      id: '/banco-imagens'
+      path: '/banco-imagens'
+      fullPath: '/banco-imagens'
+      preLoaderRoute: typeof BancoImagensRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/anuncios': {
@@ -410,6 +483,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/reunioes/gerenciador'
       preLoaderRoute: typeof ReunioesGerenciadorRouteImport
       parentRoute: typeof ReunioesRoute
+    }
+    '/ofertas/$token': {
+      id: '/ofertas/$token'
+      path: '/ofertas/$token'
+      fullPath: '/ofertas/$token'
+      preLoaderRoute: typeof OfertasTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/farmacias/entrada': {
       id: '/farmacias/entrada'
@@ -488,17 +568,21 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcoesRoute: AcoesRouteWithChildren,
   AnunciosRoute: AnunciosRoute,
+  BancoImagensRoute: BancoImagensRoute,
+  ConexoesRoute: ConexoesRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   FarmaciasRoute: FarmaciasRouteWithChildren,
   GestoresRoute: GestoresRoute,
   LoginRoute: LoginRoute,
   NovidadesRoute: NovidadesRoute,
+  OfertasClientesRoute: OfertasClientesRoute,
   RankingRoute: RankingRoute,
   RankingGestoresRoute: RankingGestoresRoute,
   RelatoriosRoute: RelatoriosRoute,
   ReunioesRoute: ReunioesRouteWithChildren,
   SetupRoute: SetupRoute,
   CampanhasNovaRoute: CampanhasNovaRoute,
+  OfertasTokenRoute: OfertasTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

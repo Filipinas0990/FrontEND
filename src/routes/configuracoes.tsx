@@ -1,155 +1,136 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Key, Database, Bell, User, MessageSquareMore, Images, UploadCloud } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { toast } from "sonner";
+import {
+  Waypoints,
+  Users,
+  Images,
+  Puzzle,
+  BarChart3,
+  Bell,
+  Tags,
+  Zap,
+  Star,
+  CalendarClock,
+  Settings,
+  Lock,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WhatsAppSection } from "@/components/WhatsAppSection";
-import { BancoImagensModal } from "@/components/BancoImagensModal";
-import { getCatalogoStatus } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 
 export const Route = createFileRoute("/configuracoes")({
   component: ConfigPage,
   head: () => ({ meta: [{ title: "Configurações — GrupoSymbol" }] }),
 });
 
-function ConfigPage() {
-  const [showKey, setShowKey] = useState(false);
-  const [showBancoImagens, setShowBancoImagens] = useState(false);
+type CardItem = {
+  icon: typeof Users;
+  label: string;
+  onClick?: () => void; // ativo (abre modal / ação)
+  to?: string; // ativo (navega)
+  locked?: boolean; // futuro (cadeado)
+};
 
-  const { data: catalogo } = useQuery({
-    queryKey: ["catalogo-status"],
-    queryFn: getCatalogoStatus,
-  });
+function ConfigPage() {
+  const isAdmin = getUser()?.is_admin === true;
+
+  // 11 cards → 6 em cima, 5 embaixo (igual ao print).
+  // Ativos: Conexões, Gestores (só admin) e Banco de Imagens. O resto é futuro (cadeado).
+  const cards: CardItem[] = [
+    { icon: Waypoints, label: "Conexões", to: "/conexoes" },
+    isAdmin
+      ? { icon: Users, label: "Gestores", to: "/gestores" }
+      : { icon: Users, label: "Gestores", locked: true },
+    { icon: Images, label: "Banco de Imagens", to: "/banco-imagens" },
+    { icon: Puzzle, label: "Integrações de API", locked: true },
+    { icon: BarChart3, label: "Power BI", locked: true },
+    { icon: Bell, label: "Notificações", locked: true },
+    { icon: Tags, label: "Etiquetas", locked: true },
+    { icon: Zap, label: "Mensagens Rápidas", locked: true },
+    { icon: Star, label: "Pesquisas de Satisfação", locked: true },
+    { icon: CalendarClock, label: "Mensagens Agendadas", locked: true },
+    { icon: Settings, label: "Configurações Gerais", locked: true },
+  ];
 
   return (
     <AppShell title="Configurações">
-      <Section icon={User} title="Conta da Agência" desc="Informações públicas da sua agência.">
-        <Field label="Nome da Agência" defaultValue="Agência Alpha" />
-        <Field label="E-mail Principal" defaultValue="contato@agenciaalpha.com.br" />
-        <Field label="Fuso Horário" defaultValue="America/Sao_Paulo" />
-      </Section>
+      <div className="text-center max-w-3xl mx-auto">
+        <h2 className="text-2xl font-bold text-zinc-900">Administração</h2>
+        <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
+          Personalize o sistema de acordo com a operação do seu grupo. Aqui você
+          gerencia as conexões, a equipe de gestores e o banco de imagens usado
+          nos criativos. Os demais recursos vão sendo liberados por aqui. 🚀
+        </p>
+      </div>
 
-      <Section
-        icon={Images}
-        title="Banco de Imagens"
-        desc="Fotos dos produtos usadas para gerar os criativos automaticamente."
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-zinc-600">
-            {catalogo
-              ? <><span className="font-semibold text-zinc-900">{catalogo.total}</span> imagem(ns) no banco</>
-              : "Carregando..."}
-          </p>
-          <button
-            onClick={() => setShowBancoImagens(true)}
-            className="bg-brand hover:bg-brand/90 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm"
-          >
-            <UploadCloud className="size-4" /> Subir imagens
-          </button>
-        </div>
-      </Section>
-
-      <Section icon={Key} title="Integrações de API" desc="Tokens utilizados pelo script Python para coletar dados.">
-        <Field label="Meta Ads Access Token" defaultValue="EAAJk7Z...••••••••••••3Xq2" type={showKey ? "text" : "password"} />
-        <Field label="Google Ads Refresh Token" defaultValue="1//0g...••••••••••••a7Yz" type={showKey ? "text" : "password"} />
-        <label className="flex items-center gap-2 text-xs text-zinc-600">
-          <input type="checkbox" checked={showKey} onChange={(e) => setShowKey(e.target.checked)} />
-          Mostrar tokens
-        </label>
-      </Section>
-
-      <Section icon={Database} title="Power BI" desc="Workspace e dataset de destino dos relatórios semanais.">
-        <Field label="Workspace ID" defaultValue="b3f9c2e1-7d4a-4b8e-9f12-a5c6d7e8f9a0" />
-        <Field label="Dataset" defaultValue="pharmaflow_weekly_v4" />
-        <Field label="Endpoint Push" defaultValue="https://api.powerbi.com/beta/..." />
-      </Section>
-
-      <Section icon={Bell} title="Notificações" desc="Receba avisos quando algo precisar de atenção.">
-        <Toggle label="E-mail quando uma execução falhar" defaultChecked />
-        <Toggle label="WhatsApp quando ROAS cair abaixo de 2x" defaultChecked />
-        <Toggle label="Resumo semanal por e-mail" defaultChecked={false} />
-      </Section>
-
-      <Section
-        icon={MessageSquareMore}
-        title="WhatsApp"
-        desc="Notificações automáticas de reunião enviadas às farmácias."
-      >
-        <WhatsAppSection />
-      </Section>
-
-      {showBancoImagens && <BancoImagensModal onClose={() => setShowBancoImagens(false)} />}
+      <div className="flex flex-wrap justify-center gap-4 max-w-5xl mx-auto">
+        {cards.map((c) => (
+          <Card key={c.label} {...c} />
+        ))}
+      </div>
     </AppShell>
   );
 }
 
-function Section({
+// ── Card ─────────────────────────────────────────────────────────────────────
+// Largura fixa (w-40) + flex-wrap justify-center no container = 6 por linha e a
+// última linha (5) centralizada, exatamente como no print.
+
+const CARD_BASE =
+  "relative flex flex-col items-center justify-center gap-3 rounded-2xl p-6 w-40 aspect-[4/3] transition-all duration-150";
+const CARD_ACTIVE =
+  "bg-zinc-100 hover:bg-zinc-200/70 hover:shadow-md hover:-translate-y-0.5 cursor-pointer";
+
+function CardInner({
   icon: Icon,
-  title,
-  desc,
-  children,
-}: {
-  icon: typeof Key;
-  title: string;
-  desc: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-zinc-100 flex items-start gap-3">
-        <div className="size-9 rounded-lg bg-brand/10 text-brand grid place-items-center">
-          <Icon className="size-4" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="text-xs text-zinc-500 mt-0.5">{desc}</p>
-        </div>
-      </div>
-      <div className="p-6 space-y-4">{children}</div>
-    </div>
-  );
-}
-
-function Field({
   label,
-  defaultValue,
-  type = "text",
+  locked,
 }: {
+  icon: typeof Users;
   label: string;
-  defaultValue: string;
-  type?: string;
+  locked?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-4 items-center">
-      <label className="text-xs font-medium text-zinc-700">{label}</label>
-      <input
-        type={type}
-        defaultValue={defaultValue}
-        className="col-span-2 px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+    <>
+      {locked && (
+        <span className="absolute top-2.5 right-2.5 size-6 rounded-full bg-white grid place-items-center ring-1 ring-zinc-200">
+          <Lock className="size-3 text-zinc-400" />
+        </span>
+      )}
+      <Icon
+        className={`size-9 ${locked ? "text-zinc-300" : "text-brand"}`}
+        strokeWidth={1.75}
       />
-    </div>
+      <span
+        className={`text-sm font-semibold text-center leading-tight ${locked ? "text-zinc-400" : "text-zinc-700"}`}
+      >
+        {label}
+      </span>
+    </>
   );
 }
 
-function Toggle({
-  label,
-  defaultChecked,
-}: {
-  label: string;
-  defaultChecked: boolean;
-}) {
-  const [on, setOn] = useState(defaultChecked);
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-zinc-700">{label}</span>
+function Card({ icon, label, onClick, to, locked }: CardItem) {
+  if (locked) {
+    return (
       <button
-        onClick={() => setOn(!on)}
-        className={`relative w-10 h-6 rounded-full transition-colors ${on ? "bg-brand" : "bg-zinc-200"}`}
+        type="button"
+        onClick={() => toast.info(`"${label}" estará disponível em breve. 🔒`)}
+        className={`${CARD_BASE} bg-zinc-100/60 cursor-not-allowed`}
       >
-        <div
-          className={`absolute top-0.5 size-5 bg-white rounded-full shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`}
-        />
+        <CardInner icon={icon} label={label} locked />
       </button>
-    </div>
+    );
+  }
+  if (to) {
+    return (
+      <Link to={to} className={`${CARD_BASE} ${CARD_ACTIVE}`}>
+        <CardInner icon={icon} label={label} />
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={`${CARD_BASE} ${CARD_ACTIVE}`}>
+      <CardInner icon={icon} label={label} />
+    </button>
   );
 }

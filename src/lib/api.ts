@@ -976,7 +976,8 @@ export function getContasAnuncio(): Promise<{ contas: ContaAnuncio[] }> {
 export interface PublicarCampanhaResultado {
   campanhaId: string
   conjuntoId: string
-  anuncioId: string
+  anuncioId: string      // 1º anúncio
+  anuncioIds: string[]   // todos os anúncios criados (um por criativo)
   linkGerenciador: string
   copyUsada: { textoPrincipal: string; titulo: string; descricao: string }
   avisos: string[]
@@ -985,6 +986,51 @@ export interface PublicarCampanhaResultado {
 /** Envia o JSON do wizard (+ PNGs) para criar a campanha ativa no Meta. */
 export function publicarCampanha(payload: unknown): Promise<PublicarCampanhaResultado> {
   return req("/api/campanhas/criar", { method: "POST", body: JSON.stringify(payload) })
+}
+
+// ── Gerenciador de campanhas (leitura ao vivo do Meta + duplicação) ────────────
+
+/** Conjunto (ad set) lido AO VIVO da conta de anúncios no Meta. */
+export interface ConjuntoMeta {
+  id: string
+  nome: string
+  campanhaId: string
+  campanhaNome: string
+  status: string            // rótulo legível ("Ativa", "Pausada"...)
+  ativa: boolean
+  orcamentoDiario: number   // em reais
+  otimizacao: string
+  idadeMin: number | null
+  idadeMax: number | null
+  genero: "todos" | "homens" | "mulheres"
+  generos: string           // rótulo legível do campo acima
+  destinoWhatsapp: boolean
+  dataInicio: string        // YYYY-MM-DD ("" se não houver)
+  dataFim: string           // YYYY-MM-DD ("" = sem término)
+}
+
+export interface NovosAnunciosResultado {
+  conjuntoId: string
+  anuncioIds: string[]
+  linkGerenciador: string
+  copyUsada: { textoPrincipal: string; titulo: string; descricao: string }
+  avisos: string[]
+}
+
+/** Cria uma cópia do conjunto com as configs revisadas e os criativos novos. */
+export function publicarNovosAnuncios(
+  conjuntoId: string,
+  payload: unknown,
+): Promise<NovosAnunciosResultado> {
+  return req(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/novos-anuncios`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+/** Todos os conjuntos (ad sets) da conta, direto do Meta — lista plana. */
+export function getConjuntosDaConta(contaId: string): Promise<{ conjuntos: ConjuntoMeta[] }> {
+  return req(`/api/campanhas/conjuntos?conta=${encodeURIComponent(contaId)}`)
 }
 
 // ── Catálogo de produtos (fluxo Criativos e Campanhas) ─────────────────────────
@@ -1020,6 +1066,7 @@ export function getCatalogoStatus(): Promise<{ total: number }> {
 export interface CatalogoProdutoItem {
   id: number
   nome: string
+  ativo: boolean
   criadoEm: string | null
 }
 
@@ -1043,7 +1090,243 @@ export function cadastrarCatalogoProduto(data: {
   return req("/api/catalogo/produtos", { method: "POST", body: JSON.stringify(data) })
 }
 
+/** Liga/desliga um produto do catálogo (desligado não entra nos criativos). */
+export function setCatalogoProdutoAtivo(id: number, ativo: boolean): Promise<{ ok: boolean; ativo: boolean }> {
+  return req(`/api/catalogo/produtos/${id}`, { method: "PATCH", body: JSON.stringify({ ativo }) })
+}
+
 /** Remove um produto do catálogo. */
 export function deletarCatalogoProduto(id: number): Promise<{ ok: boolean }> {
   return req(`/api/catalogo/produtos/${id}`, { method: "DELETE" })
+}
+
+// ── Disparo em Grupos de Ofertas (WhatsApp via Evolution) ─────────────────────
+// Multi-tenant por GESTOR: cada gestor tem UMA conexão de WhatsApp e enxerga
+// somente os grupos dela (os grupos de oferta dos clientes dele).
+
+export type InstanciaStatus = "open" | "connecting" | "close"
+
+export interface GrupoWhatsApp {
+  jid: string
+  nome: string
+  participantes: number | null
+}
+
+export interface StatusInstancia {
+  instancia: string | null
+  status: InstanciaStatus
+  qr_code: string | null
+  numero: string | null
+  conectado: boolean
+  configurado: boolean
+}
+
+export interface GrupoSelecionado {
+  jid: string
+  nome: string
+}
+
+export type RepetirDisparo = "nunca" | "diario" | "semanal" | "mensal"
+
+/** Um criativo do disparo — um pedido de oferta gera vários. */
+export interface MidiaDisparo {
+  b64: string
+  mime: string
+  rotulo?: string
+}
+
+export interface CriarDisparoPayload {
+  titulo: string
+  mensagem: string
+  midias?: MidiaDisparo[]
+  grupos: GrupoSelecionado[]
+  quando: "agora" | "agendado"
+  agendado_para?: string | null
+  repetir?: RepetirDisparo
+  timezone?: string
+  farmacia_id?: number | null
+  solicitacao_id?: number | null
+}
+
+export interface DisparoCriado {
+  id: number
+  status: string
+  enviados?: number
+  falhas?: number
+  agendado_para?: string | null
+  repetir?: RepetirDisparo
+}
+
+export interface DisparoResumo {
+  id: number
+  titulo: string
+  mensagem: string
+  total_midias: number
+  farmacia_id: number | null
+  total_grupos: number
+  quando: string
+  repetir: RepetirDisparo
+  status: string
+  agendado_para: string | null
+  proximo_envio: string | null
+  ultimo_envio: string | null
+  criado_em: string
+}
+
+/** Cria/reconecta a instância Evolution do gestor logado e retorna o QR code. */
+export function conectarMeuWhatsapp(): Promise<StatusInstancia> {
+  return req("/api/disparos/whatsapp/conectar", { method: "POST" })
+}
+
+/** Status ao vivo da minha conexão (usado em polling durante o QR). */
+export function getMeuWhatsappStatus(): Promise<StatusInstancia> {
+  return req("/api/disparos/whatsapp/status")
+}
+
+/** Desconecta meu WhatsApp (logout na Evolution). */
+export function desconectarMeuWhatsapp(): Promise<void> {
+  return req("/api/disparos/whatsapp", { method: "DELETE" })
+}
+
+/** Meus grupos de WhatsApp, ao vivo. */
+export function getMeusGrupos(): Promise<GrupoWhatsApp[]> {
+  return req("/api/disparos/grupos")
+}
+
+/** Cria o disparo (imediato ou agendado). */
+export function criarDisparo(payload: CriarDisparoPayload): Promise<DisparoCriado> {
+  return req("/api/disparos", { method: "POST", body: JSON.stringify(payload) })
+}
+
+/** Histórico de disparos das farmácias do gestor. */
+export function getDisparos(): Promise<DisparoResumo[]> {
+  return req("/api/disparos")
+}
+
+/** Cancela um disparo agendado. */
+export function cancelarDisparo(id: number): Promise<void> {
+  return req(`/api/disparos/${id}`, { method: "DELETE" })
+}
+
+// ── Ofertas enviadas pelo dono da farmácia ────────────────────────────────────
+// O gestor manda um link com token; o dono abre SEM login e escolhe os produtos.
+
+export interface ProdutoOferta {
+  id: number
+  nome: string
+}
+
+export interface OfertaPublica {
+  gestor: { nome: string }
+  farmacias: { id: number; nome: string; cidade: string | null }[]
+  produtos: ProdutoOferta[]
+}
+
+export interface EnviarOfertaPayload {
+  farmacia_id: number
+  produtos: number[]
+  produtos_livres?: string | null
+  observacao?: string | null
+  enviado_por?: string | null
+}
+
+export type StatusSolicitacao = "pendente" | "atendida" | "descartada"
+
+export interface SolicitacaoOferta {
+  id: number
+  farmacia_id: number
+  farmacia: string
+  produtos: ProdutoOferta[]
+  produtos_livres: string | null
+  observacao: string | null
+  enviado_por: string | null
+  status: StatusSolicitacao
+  criado_em: string
+  atendida_em: string | null
+}
+
+export interface LinkOfertas {
+  token: string
+  url: string
+}
+
+// -- Públicas (sem token de login; o token do link é a credencial) --
+
+/** Abre o link: gestor, farmácias daquele gestor e o catálogo. */
+export function getOfertaPublica(token: string): Promise<OfertaPublica> {
+  return req(`/api/publico/ofertas/${token}`)
+}
+
+/** Envia a seleção do dono da farmácia. */
+export function enviarOfertaPublica(
+  token: string,
+  payload: EnviarOfertaPayload,
+): Promise<{ ok: boolean; id: number }> {
+  return req(`/api/publico/ofertas/${token}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+/** URL da foto do produto na página pública (não exige login). */
+export function ofertaImagemUrl(token: string, produtoId: number): string {
+  return `${BASE_URL}/api/publico/ofertas/${token}/produto/${produtoId}/imagem`
+}
+
+// -- Do gestor --
+
+/** Link de ofertas do gestor (criado na primeira chamada). */
+export function getLinkOfertas(): Promise<LinkOfertas> {
+  return req("/api/ofertas/link")
+}
+
+/** Gera um token novo — o link antigo para de funcionar. */
+export function regenerarLinkOfertas(): Promise<LinkOfertas> {
+  return req("/api/ofertas/link/regenerar", { method: "POST" })
+}
+
+/** O que os clientes enviaram. */
+export function getSolicitacoes(): Promise<SolicitacaoOferta[]> {
+  return req("/api/ofertas/solicitacoes")
+}
+
+/** Um cliente da carteira e o estado de resposta dele. */
+export interface ClienteCarteira {
+  farmacia_id: number
+  farmacia: string
+  cidade: string | null
+  telefone: string | null
+  responsavel: string | null
+  /** true = tem pedido aguardando virar disparo */
+  respondeu: boolean
+  solicitacao: {
+    id: number
+    produtos: ProdutoOferta[]
+    produtos_livres: string | null
+    observacao: string | null
+    enviado_por: string | null
+    criado_em: string
+  } | null
+  ultimo_envio_em: string | null
+}
+
+/** Carteira completa: TODAS as farmácias, com quem respondeu e quem não. */
+export function getCarteiraOfertas(): Promise<ClienteCarteira[]> {
+  return req("/api/ofertas/carteira")
+}
+
+/** Marca a solicitação como atendida/descartada. */
+export function atualizarSolicitacao(
+  id: number,
+  status: StatusSolicitacao,
+): Promise<{ ok: boolean }> {
+  return req(`/api/ofertas/solicitacoes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  })
+}
+
+/** Total de solicitações pendentes (badge do menu). */
+export function getOfertasPendentes(): Promise<{ total: number }> {
+  return req("/api/ofertas/pendentes")
 }
