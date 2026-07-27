@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, Search, Check, Rocket, Loader2, ChevronLeft, ChevronRight,
   Megaphone, MousePointerClick, MessageCircle, Users, ShoppingCart,
   User, Instagram, Facebook, Layers, Globe, Newspaper, Square, Film, Calendar, LayoutGrid,
-  UploadCloud, CheckCircle2, ImageIcon, Wallet, Download,
+  UploadCloud, CheckCircle2, ImageIcon, Wallet, Download, Plus, X,
 } from "lucide-react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import { toast } from "sonner";
@@ -820,9 +820,17 @@ const COPY_PADRAO = {
     "✨ Qualidade Premium\n✨ Variedade de Opções\n✨ Resultados Incríveis\n\n" +
     "📱 Siga-nos: {instagram}\n\n" +
     "Venha conhecer e se surpreender!",
-  titulo: "",
   descricao: "",
 };
+
+// Lista de títulos padrão — cada anúncio recebe um (rotaciona pela lista).
+const TITULOS_PADRAO = [
+  "Preços Imperdíveis 🔥",
+  "Oferta Limitada ⏰",
+  "Melhores Marcas ✨",
+  "Estoque Limitado 🛒",
+  "Entrega Rápida 🏍️",
+];
 
 /** Dados que preenchem os marcadores de uma copy. */
 interface CopyCtx {
@@ -852,20 +860,23 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
   const [bairro, setBairro] = useState("");
   const [instagram, setInstagram] = useState("");
   const [tplTexto, setTplTexto] = useState(COPY_PADRAO.textoPrincipal);
-  const [tplTitulo, setTplTitulo] = useState(COPY_PADRAO.titulo);
+  const [titulos, setTitulos] = useState<string[]>(TITULOS_PADRAO);
   const [tplDescricao, setTplDescricao] = useState(COPY_PADRAO.descricao);
 
-  // Reporta o resultado ao parent sempre que algo muda — expande a copy por criativo
+  // Reporta o resultado ao parent sempre que algo muda — expande a copy por criativo.
+  // O título rotaciona pela lista: anúncio 1 → título 1, anúncio 2 → título 2, ...
   useEffect(() => {
+    const titulosValidos = titulos.map((t) => t.trim()).filter(Boolean);
     const selArr = criativos
       .filter((c) => selecionados.has(c.id))
-      .map((c) => {
+      .map((c, i) => {
         const ctx: CopyCtx = { produto: c.nome, preco: c.preco ?? "", cidade, bairro, instagram };
+        const tituloBruto = titulosValidos.length ? titulosValidos[i % titulosValidos.length] : "";
         return {
           id: c.id, nome: c.nome, preco: c.preco ?? null, tipo: c.tipo,
           pngBase64: c.png ?? c.arquivoUrl ?? null,
           textoPrincipal: expandirCopy(tplTexto, ctx),
-          titulo: expandirCopy(tplTitulo, ctx),
+          titulo: expandirCopy(tituloBruto, ctx),
           descricao: expandirCopy(tplDescricao, ctx),
         };
       });
@@ -877,7 +888,18 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
       descricao: primeiro?.descricao ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [criativos, selecionados, cidade, bairro, instagram, tplTexto, tplTitulo, tplDescricao]);
+  }, [criativos, selecionados, cidade, bairro, instagram, tplTexto, titulos, tplDescricao]);
+
+  // Helpers da lista de títulos
+  function setTituloAt(idx: number, valor: string) {
+    setTitulos((prev) => prev.map((t, i) => (i === idx ? valor : t)));
+  }
+  function removerTitulo(idx: number) {
+    setTitulos((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function adicionarTitulo() {
+    setTitulos((prev) => [...prev, ""]);
+  }
 
   function toggle(id: string) {
     setSelecionados((prev) => {
@@ -919,17 +941,6 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
     });
     e.target.value = "";
   }
-
-  // Prévia da copy expandida para cada criativo selecionado
-  const previews = criativos
-    .filter((c) => selecionados.has(c.id))
-    .map((c) => {
-      const ctx: CopyCtx = {
-        produto: c.nome, preco: c.preco ?? "—",
-        cidade: cidade || "…", bairro: bairro || "…", instagram: instagram || "…",
-      };
-      return { id: c.id, nome: c.nome, texto: expandirCopy(tplTexto, ctx) };
-    });
 
   return (
     <div className="space-y-8">
@@ -1060,32 +1071,60 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
         </div>
         <p className="text-[11px] text-zinc-400 mt-1.5">Preenchem {"{cidade}"}, {"{bairro}"} e {"{instagram}"} em todos os criativos.</p>
 
-        {/* Modelos de copy */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+        {/* Títulos — lista de headlines (rotaciona pelos anúncios) */}
+        <div className="mt-5">
+          <div className="flex items-center justify-between gap-2">
+            <label className="block text-sm font-semibold text-zinc-700">Títulos</label>
+            <button
+              type="button"
+              onClick={adicionarTitulo}
+              className="text-xs font-medium text-brand hover:underline flex items-center gap-1"
+            >
+              <Plus className="size-3.5" /> Adicionar título
+            </button>
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-0.5 mb-2">
+            Cada anúncio recebe um título; a lista rotaciona pelos criativos.
+          </p>
+          <div className="space-y-2">
+            {titulos.map((t, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={t}
+                  onChange={(e) => setTituloAt(i, e.target.value)}
+                  maxLength={200}
+                  placeholder={`Título ${i + 1}`}
+                  className="flex-1 text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                />
+                <button
+                  type="button"
+                  onClick={() => removerTitulo(i)}
+                  className="size-8 rounded-lg grid place-items-center text-zinc-400 hover:bg-red-50 hover:text-red-500 transition shrink-0"
+                  title="Remover título"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
+            {titulos.length === 0 && (
+              <p className="text-xs text-zinc-400 italic">Nenhum título — os anúncios ficarão sem headline.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Texto Principal + Descrição */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
           <div>
             <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Texto Principal</label>
             <textarea
               value={tplTexto}
               onChange={(e) => setTplTexto(e.target.value)}
               maxLength={600}
-              rows={6}
-              placeholder="Ex: Farmácia na {cidade} está com promoção de {produto} por {preco}..."
+              rows={8}
+              placeholder="Ex: Farmácia em {cidade}, {bairro}..."
               className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             />
             <p className="text-right text-[11px] text-zinc-400 mt-1">{tplTexto.length} / 600</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Título</label>
-            <textarea
-              value={tplTitulo}
-              onChange={(e) => setTplTitulo(e.target.value)}
-              maxLength={200}
-              rows={6}
-              placeholder="Ex: {produto} em promoção"
-              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-            />
-            <p className="text-right text-[11px] text-zinc-400 mt-1">{tplTitulo.length} / 200</p>
           </div>
 
           <div>
@@ -1094,7 +1133,7 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
               value={tplDescricao}
               onChange={(e) => setTplDescricao(e.target.value)}
               maxLength={200}
-              rows={6}
+              rows={8}
               placeholder="Ex: Solicite seu orçamento pelo WhatsApp."
               className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             />
@@ -1102,24 +1141,6 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
           </div>
         </div>
 
-        {/* Prévia da copy expandida por criativo */}
-        {previews.length > 0 && (
-          <div className="mt-5">
-            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
-              Prévia por criativo ({previews.length})
-            </p>
-            <div className="space-y-2">
-              {previews.map((p) => (
-                <div key={p.id} className="flex items-start gap-3 bg-zinc-50 border border-zinc-100 rounded-lg p-3">
-                  <span className="text-xs font-semibold text-zinc-700 bg-white ring-1 ring-zinc-200 rounded px-2 py-0.5 shrink-0 max-w-[160px] truncate" title={p.nome}>
-                    {p.nome}
-                  </span>
-                  <p className="text-sm text-zinc-600 whitespace-pre-line">{p.texto}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1183,23 +1204,59 @@ function EtapaRevisao({ payload, resultado, modo }: {
       </div>
     );
   }
+  // Extrai os criativos (com a copy já expandida) do payload para a prévia
+  const itens = ((payload as {
+    criativos?: {
+      itens?: Array<{ nome?: string; preco?: string; textoPrincipal?: string; titulo?: string; descricao?: string }>;
+    };
+  })?.criativos?.itens) ?? [];
+
   return (
     <div>
       <h2 className="text-xl font-bold text-zinc-900">Revise antes de publicar</h2>
       <p className="text-sm text-zinc-500 mt-1 mb-5">
         {modo === "conjunto"
-          ? "Vamos criar uma cópia do conjunto escolhido com estas configurações e subir os criativos novos dentro dela. O conjunto original não será alterado."
-          : "Estas são todas as informações que o sistema enviará ao Meta para criar a campanha."}
+          ? "Vamos criar uma cópia do conjunto escolhido e subir estes criativos dentro dela. O conjunto original não será alterado. Confira a copy de cada anúncio antes de publicar."
+          : "Confira como cada anúncio vai ficar antes de publicar no Meta."}
       </p>
-      <div className="rounded-xl border border-zinc-200 bg-zinc-900 overflow-hidden">
-        <div className="px-4 py-2 border-b border-zinc-700 flex items-center justify-between">
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">payload da campanha (JSON)</span>
-          <span className="text-[10px] text-zinc-500">enviado ao publicar</span>
+
+      {itens.length === 0 ? (
+        <p className="text-sm text-zinc-400 bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-3">
+          Nenhum criativo selecionado. Volte à etapa anterior e selecione ao menos um.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+            Anúncios a publicar ({itens.length})
+          </p>
+          {itens.map((it, i) => (
+            <div key={i} className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-xs font-semibold text-zinc-700 bg-zinc-100 rounded px-2 py-0.5">
+                  Anúncio {i + 1}
+                </span>
+                <span className="text-xs text-zinc-500 truncate max-w-[220px]" title={it.nome}>{it.nome}</span>
+                {it.preco ? (
+                  <span className="text-xs font-semibold text-brand bg-brand/10 rounded px-2 py-0.5">{it.preco}</span>
+                ) : null}
+              </div>
+              {it.titulo && <p className="text-sm font-bold text-zinc-900">{it.titulo}</p>}
+              <p className="text-sm text-zinc-700 whitespace-pre-line mt-1">{it.textoPrincipal}</p>
+              {it.descricao && <p className="text-xs text-zinc-500 mt-2 border-t border-zinc-100 pt-2">{it.descricao}</p>}
+            </div>
+          ))}
         </div>
-        <pre className="p-4 text-xs text-emerald-300 overflow-x-auto leading-relaxed">
-          {JSON.stringify(payload, null, 2)}
-        </pre>
-      </div>
+      )}
+
+      {/* JSON técnico (colapsado) — para conferência de quem quiser */}
+      <details className="mt-5">
+        <summary className="text-xs text-zinc-400 cursor-pointer">Ver payload técnico (JSON)</summary>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-900 overflow-hidden mt-2">
+          <pre className="p-4 text-xs text-emerald-300 overflow-x-auto leading-relaxed">
+            {JSON.stringify(payload, null, 2)}
+          </pre>
+        </div>
+      </details>
     </div>
   );
 }
