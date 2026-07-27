@@ -1121,6 +1121,15 @@ export interface StatusInstancia {
   configurado: boolean
 }
 
+/** Conexão que o gestor pode usar no disparo: a dele ou uma global. */
+export interface ConexaoDisparo {
+  instanceName: string
+  nome: string
+  tipo: "gestor" | "global"
+  status: InstanciaStatus
+  numero: string | null
+}
+
 export interface GrupoSelecionado {
   jid: string
   nome: string
@@ -1146,6 +1155,7 @@ export interface CriarDisparoPayload {
   timezone?: string
   farmacia_id?: number | null
   solicitacao_id?: number | null
+  instance?: string | null
 }
 
 export interface DisparoCriado {
@@ -1188,9 +1198,15 @@ export function desconectarMeuWhatsapp(): Promise<void> {
   return req("/api/disparos/whatsapp", { method: "DELETE" })
 }
 
-/** Meus grupos de WhatsApp, ao vivo. */
-export function getMeusGrupos(): Promise<GrupoWhatsApp[]> {
-  return req("/api/disparos/grupos")
+/** Conexões que posso usar no disparo (a minha + as globais). */
+export function getConexoesDisparo(): Promise<ConexaoDisparo[]> {
+  return req("/api/disparos/conexoes")
+}
+
+/** Grupos ao vivo — da conexão escolhida (ou a minha, se `instance` vazio). */
+export function getMeusGrupos(instance?: string): Promise<GrupoWhatsApp[]> {
+  const q = instance ? `?instance=${encodeURIComponent(instance)}` : ""
+  return req(`/api/disparos/grupos${q}`)
 }
 
 /** Cria o disparo (imediato ou agendado). */

@@ -7,9 +7,10 @@ import {
 import { toast } from "sonner";
 import {
   conectarMeuWhatsapp, getMeuWhatsappStatus, getMeusGrupos, criarDisparo,
+  getConexoesDisparo,
   getCarteiraOfertas, getLinkOfertas, catalogoImagemUrl,
   type GrupoWhatsApp, type RepetirDisparo, type InstanciaStatus,
-  type ClienteCarteira, type MidiaDisparo,
+  type ClienteCarteira, type MidiaDisparo, type ConexaoDisparo,
 } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { exportarCriativoPng } from "@/lib/exportarCriativo";
@@ -115,6 +116,11 @@ export function EnviarGrupoWizard({
   const [gerando, setGerando] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  // Conexões disponíveis para o disparo (a do gestor + as globais) e a escolhida.
+  const [conexoes, setConexoes] = useState<ConexaoDisparo[]>([]);
+  const [conexaoSel, setConexaoSel] = useState<string | null>(null);
+  const [carregandoConexoes, setCarregandoConexoes] = useState(true);
+
   const conectado = statusConexao === "open";
 
   // ── Conexão ─────────────────────────────────────────────────────────────────
@@ -138,8 +144,26 @@ export function EnviarGrupoWizard({
       .finally(() => setCarregandoStatus(false));
   }
 
+  /** Conexões que posso usar no disparo (a minha + as globais). */
+  function carregarConexoes() {
+    setCarregandoConexoes(true);
+    getConexoesDisparo()
+      .then((lista) => {
+        setConexoes(lista);
+        // Mantém a escolha atual se ainda existir; senão pega a 1ª conectada.
+        setConexaoSel((atual) =>
+          atual && lista.some((c) => c.instanceName === atual)
+            ? atual
+            : (lista.find((c) => c.status === "open")?.instanceName ?? null),
+        );
+      })
+      .catch(() => { /* lista vazia mostra o convite pra conectar */ })
+      .finally(() => setCarregandoConexoes(false));
+  }
+
   useEffect(() => {
     carregarStatus();
+    carregarConexoes();
     getLinkOfertas().then((l) => setLinkOfertas(l.url)).catch(() => { /* opcional */ });
   }, []);
 
@@ -154,6 +178,7 @@ export function EnviarGrupoWizard({
           setNumero(s.numero);
           setQrCode(null);
           toast.success("WhatsApp conectado!");
+          carregarConexoes();
         }
       } catch { /* segue tentando */ }
     }, 4000);
@@ -265,9 +290,9 @@ export function EnviarGrupoWizard({
     setCarregandoGrupos(true);
     setErroGrupos(null);
     try {
-      const lista = await getMeusGrupos();
+      const lista = await getMeusGrupos(conexaoSel ?? undefined);
       setGrupos(lista);
-      if (lista.length === 0) setErroGrupos("Nenhum grupo encontrado na sua conta de WhatsApp.");
+      if (lista.length === 0) setErroGrupos("Nenhum grupo encontrado nesta conexão de WhatsApp.");
     } catch (err) {
       setErroGrupos(err instanceof Error ? err.message : "Erro ao carregar os grupos.");
     } finally {
@@ -318,7 +343,10 @@ export function EnviarGrupoWizard({
   // ── Navegação ───────────────────────────────────────────────────────────────
   async function avancar() {
     if (etapa === 1) {
-      if (!conectado) { toast.error("Conecte seu WhatsApp primeiro."); return; }
+      const ativa = conexoes.find((c) => c.instanceName === conexaoSel);
+      if (!ativa || ativa.status !== "open") {
+        toast.error("Selecione uma conexão conectada."); return;
+      }
       setEtapa(2);
       if (carteira.length === 0) carregarSolicitacoes();
       return;
@@ -373,6 +401,7 @@ export function EnviarGrupoWizard({
         timezone: "America/Sao_Paulo",
         farmacia_id: clienteSel?.farmacia_id ?? null,
         solicitacao_id: clienteSel?.solicitacao?.id ?? null,
+        instance: conexaoSel,
       });
 
       if (quando === "agora") {
@@ -451,74 +480,96 @@ export function EnviarGrupoWizard({
           {/* ── 1: Conexão ── */}
           {etapa === 1 && (
             <div className="flex flex-col gap-4">
-              {carregandoStatus ? (
+              {(carregandoConexoes || carregandoStatus) ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-zinc-400">
-                  <Loader2 className="size-4 animate-spin" /> Verificando sua conexão...
-                </div>
-              ) : erroStatus ? (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
-                  <AlertCircle className="size-5 text-red-600 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-red-800">Não foi possível verificar sua conexão.</p>
-                    <p className="text-xs text-red-700 mt-0.5">{erroStatus}</p>
-                    <button
-                      onClick={carregarStatus}
-                      className="mt-2 text-sm font-medium text-red-800 hover:underline flex items-center gap-1.5"
-                    >
-                      <RefreshCw className="size-3.5" /> Tentar de novo
-                    </button>
-                  </div>
-                </div>
-              ) : conectado ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
-                  <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-emerald-800">Seu WhatsApp está conectado.</p>
-                    {numero && <p className="text-xs text-emerald-700 mt-0.5">Número: {numero}</p>}
-                  </div>
+                  <Loader2 className="size-4 animate-spin" /> Carregando suas conexões...
                 </div>
               ) : (
-                <div className="border border-zinc-200 rounded-xl p-5 flex flex-col items-center gap-3">
-                  <Smartphone className="size-8 text-zinc-300" />
-                  <p className="text-sm text-zinc-600 text-center max-w-sm">
-                    Conecte o seu WhatsApp para carregar os grupos de ofertas dos seus clientes.
-                    A conexão é sua e fica salva — você só faz isso uma vez.
-                  </p>
-                  {qrCode ? (
-                    <>
-                      <img
-                        src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`}
-                        alt="QR Code do WhatsApp"
-                        className="size-56 rounded-lg border border-zinc-200"
-                      />
-                      <p className="text-xs text-zinc-500 text-center">
-                        No celular: WhatsApp → Aparelhos conectados → Conectar aparelho.
-                      </p>
-                      <span className="flex items-center gap-2 text-xs text-zinc-400">
-                        <Loader2 className="size-3 animate-spin" /> Aguardando leitura...
-                      </span>
-                    </>
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-700">Escolha a conexão</p>
+                    <p className="text-xs text-zinc-500">De qual WhatsApp esta oferta vai sair.</p>
+                  </div>
+
+                  {conexoes.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      {conexoes.map((c) => {
+                        const ativa = c.status === "open";
+                        const sel = c.instanceName === conexaoSel;
+                        return (
+                          <button
+                            key={c.instanceName}
+                            type="button"
+                            onClick={() => setConexaoSel(c.instanceName)}
+                            className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
+                              sel ? "border-brand bg-brand/5" : "border-zinc-200 hover:border-zinc-300"
+                            }`}
+                          >
+                            <span className={`size-2.5 rounded-full shrink-0 ${ativa ? "bg-emerald-500" : "bg-zinc-300"}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-zinc-800 truncate">{c.nome}</p>
+                              <p className="text-xs text-zinc-500 truncate">
+                                {c.tipo === "gestor" ? "Sua conexão" : "Conexão da agência"}
+                                {c.numero ? ` · ${c.numero}` : ""}
+                                {ativa ? "" : " · desconectado"}
+                              </p>
+                            </div>
+                            {sel && <CheckCircle2 className="size-5 text-brand shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   ) : (
-                    <button
-                      onClick={async () => {
-                        setConectando(true);
-                        try {
-                          const r = await conectarMeuWhatsapp();
-                          setQrCode(r.qr_code);
-                          setStatusConexao(r.status);
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : "Não foi possível conectar.");
-                        } finally { setConectando(false); }
-                      }}
-                      disabled={conectando}
-                      className="bg-brand hover:bg-brand/90 disabled:opacity-60 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition"
-                    >
-                      {conectando
-                        ? <><Loader2 className="size-4 animate-spin" /> Gerando QR...</>
-                        : <><QrCode className="size-4" /> Conectar meu WhatsApp</>}
-                    </button>
+                    <p className="text-sm text-zinc-500">
+                      Nenhuma conexão disponível ainda. Conecte o seu WhatsApp abaixo.
+                    </p>
                   )}
-                </div>
+
+                  {/* Conectar a conexão do próprio gestor — passa a aparecer na lista */}
+                  {!conectado && (
+                    <div className="border border-zinc-200 rounded-xl p-5 flex flex-col items-center gap-3">
+                      <Smartphone className="size-8 text-zinc-300" />
+                      <p className="text-sm text-zinc-600 text-center max-w-sm">
+                        Quer usar o seu próprio WhatsApp? Conecte-o uma vez — ele passa a aparecer na lista acima.
+                      </p>
+                      {erroStatus && <p className="text-xs text-red-600 text-center">{erroStatus}</p>}
+                      {qrCode ? (
+                        <>
+                          <img
+                            src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`}
+                            alt="QR Code do WhatsApp"
+                            className="size-56 rounded-lg border border-zinc-200"
+                          />
+                          <p className="text-xs text-zinc-500 text-center">
+                            No celular: WhatsApp → Aparelhos conectados → Conectar aparelho.
+                          </p>
+                          <span className="flex items-center gap-2 text-xs text-zinc-400">
+                            <Loader2 className="size-3 animate-spin" /> Aguardando leitura...
+                          </span>
+                        </>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            setConectando(true);
+                            try {
+                              const r = await conectarMeuWhatsapp();
+                              setQrCode(r.qr_code);
+                              setStatusConexao(r.status);
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : "Não foi possível conectar.");
+                            } finally { setConectando(false); }
+                          }}
+                          disabled={conectando}
+                          className="bg-brand hover:bg-brand/90 disabled:opacity-60 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition"
+                        >
+                          {conectando
+                            ? <><Loader2 className="size-4 animate-spin" /> Gerando QR...</>
+                            : <><QrCode className="size-4" /> Conectar meu WhatsApp</>}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Link que o gestor manda para os donos */}

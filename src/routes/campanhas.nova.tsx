@@ -781,7 +781,12 @@ interface CriativoWizard {
 }
 
 export interface CriativosResultado {
-  selecionados: { id: string; nome: string; preco: string | null; tipo: string; pngBase64: string | null }[];
+  selecionados: {
+    id: string; nome: string; preco: string | null; tipo: string; pngBase64: string | null;
+    // copy padrão já expandida ({produto}/{preco}/{cidade}) para ESTE criativo
+    textoPrincipal: string; titulo: string; descricao: string;
+  }[];
+  // representativo (1º criativo) — usado na revisão / copyUsada
   textoPrincipal: string;
   titulo: string;
   descricao: string;
@@ -803,52 +808,60 @@ function lerCriativosPuxados(): CriativoWizard[] {
   }
 }
 
-// Gera copys de exemplo com base nos produtos selecionados (será a chamada de IA no futuro)
-function gerarCopysExemplo(nomes: string[]): { textoPrincipal: string; titulos: string[]; descricoes: string[] } {
-  const lista = nomes.length ? nomes.join(", ") : "nossos produtos";
-  return {
-    textoPrincipal:
-      `Ofertas que cuidam de você! 💊\n${lista} com preços especiais para o seu dia a dia.\n\n` +
-      `Alívio e bem-estar com qualidade e economia.\n\nAproveite agora e cuide da sua saúde!\n` +
-      `Somos a PharmaFarma, sua saúde, nossa prioridade.`,
-    titulos: [
-      "Alívio e economia para o seu dia",
-      "Cuide da sua saúde e economize",
-      "Preços especiais para você!",
-    ],
-    descricoes: [
-      "Medicamentos essenciais com preços que cabem no seu bolso.",
-      `${lista} com qualidade e confiança.`,
-      "Ofertas imperdíveis na PharmaFarma. Sua saúde, nossa prioridade.",
-    ],
-  };
+// ── Copy padrão (template) ────────────────────────────────────────────────────
+// A mesma copy vale para todos os criativos; só {produto}/{preco} mudam por
+// criativo, e {cidade} vale para a campanha toda. Marcadores aceitos (case-insensitive):
+//   {produto}  {preco} / {preço}  {cidade}
+const TOKENS_COPY = ["{produto}", "{preco}", "{cidade}"] as const;
+
+const COPY_PADRAO = {
+  textoPrincipal:
+    "Farmácia na {cidade} está com promoção de {produto} por {preco}. Solicite seu orçamento pelo WhatsApp!",
+  titulo: "{produto} em promoção",
+  descricao: "Solicite seu orçamento pelo WhatsApp.",
+};
+
+/** Substitui os marcadores da copy pelos dados de um criativo. */
+function expandirCopy(tpl: string, ctx: { produto: string; preco: string; cidade: string }): string {
+  return tpl
+    .replace(/\{\s*produto\s*\}/gi, ctx.produto)
+    .replace(/\{\s*pre(?:c|ç)o\s*\}/gi, ctx.preco)
+    .replace(/\{\s*cidade\s*\}/gi, ctx.cidade);
 }
 
 function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => void }) {
   const [criativos, setCriativos] = useState<CriativoWizard[]>(() => lerCriativosPuxados());
   const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set(lerCriativosPuxados().map((c) => c.id)));
 
-  const [gerando, setGerando] = useState(false);
-  const [gerado, setGerado] = useState(false);
-  const [titulos, setTitulos] = useState<string[]>([]);
-  const [descricoes, setDescricoes] = useState<string[]>([]);
-  const [textoPrincipal, setTextoPrincipal] = useState("");
-  const [titulo, setTitulo] = useState("");
-  const [descricao, setDescricao] = useState("");
+  // Copy padrão (modelo). {produto}/{preco} trocam por criativo; {cidade} vale p/ a campanha.
+  const [cidade, setCidade] = useState("");
+  const [tplTexto, setTplTexto] = useState(COPY_PADRAO.textoPrincipal);
+  const [tplTitulo, setTplTitulo] = useState(COPY_PADRAO.titulo);
+  const [tplDescricao, setTplDescricao] = useState(COPY_PADRAO.descricao);
 
-  // Reporta o resultado ao parent sempre que algo muda
+  // Reporta o resultado ao parent sempre que algo muda — expande a copy por criativo
   useEffect(() => {
-    onChange({
-      selecionados: criativos
-        .filter((c) => selecionados.has(c.id))
-        .map((c) => ({
+    const selArr = criativos
+      .filter((c) => selecionados.has(c.id))
+      .map((c) => {
+        const ctx = { produto: c.nome, preco: c.preco ?? "", cidade };
+        return {
           id: c.id, nome: c.nome, preco: c.preco ?? null, tipo: c.tipo,
           pngBase64: c.png ?? c.arquivoUrl ?? null,
-        })),
-      textoPrincipal, titulo, descricao,
+          textoPrincipal: expandirCopy(tplTexto, ctx),
+          titulo: expandirCopy(tplTitulo, ctx),
+          descricao: expandirCopy(tplDescricao, ctx),
+        };
+      });
+    const primeiro = selArr[0];
+    onChange({
+      selecionados: selArr,
+      textoPrincipal: primeiro?.textoPrincipal ?? "",
+      titulo: primeiro?.titulo ?? "",
+      descricao: primeiro?.descricao ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [criativos, selecionados, textoPrincipal, titulo, descricao]);
+  }, [criativos, selecionados, cidade, tplTexto, tplTitulo, tplDescricao]);
 
   function toggle(id: string) {
     setSelecionados((prev) => {
@@ -891,21 +904,13 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
     e.target.value = "";
   }
 
-  function gerarCopys() {
-    setGerando(true);
-    setTimeout(() => {
-      const nomes = criativos.filter((c) => selecionados.has(c.id)).map((c) => c.nome);
-      const r = gerarCopysExemplo(nomes);
-      setTextoPrincipal(r.textoPrincipal);
-      setTitulos(r.titulos);
-      setDescricoes(r.descricoes);
-      setTitulo(r.titulos[0]);
-      setDescricao(r.descricoes[0]);
-      setGerando(false);
-      setGerado(true);
-      toast.success("Copys geradas!");
-    }, 700);
-  }
+  // Prévia da copy expandida para cada criativo selecionado
+  const previews = criativos
+    .filter((c) => selecionados.has(c.id))
+    .map((c) => {
+      const ctx = { produto: c.nome, preco: c.preco ?? "—", cidade: cidade || "…" };
+      return { id: c.id, nome: c.nome, texto: expandirCopy(tplTexto, ctx) };
+    });
 
   return (
     <div className="space-y-8">
@@ -984,105 +989,99 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
 
       <div className="border-t border-zinc-100" />
 
-      {/* ── Copys ────────────────────────────────────────────────────────── */}
+      {/* ── Copy padrão ──────────────────────────────────────────────────── */}
       <div>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-lg font-bold text-zinc-900">Textos Principais, Títulos e Descrições</h2>
-            <p className="text-sm text-zinc-500 mt-1">Geraremos automaticamente as copys com base na análise dos criativos selecionados.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={gerarCopys}
-              disabled={gerando}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm"
-            >
-              {gerando ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Gerar Copys
-            </button>
-            {gerado && (
-              <span className="text-xs text-zinc-400 bg-zinc-100 px-3 py-2 rounded-lg">Gerado automaticamente</span>
-            )}
-          </div>
+        <div>
+          <h2 className="text-lg font-bold text-zinc-900">Copy padrão dos anúncios</h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            A mesma copy vale para todos os criativos — só o <b>produto</b> e o <b>preço</b> mudam em cada um.
+          </p>
         </div>
 
-        <div className="mt-3 flex items-start gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-          <Sparkles className="size-3.5 shrink-0 mt-0.5" />
-          O prompt irá gerar as copys dos produtos com base na análise do criativo inserido para maior personalização e assertividade.
+        {/* Marcadores disponíveis */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-600 bg-zinc-50 border border-zinc-100 rounded-lg px-3 py-2">
+          <span className="font-medium">Marcadores:</span>
+          {TOKENS_COPY.map((t) => (
+            <code key={t} className="bg-white ring-1 ring-zinc-200 rounded px-1.5 py-0.5 text-brand font-semibold">{t}</code>
+          ))}
+          <span className="text-zinc-400">
+            — {"{produto}"} e {"{preco}"} trocam por criativo; {"{cidade}"} vale para a campanha toda.
+          </span>
         </div>
 
+        {/* Cidade da campanha */}
+        <div className="mt-4 max-w-xs">
+          <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Cidade</label>
+          <input
+            value={cidade}
+            onChange={(e) => setCidade(e.target.value)}
+            placeholder="Ex: Fortaleza"
+            className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+          />
+          <p className="text-[11px] text-zinc-400 mt-1">Preenche o {"{cidade}"} em todos os criativos.</p>
+        </div>
+
+        {/* Modelos de copy */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-          {/* Texto Principal */}
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-semibold text-zinc-700 mb-1.5">
-              Texto Principal <Sparkles className="size-3.5 text-blue-500" />
-            </label>
+            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Texto Principal</label>
             <textarea
-              value={textoPrincipal}
-              onChange={(e) => setTextoPrincipal(e.target.value)}
+              value={tplTexto}
+              onChange={(e) => setTplTexto(e.target.value)}
               maxLength={600}
-              rows={8}
-              placeholder="Clique em “Gerar Copys” ou escreva o texto principal..."
+              rows={6}
+              placeholder="Ex: Farmácia na {cidade} está com promoção de {produto} por {preco}..."
               className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             />
-            <p className="text-right text-[11px] text-zinc-400 mt-1">{textoPrincipal.length} / 600</p>
+            <p className="text-right text-[11px] text-zinc-400 mt-1">{tplTexto.length} / 600</p>
           </div>
 
-          {/* Título */}
-          <OpcoesCopy
-            rotulo="Título"
-            opcoes={titulos}
-            selecionado={titulo}
-            onSelect={setTitulo}
-            vazio="As opções de título aparecerão aqui após gerar."
-          />
+          <div>
+            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Título</label>
+            <textarea
+              value={tplTitulo}
+              onChange={(e) => setTplTitulo(e.target.value)}
+              maxLength={200}
+              rows={6}
+              placeholder="Ex: {produto} em promoção"
+              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+            />
+            <p className="text-right text-[11px] text-zinc-400 mt-1">{tplTitulo.length} / 200</p>
+          </div>
 
-          {/* Descrição */}
-          <OpcoesCopy
-            rotulo="Descrição"
-            opcoes={descricoes}
-            selecionado={descricao}
-            onSelect={setDescricao}
-            vazio="As opções de descrição aparecerão aqui após gerar."
-          />
+          <div>
+            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Descrição</label>
+            <textarea
+              value={tplDescricao}
+              onChange={(e) => setTplDescricao(e.target.value)}
+              maxLength={200}
+              rows={6}
+              placeholder="Ex: Solicite seu orçamento pelo WhatsApp."
+              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+            />
+            <p className="text-right text-[11px] text-zinc-400 mt-1">{tplDescricao.length} / 200</p>
+          </div>
         </div>
+
+        {/* Prévia da copy expandida por criativo */}
+        {previews.length > 0 && (
+          <div className="mt-5">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
+              Prévia por criativo ({previews.length})
+            </p>
+            <div className="space-y-2">
+              {previews.map((p) => (
+                <div key={p.id} className="flex items-start gap-3 bg-zinc-50 border border-zinc-100 rounded-lg p-3">
+                  <span className="text-xs font-semibold text-zinc-700 bg-white ring-1 ring-zinc-200 rounded px-2 py-0.5 shrink-0 max-w-[160px] truncate" title={p.nome}>
+                    {p.nome}
+                  </span>
+                  <p className="text-sm text-zinc-600 whitespace-pre-line">{p.texto}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-function OpcoesCopy({ rotulo, opcoes, selecionado, onSelect, vazio }: {
-  rotulo: string; opcoes: string[]; selecionado: string; onSelect: (v: string) => void; vazio: string;
-}) {
-  return (
-    <div>
-      <label className="flex items-center gap-1.5 text-sm font-semibold text-zinc-700 mb-1.5">
-        {rotulo} <Sparkles className="size-3.5 text-blue-500" />
-      </label>
-      {opcoes.length === 0 ? (
-        <div className="h-full min-h-[120px] grid place-items-center text-center text-xs text-zinc-400 border border-dashed border-zinc-200 rounded-lg p-4">
-          {vazio}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {opcoes.map((op, i) => {
-            const ativo = selecionado === op;
-            return (
-              <button
-                key={i}
-                onClick={() => onSelect(op)}
-                className={`w-full text-left flex items-start gap-2.5 p-3 rounded-lg border transition ${
-                  ativo ? "border-brand ring-1 ring-brand" : "border-zinc-200 hover:border-zinc-300"
-                }`}
-              >
-                <span className={`shrink-0 size-4 rounded-full border-2 grid place-items-center mt-0.5 ${ativo ? "border-brand" : "border-zinc-300"}`}>
-                  {ativo && <span className="size-2 rounded-full bg-brand" />}
-                </span>
-                <span className="text-sm text-zinc-700">{op}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -1261,6 +1260,7 @@ function NovaCampanhaPage() {
       criativos: {
         itens: criativosData.selecionados.map((c) => ({
           nome: c.nome, preco: c.preco, pngBase64: c.pngBase64,
+          textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
         })),
         copy: {
           textoPrincipal: criativosData.textoPrincipal,
@@ -1305,8 +1305,10 @@ function NovaCampanhaPage() {
       criativos: {
         itens: criativosData.selecionados.map((c) =>
           incluirPng
-            ? { nome: c.nome, preco: c.preco, pngBase64: c.pngBase64 }
-            : { nome: c.nome, preco: c.preco }),
+            ? { nome: c.nome, preco: c.preco, pngBase64: c.pngBase64,
+                textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao }
+            : { nome: c.nome, preco: c.preco,
+                textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao }),
         copy: {
           textoPrincipal: criativosData.textoPrincipal,
           titulo:         criativosData.titulo,
