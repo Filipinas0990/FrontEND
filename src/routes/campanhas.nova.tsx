@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, Search, Check, Rocket, Loader2, ChevronLeft, ChevronRight,
   Megaphone, MousePointerClick, MessageCircle, Users, ShoppingCart,
   User, Instagram, Facebook, Layers, Globe, Newspaper, Square, Film, Calendar, LayoutGrid,
-  UploadCloud, Sparkles, CheckCircle2, ImageIcon, Wallet, Download,
+  UploadCloud, CheckCircle2, ImageIcon, Wallet, Download,
 } from "lucide-react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import { toast } from "sonner";
