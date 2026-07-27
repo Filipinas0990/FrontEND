@@ -13,7 +13,7 @@ import {
   type ClienteCarteira, type MidiaDisparo, type ConexaoDisparo,
 } from "@/lib/api";
 import { getUser } from "@/lib/auth";
-import { exportarCriativoPng } from "@/lib/exportarCriativo";
+import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
 import type { CriativosConfig } from "@/components/CriativosModal";
 
 export interface ProdutoDisparo {
@@ -326,9 +326,11 @@ export function EnviarGrupoWizard({
           titulo:        criativosConfig.titulo,
           subtitulo:     criativosConfig.subtitulo,
         });
+        // Comprime para caber sob o limite de 1 MB do nginx da Evolution.
+        const comprimido = await comprimirParaEnvio(png);
         geradas.push({
-          b64:    png.replace(/^data:[^;]+;base64,/, ""),
-          mime:   "image/png",
+          b64:    comprimido.b64,
+          mime:   comprimido.mime,
           rotulo: preco ? `${item.nome} — ${preco}` : item.nome,
         });
       }

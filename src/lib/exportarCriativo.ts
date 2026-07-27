@@ -42,6 +42,59 @@ export async function exportarCriativoPng(dados: CriativoDados): Promise<string>
   }
 }
 
+function carregarImagem(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+/**
+ * Comprime um criativo (data URL) para caber abaixo de `maxBytes`, re-encodando
+ * em JPEG com qualidade — e, se preciso, resolução — decrescentes.
+ *
+ * Necessário porque a Evolution API fica atrás de um nginx com
+ * `client_max_body_size` de 1 MB: um PNG de 1080px estoura fácil e a imagem é
+ * rejeitada (413) antes de chegar no WhatsApp. Devolve base64 PURO (sem o
+ * prefixo data:) + o mime resultante.
+ */
+export async function comprimirParaEnvio(
+  dataUrl: string,
+  maxBytes = 800 * 1024,
+): Promise<{ b64: string; mime: string }> {
+  const img = await carregarImagem(dataUrl);
+  const qualidades = [0.82, 0.7, 0.6, 0.5, 0.4];
+
+  const desenhar = (escala: number, q: number): string => {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * escala));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * escala));
+    const ctx = canvas.getContext("2d")!;
+    // JPEG não tem transparência — fundo branco evita artefatos pretos.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", q);
+  };
+
+  let escala = 1;
+  let ultimo = "";
+  for (let tentativa = 0; tentativa < 6; tentativa++) {
+    for (const q of qualidades) {
+      const jpeg = desenhar(escala, q);
+      const b64 = jpeg.replace(/^data:[^;]+;base64,/, "");
+      ultimo = b64;
+      if (b64.length <= maxBytes) return { b64, mime: "image/jpeg" };
+    }
+    escala *= 0.8; // ainda grande: reduz a resolução e tenta de novo
+  }
+
+  // Não conseguiu bater a meta — devolve a menor versão gerada mesmo assim.
+  return { b64: ultimo, mime: "image/jpeg" };
+}
+
 /** Dispara o download de um data URI no navegador. Mantém a extensão se já houver; senão usa .png */
 export function baixarPng(dataUrl: string, nomeArquivo: string) {
   const a = document.createElement("a");

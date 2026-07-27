@@ -809,32 +809,48 @@ function lerCriativosPuxados(): CriativoWizard[] {
 }
 
 // ── Copy padrão (template) ────────────────────────────────────────────────────
-// A mesma copy vale para todos os criativos; só {produto}/{preco} mudam por
-// criativo, e {cidade} vale para a campanha toda. Marcadores aceitos (case-insensitive):
-//   {produto}  {preco} / {preço}  {cidade}
-const TOKENS_COPY = ["{produto}", "{preco}", "{cidade}"] as const;
+// A mesma copy vale para todos os criativos. Marcadores aceitos (case-insensitive):
+//   por criativo:  {produto}  {preco} / {preço}
+//   por campanha:  {cidade}  {bairro}  {instagram}
+const TOKENS_COPY = ["{produto}", "{preco}", "{cidade}", "{bairro}", "{instagram}"] as const;
 
 const COPY_PADRAO = {
   textoPrincipal:
-    "Farmácia na {cidade} está com promoção de {produto} por {preco}. Solicite seu orçamento pelo WhatsApp!",
-  titulo: "{produto} em promoção",
-  descricao: "Solicite seu orçamento pelo WhatsApp.",
+    "🌟 Descubra a Nova Linha de Produtos da Farmácia em {cidade}, {bairro}! Opções exclusivas para todos os gostos! 🌟\n\n" +
+    "✨ Qualidade Premium\n✨ Variedade de Opções\n✨ Resultados Incríveis\n\n" +
+    "📱 Siga-nos: {instagram}\n\n" +
+    "Venha conhecer e se surpreender!",
+  titulo: "",
+  descricao: "",
 };
 
-/** Substitui os marcadores da copy pelos dados de um criativo. */
-function expandirCopy(tpl: string, ctx: { produto: string; preco: string; cidade: string }): string {
+/** Dados que preenchem os marcadores de uma copy. */
+interface CopyCtx {
+  produto: string;
+  preco: string;
+  cidade: string;
+  bairro: string;
+  instagram: string;
+}
+
+/** Substitui os marcadores da copy pelos dados de um criativo/campanha. */
+function expandirCopy(tpl: string, ctx: CopyCtx): string {
   return tpl
     .replace(/\{\s*produto\s*\}/gi, ctx.produto)
     .replace(/\{\s*pre(?:c|ç)o\s*\}/gi, ctx.preco)
-    .replace(/\{\s*cidade\s*\}/gi, ctx.cidade);
+    .replace(/\{\s*cidade\s*\}/gi, ctx.cidade)
+    .replace(/\{\s*bairro\s*\}/gi, ctx.bairro)
+    .replace(/\{\s*instagram\s*\}/gi, ctx.instagram);
 }
 
 function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => void }) {
   const [criativos, setCriativos] = useState<CriativoWizard[]>(() => lerCriativosPuxados());
   const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set(lerCriativosPuxados().map((c) => c.id)));
 
-  // Copy padrão (modelo). {produto}/{preco} trocam por criativo; {cidade} vale p/ a campanha.
+  // Copy padrão (modelo). {produto}/{preco} trocam por criativo; {cidade}/{bairro}/{instagram} valem p/ a campanha.
   const [cidade, setCidade] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [tplTexto, setTplTexto] = useState(COPY_PADRAO.textoPrincipal);
   const [tplTitulo, setTplTitulo] = useState(COPY_PADRAO.titulo);
   const [tplDescricao, setTplDescricao] = useState(COPY_PADRAO.descricao);
@@ -844,7 +860,7 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
     const selArr = criativos
       .filter((c) => selecionados.has(c.id))
       .map((c) => {
-        const ctx = { produto: c.nome, preco: c.preco ?? "", cidade };
+        const ctx: CopyCtx = { produto: c.nome, preco: c.preco ?? "", cidade, bairro, instagram };
         return {
           id: c.id, nome: c.nome, preco: c.preco ?? null, tipo: c.tipo,
           pngBase64: c.png ?? c.arquivoUrl ?? null,
@@ -861,7 +877,7 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
       descricao: primeiro?.descricao ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [criativos, selecionados, cidade, tplTexto, tplTitulo, tplDescricao]);
+  }, [criativos, selecionados, cidade, bairro, instagram, tplTexto, tplTitulo, tplDescricao]);
 
   function toggle(id: string) {
     setSelecionados((prev) => {
@@ -908,7 +924,10 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
   const previews = criativos
     .filter((c) => selecionados.has(c.id))
     .map((c) => {
-      const ctx = { produto: c.nome, preco: c.preco ?? "—", cidade: cidade || "…" };
+      const ctx: CopyCtx = {
+        produto: c.nome, preco: c.preco ?? "—",
+        cidade: cidade || "…", bairro: bairro || "…", instagram: instagram || "…",
+      };
       return { id: c.id, nome: c.nome, texto: expandirCopy(tplTexto, ctx) };
     });
 
@@ -1005,21 +1024,41 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
             <code key={t} className="bg-white ring-1 ring-zinc-200 rounded px-1.5 py-0.5 text-brand font-semibold">{t}</code>
           ))}
           <span className="text-zinc-400">
-            — {"{produto}"} e {"{preco}"} trocam por criativo; {"{cidade}"} vale para a campanha toda.
+            — {"{produto}"} e {"{preco}"} trocam por criativo; {"{cidade}"}, {"{bairro}"} e {"{instagram}"} valem para a campanha toda.
           </span>
         </div>
 
-        {/* Cidade da campanha */}
-        <div className="mt-4 max-w-xs">
-          <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Cidade</label>
-          <input
-            value={cidade}
-            onChange={(e) => setCidade(e.target.value)}
-            placeholder="Ex: Fortaleza"
-            className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-          />
-          <p className="text-[11px] text-zinc-400 mt-1">Preenche o {"{cidade}"} em todos os criativos.</p>
+        {/* Dados da campanha (valem para todos os criativos) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          <div>
+            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Cidade</label>
+            <input
+              value={cidade}
+              onChange={(e) => setCidade(e.target.value)}
+              placeholder="Ex: Fortaleza"
+              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Bairro</label>
+            <input
+              value={bairro}
+              onChange={(e) => setBairro(e.target.value)}
+              placeholder="Ex: Aldeota"
+              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Instagram</label>
+            <input
+              value={instagram}
+              onChange={(e) => setInstagram(e.target.value)}
+              placeholder="Ex: @suafarmacia"
+              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+            />
+          </div>
         </div>
+        <p className="text-[11px] text-zinc-400 mt-1.5">Preenchem {"{cidade}"}, {"{bairro}"} e {"{instagram}"} em todos os criativos.</p>
 
         {/* Modelos de copy */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
