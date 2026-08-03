@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   XCircle,
   Megaphone,
+  Send,
   Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -435,10 +436,12 @@ export function AppShell({ title, children, headerRight, hideHeader }: AppShellP
     { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const,        badge: undefined as ReactNode },
     { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const,         badge: undefined as ReactNode },
    // { icon: Zap,             label: "Ações",          to: "/acoes" as const,            badge: undefined as ReactNode },
+    { icon: Megaphone,       label: "Anúncios",       to: "/anuncios" as const,         badge: undefined as ReactNode },
+    // Disparo em grupos de WhatsApp — hub próprio (saiu do botão da tela de Anúncios)
     {
-      icon: Megaphone,
-      label: "Anúncios",
-      to: "/anuncios" as const,
+      icon: Send,
+      label: "Grupos",
+      to: "/grupos" as const,
       badge: totalPendentes > 0
         ? <span
             title={`${totalPendentes} cliente(s) enviaram lista de ofertas`}

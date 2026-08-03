@@ -5,7 +5,7 @@ import { getOfertasPendentes } from "@/lib/api";
 
 /**
  * Botão do cabeçalho de Criativos e Campanhas. Mostra quantos clientes têm
- * lista pendente e leva para a tela cheia de Ofertas dos Clientes.
+ * lista pendente e leva para a aba de ofertas dentro de Grupos.
  */
 export function OfertasClientesButton() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export function OfertasClientesButton() {
 
   return (
     <button
-      onClick={() => navigate({ to: "/ofertas-clientes" })}
+      onClick={() => navigate({ to: "/grupos", search: { aba: "clientes" } })}
       className="relative border border-zinc-200 bg-white hover:border-brand hover:text-brand text-zinc-700 font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
     >
       <Inbox className="size-4" />

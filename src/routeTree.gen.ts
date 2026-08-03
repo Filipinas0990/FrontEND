@@ -17,6 +17,7 @@ import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as OfertasClientesRouteImport } from './routes/ofertas-clientes'
 import { Route as NovidadesRouteImport } from './routes/novidades'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as GruposRouteImport } from './routes/grupos'
 import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
@@ -73,6 +74,11 @@ const NovidadesRoute = NovidadesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GruposRoute = GruposRouteImport.update({
+  id: '/grupos',
+  path: '/grupos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GestoresRoute = GestoresRouteImport.update({
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
+  '/grupos': typeof GruposRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
@@ -195,6 +202,7 @@ export interface FileRoutesByTo {
   '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
+  '/grupos': typeof GruposRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
+  '/grupos': typeof GruposRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
@@ -251,6 +260,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
+    | '/grupos'
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/conexoes'
     | '/configuracoes'
     | '/gestores'
+    | '/grupos'
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/farmacias'
     | '/gestores'
+    | '/grupos'
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
@@ -330,6 +342,7 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
   GestoresRoute: typeof GestoresRoute
+  GruposRoute: typeof GruposRoute
   LoginRoute: typeof LoginRoute
   NovidadesRoute: typeof NovidadesRoute
   OfertasClientesRoute: typeof OfertasClientesRoute
@@ -398,6 +411,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/grupos': {
+      id: '/grupos'
+      path: '/grupos'
+      fullPath: '/grupos'
+      preLoaderRoute: typeof GruposRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gestores': {
@@ -573,6 +593,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRoute,
   FarmaciasRoute: FarmaciasRouteWithChildren,
   GestoresRoute: GestoresRoute,
+  GruposRoute: GruposRoute,
   LoginRoute: LoginRoute,
   NovidadesRoute: NovidadesRoute,
   OfertasClientesRoute: OfertasClientesRoute,
