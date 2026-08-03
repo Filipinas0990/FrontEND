@@ -1048,6 +1048,15 @@ function hojeISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Próxima hora cheia, no formato do input datetime-local (yyyy-mm-ddThh:mm). */
+function proximaHoraISO(): string {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + 1);
+  const data = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${data}T${String(d.getHours()).padStart(2, "0")}:00`;
+}
+
 const FREQUENCIAS: { id: RepetirDisparo; nome: string }[] = [
   { id: "diario",  nome: "Todo dia" },
   { id: "semanal", nome: "Toda semana" },
@@ -1066,6 +1075,8 @@ function ModalAgendamento({
 }) {
   const [repete, setRepete] = useState(false);
   const [frequencia, setFrequencia] = useState<RepetirDisparo>("semanal");
+  // Envio único: um campo só (data + hora). Repetido: janela com início e fim.
+  const [envioEm, setEnvioEm] = useState(proximaHoraISO());
   const [dataInicio, setDataInicio] = useState(hojeISO());
   const [dataFim, setDataFim] = useState(hojeISO());
   const [horaInicio, setHoraInicio] = useState("08:00");
@@ -1080,9 +1091,16 @@ function ModalAgendamento({
     staleTime: 60_000,
   });
 
+  // Quando o disparo vai sair, nos dois modos
+  const quandoISO = repete ? `${dataInicio}T${horaInicio}` : envioEm;
+  const jaPassou = Boolean(quandoISO) && new Date(quandoISO).getTime() < Date.now();
+
   async function confirmar() {
     if (!conexao) { toast.error("Escolha a conexão que vai disparar."); return; }
-    if (!dataInicio || !horaInicio) { toast.error("Informe a data e a hora de início."); return; }
+    if (!quandoISO) {
+      toast.error(repete ? "Informe a data e a hora de início." : "Informe o horário do envio.");
+      return;
+    }
     if (repete && dataFim && dataFim < dataInicio) {
       toast.error("A data de término é anterior à de início."); return;
     }
@@ -1111,7 +1129,7 @@ function ModalAgendamento({
         midias,
         grupos:        grupos.map((g) => ({ jid: g.jid, nome: g.nome })),
         quando:        "agendado",
-        agendado_para: new Date(`${dataInicio}T${horaInicio}`).toISOString(),
+        agendado_para: new Date(quandoISO).toISOString(),
         repetir:       repete ? frequencia : "nunca",
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
@@ -1184,42 +1202,59 @@ function ModalAgendamento({
             )}
           </div>
 
-          {/* Datas e horas */}
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Campo rotulo="Data de início">
+          {/* Envio único: só o horário do envio. Repetido: a janela inteira. */}
+          {!repete ? (
+            <Campo rotulo="Horário do envio">
               <input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
+                type="datetime-local"
+                value={envioEm}
+                onChange={(e) => setEnvioEm(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
             </Campo>
-            <Campo rotulo="Data de término">
-              <input
-                type="date"
-                value={dataFim}
-                min={dataInicio}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-              />
-            </Campo>
-            <Campo rotulo="Hora de início">
-              <input
-                type="time"
-                value={horaInicio}
-                onChange={(e) => setHoraInicio(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-              />
-            </Campo>
-            <Campo rotulo="Hora de término">
-              <input
-                type="time"
-                value={horaFim}
-                onChange={(e) => setHoraFim(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-              />
-            </Campo>
-          </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Campo rotulo="Data de início">
+                <input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+              </Campo>
+              <Campo rotulo="Data de término">
+                <input
+                  type="date"
+                  value={dataFim}
+                  min={dataInicio}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+              </Campo>
+              <Campo rotulo="Hora de início">
+                <input
+                  type="time"
+                  value={horaInicio}
+                  onChange={(e) => setHoraInicio(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+              </Campo>
+              <Campo rotulo="Hora de término">
+                <input
+                  type="time"
+                  value={horaFim}
+                  onChange={(e) => setHoraFim(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+              </Campo>
+            </div>
+          )}
+
+          {jaPassou && (
+            <p className="text-[11px] text-amber-600">
+              Esse horário já passou — o disparo sai no próximo ciclo do agendador (até 1 minuto).
+            </p>
+          )}
 
           {/* Conexões */}
           <Campo rotulo="Conexões">
@@ -1239,8 +1274,8 @@ function ModalAgendamento({
           </Campo>
 
           <p className="text-[11px] text-zinc-400">
-            Horário de Brasília. Hoje o agendador usa a data/hora de início e a repetição —
-            data de término e hora de término ainda não são aplicadas (falta suporte no backend).
+            Horário de Brasília.
+            {repete && " Hoje o agendador usa a data/hora de início e a repetição — data de término e hora de término ainda não são aplicadas (falta suporte no backend)."}
           </p>
         </div>
 
