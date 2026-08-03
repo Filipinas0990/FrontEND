@@ -709,6 +709,9 @@ function PassoCriativo({
   const [busca, setBusca] = useState("");
   const [escolhidos, setEscolhidos] = useState<Set<number>>(new Set());
   const [precos, setPrecos] = useState<Record<number, string>>({});
+  // Produtos com oferta "de/por" e o preço antigo (riscado) de cada um
+  const [dePor, setDePor] = useState<Set<number>>(new Set());
+  const [precosDe, setPrecosDe] = useState<Record<number, string>>({});
   const [subtitulo, setSubtitulo] = useState("");
 
   const { data, isLoading } = useQuery({
@@ -749,6 +752,14 @@ function PassoCriativo({
     });
   }
 
+  function alternarDePor(id: number) {
+    setDePor((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id); else novo.add(id);
+      return novo;
+    });
+  }
+
   /** Dados de render de um produto no modelo escolhido. */
   function dadosCriativo(produto: { id: number; nome: string }) {
     return {
@@ -756,6 +767,7 @@ function PassoCriativo({
       enquadramento: "4:5" as const,
       nome:          produto.nome,
       preco:         precos[produto.id] ?? "",
+      precoDe:       dePor.has(produto.id) ? precosDe[produto.id] : undefined,
       imagem:        catalogoImagemUrl(produto.id),
       localizacao:   farmacia.nome,
       titulo:        modeloAtual?.titulo,
@@ -768,6 +780,8 @@ function PassoCriativo({
     if (selecionados.length === 0) { toast.error("Escolha ao menos uma imagem."); return; }
     const semPreco = selecionados.filter((p) => !(precos[p.id] ?? "").trim());
     if (semPreco.length > 0)     { toast.error(`Falta o preço de ${semPreco.length} produto(s).`); return; }
+    const semPrecoDe = selecionados.filter((p) => dePor.has(p.id) && !(precosDe[p.id] ?? "").trim());
+    if (semPrecoDe.length > 0)   { toast.error(`Falta o preço "de" de ${semPrecoDe.length} produto(s).`); return; }
     onAgendar();
   }
 
@@ -895,16 +909,30 @@ function PassoCriativo({
                     </button>
 
                     {marcado && (
-                      <div className="relative mt-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-zinc-400 pointer-events-none">
-                          R$
-                        </span>
-                        <input
-                          value={precos[p.id] ?? ""}
-                          onChange={(e) => setPrecos((atual) => ({ ...atual, [p.id]: formatarMoeda(e.target.value) }))}
-                          inputMode="numeric"
-                          placeholder="0,00"
-                          className="w-full pl-8 pr-2 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      <div className="mt-1.5 space-y-1.5">
+                        {/* Liga o "de/por": um preço riscado antes do preço da oferta */}
+                        <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
+                          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">
+                            De / Por
+                          </span>
+                          <Toggle
+                            ligado={dePor.has(p.id)}
+                            onChange={() => alternarDePor(p.id)}
+                          />
+                        </label>
+
+                        {dePor.has(p.id) && (
+                          <CampoPreco
+                            rotulo="De"
+                            valor={precosDe[p.id] ?? ""}
+                            onChange={(v) => setPrecosDe((atual) => ({ ...atual, [p.id]: v }))}
+                            riscado
+                          />
+                        )}
+                        <CampoPreco
+                          rotulo={dePor.has(p.id) ? "Por" : undefined}
+                          valor={precos[p.id] ?? ""}
+                          onChange={(v) => setPrecos((atual) => ({ ...atual, [p.id]: v }))}
                         />
                       </div>
                     )}
@@ -957,6 +985,57 @@ function PassoCriativo({
           onPronto={onAgendado}
         />
       )}
+    </div>
+  );
+}
+
+/** Chavinha de ligar/desligar (usada no "de/por"). */
+function Toggle({ ligado, onChange }: { ligado: boolean; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={ligado}
+      onClick={onChange}
+      className={`relative h-5 w-9 rounded-full transition-colors shrink-0 ${
+        ligado ? "bg-brand" : "bg-zinc-300"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${
+          ligado ? "left-[1.125rem]" : "left-0.5"
+        }`}
+      />
+    </button>
+  );
+}
+
+/** Campo de preço com prefixo R$, máscara de dinheiro e rótulo opcional. */
+function CampoPreco({
+  rotulo, valor, onChange, riscado,
+}: {
+  rotulo?: string;
+  valor: string;
+  onChange: (v: string) => void;
+  riscado?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+        {rotulo && (
+          <span className="text-[10px] font-semibold text-zinc-400 uppercase">{rotulo}</span>
+        )}
+        <span className="text-sm text-zinc-400">R$</span>
+      </span>
+      <input
+        value={valor}
+        onChange={(e) => onChange(formatarMoeda(e.target.value))}
+        inputMode="numeric"
+        placeholder="0,00"
+        className={`w-full ${rotulo ? "pl-16" : "pl-8"} pr-2 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+          riscado ? "text-zinc-500 line-through" : ""
+        }`}
+      />
     </div>
   );
 }
@@ -1019,7 +1098,9 @@ function ModalAgendamento({
         midias.push({
           b64:    comprimido.b64,
           mime:   comprimido.mime,
-          rotulo: dados.preco ? `${dados.nome} — ${dados.preco}` : dados.nome,
+          rotulo: dados.precoDe && dados.preco
+            ? `${dados.nome} — de R$${dados.precoDe} por R$${dados.preco}`
+            : dados.preco ? `${dados.nome} — R$${dados.preco}` : dados.nome,
         });
         setProgresso(midias.length);
       }

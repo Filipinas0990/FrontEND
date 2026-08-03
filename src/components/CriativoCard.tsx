@@ -13,6 +13,8 @@ const ASPECTO: Record<Enquadramento, string> = {
 export interface CriativoDados {
   nome: string;
   preco: string;
+  /** Preço "de" (riscado) — quando a oferta é DE/POR. Vazio = só o preço. */
+  precoDe?: string;
   imagem?: string | null;
   localizacao: string;      // nome da farmácia / localização (barra inferior — layout azul)
   layout: LayoutCriativo;
@@ -49,7 +51,7 @@ function Imagem({ imagem, nome, className }: { imagem?: string | null; nome: str
 }
 
 // ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
-function ModeloBanner({ nome, preco, imagem, titulo, subtitulo }: CriativoDados) {
+function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: CriativoDados) {
   return (
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
@@ -86,6 +88,12 @@ function ModeloBanner({ nome, preco, imagem, titulo, subtitulo }: CriativoDados)
           </span>
         </div>
         <div className="w-full rounded-xl px-[4%] pt-[7%] pb-[4%] text-center" style={{ background: VERM }}>
+          {precoDe && (
+            <span className="block text-white font-bold uppercase leading-none line-through"
+                  style={{ fontSize: "clamp(9px, 4.6cqw, 30px)", opacity: 0.9, marginBottom: "1.5%" }}>
+              De R${valorPreco(precoDe)}
+            </span>
+          )}
           <span className="text-white font-black leading-none inline-flex items-start justify-center"
                 style={{ fontSize: "clamp(30px, 21cqw, 140px)" }}>
             <span style={{ fontSize: "0.42em" }} className="mt-[0.35em] mr-[0.05em]">R$</span>
@@ -104,7 +112,7 @@ function ModeloBanner({ nome, preco, imagem, titulo, subtitulo }: CriativoDados)
 }
 
 // ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
-function ModeloAzul({ nome, preco, imagem, localizacao }: CriativoDados) {
+function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
   return (
     <>
@@ -113,6 +121,12 @@ function ModeloAzul({ nome, preco, imagem, localizacao }: CriativoDados) {
       {/* Pílula de preço no topo */}
       <div className="absolute top-[5%] left-[5%] w-[60%]">
         <div className="rounded-[1.4rem] px-[4%] py-[3.5%] text-center" style={estiloAzul}>
+          {precoDe && (
+            <span className="block text-white font-bold uppercase leading-none line-through"
+                  style={{ fontSize: "clamp(9px, 4.8cqw, 24px)", opacity: 0.85, marginBottom: "2.5%" }}>
+              De R${valorPreco(precoDe)}
+            </span>
+          )}
           <span className="block text-white font-black uppercase leading-none tracking-tight"
                 style={{ fontSize: "clamp(14px, 8.5cqw, 44px)" }}>
             POR R${valorPreco(preco)}
