@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Search, Check, Store, Loader2, AlertCircle, CheckCircle2, Send, ArrowLeft, ImageIcon,
+  Search, Check, Store, Loader2, AlertCircle, CheckCircle2, Send, ArrowLeft, ImageIcon, X,
 } from "lucide-react";
 import {
   getOfertaPublica, enviarOfertaPublica, ofertaImagemUrl,
@@ -12,6 +12,11 @@ export const Route = createFileRoute("/ofertas/$token")({
   component: OfertasPublicaPage,
   head: () => ({ meta: [{ title: "Ofertas da semana" }] }),
 });
+
+/** Minúsculo e sem acento — o dono digita "sao jose" e acha "São José". */
+function semAcento(texto: string): string {
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
 
 /**
  * Página PÚBLICA — o dono da farmácia abre pelo link que o gestor mandou,
@@ -55,12 +60,14 @@ function OfertasPublicaPage() {
 
   const farmacia = dados?.farmacias.find((f) => f.id === farmaciaId) ?? null;
 
-  // Com o link do admin a lista tem todas as farmácias — sem busca não dá
+  // A lista só aparece depois que o dono digita — com o link do admin são
+  // todas as farmácias da base, e rolar isso no celular é inviável.
   const farmaciasFiltradas = useMemo(() => {
-    const filtro = buscaFarmacia.trim().toLowerCase();
+    const filtro = semAcento(buscaFarmacia);
+    if (!filtro) return [];
     return (dados?.farmacias ?? []).filter((f) =>
-      f.nome.toLowerCase().includes(filtro)
-      || (f.cidade ?? "").toLowerCase().includes(filtro));
+      semAcento(f.nome).includes(filtro)
+      || semAcento(f.cidade ?? "").includes(filtro));
   }, [dados, buscaFarmacia]);
 
   function alternar(id: number) {
@@ -136,52 +143,63 @@ function OfertasPublicaPage() {
         <div className="max-w-lg mx-auto px-4 py-6">
           <h2 className="text-lg font-bold text-zinc-900">Qual é a sua farmácia?</h2>
           <p className="text-sm text-zinc-500 mt-1 mb-4">
-            Toque no nome da sua farmácia para começar.
+            Digite o nome da sua farmácia e toque nela para começar.
           </p>
 
-          {(dados?.farmacias.length ?? 0) > 6 && (
-            <div className="flex items-center gap-2 px-3 py-2.5 mb-3 bg-white rounded-xl border border-zinc-200">
-              <Search className="size-4 text-zinc-400 shrink-0" />
-              <input
-                value={buscaFarmacia}
-                onChange={(e) => setBuscaFarmacia(e.target.value)}
-                placeholder="Buscar pelo nome ou cidade..."
-                className="bg-transparent outline-none text-sm flex-1 min-w-0"
-              />
-            </div>
-          )}
-
-          <div className="grid gap-2">
-            {farmaciasFiltradas.map((f) => (
+          <div className="flex items-center gap-2 px-3 py-3 bg-white rounded-xl border border-zinc-200">
+            <Search className="size-4 text-zinc-400 shrink-0" />
+            <input
+              value={buscaFarmacia}
+              onChange={(e) => setBuscaFarmacia(e.target.value)}
+              placeholder="Digite o nome ou a cidade..."
+              autoFocus
+              className="bg-transparent outline-none text-sm flex-1 min-w-0"
+            />
+            {buscaFarmacia && (
               <button
-                key={f.id}
-                onClick={() => setFarmaciaId(f.id)}
-                className="flex items-center gap-3 p-4 rounded-xl border border-zinc-200 bg-white text-left hover:border-brand hover:bg-brand/5 transition"
+                onClick={() => setBuscaFarmacia("")}
+                className="text-zinc-400 hover:text-zinc-700 shrink-0"
+                aria-label="Limpar busca"
               >
-                <Store className="size-5 text-zinc-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="font-medium text-zinc-900 truncate">{f.nome}</p>
-                  {f.cidade && <p className="text-xs text-zinc-500">{f.cidade}</p>}
-                </div>
+                <X className="size-4" />
               </button>
-            ))}
-
-            {farmaciasFiltradas.length === 0 && (
-              <div className="p-6 rounded-xl border border-zinc-200 bg-white text-center">
-                <Store className="size-8 text-zinc-200 mx-auto mb-2" />
-                <p className="text-sm text-zinc-600">
-                  {buscaFarmacia
-                    ? `Nenhuma farmácia encontrada para "${buscaFarmacia}".`
-                    : "Nenhuma farmácia disponível neste link."}
-                </p>
-                {!buscaFarmacia && (
-                  <p className="text-xs text-zinc-400 mt-1">
-                    Avise o seu gestor — ele precisa liberar a sua farmácia.
-                  </p>
-                )}
-              </div>
             )}
           </div>
+
+          {/* Nada aparece antes de digitar — a base tem farmácia demais */}
+          {!buscaFarmacia.trim() ? (
+            <p className="text-xs text-zinc-400 text-center mt-6">
+              {(dados?.farmacias.length ?? 0) > 0
+                ? "Comece a digitar para ver as farmácias."
+                : "Nenhuma farmácia disponível neste link — avise o seu gestor."}
+            </p>
+          ) : farmaciasFiltradas.length === 0 ? (
+            <div className="p-6 mt-3 rounded-xl border border-zinc-200 bg-white text-center">
+              <Store className="size-8 text-zinc-200 mx-auto mb-2" />
+              <p className="text-sm text-zinc-600">
+                Nenhuma farmácia encontrada para “{buscaFarmacia}”.
+              </p>
+              <p className="text-xs text-zinc-400 mt-1">
+                Tente só uma parte do nome, ou a cidade.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-2 mt-3">
+              {farmaciasFiltradas.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setFarmaciaId(f.id)}
+                  className="flex items-center gap-3 p-4 rounded-xl border border-zinc-200 bg-white text-left hover:border-brand hover:bg-brand/5 transition"
+                >
+                  <Store className="size-5 text-zinc-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-zinc-900 truncate">{f.nome}</p>
+                    {f.cidade && <p className="text-xs text-zinc-500">{f.cidade}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
