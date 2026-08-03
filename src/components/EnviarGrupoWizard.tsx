@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
+import { formatarMoeda } from "@/lib/moeda";
 import type { CriativosConfig } from "@/components/CriativosModal";
 
 export interface ProdutoDisparo {
@@ -791,12 +792,18 @@ export function EnviarGrupoWizard({
                       </span>
                     )}
                     <span className="flex-1 min-w-0 text-sm text-zinc-800 truncate">{item.nome}</span>
-                    <input
-                      value={precos[item.chave] ?? item.preco}
-                      onChange={(e) => setPrecos((p) => ({ ...p, [item.chave]: e.target.value }))}
-                      placeholder="R$ 0,00"
-                      className="w-28 shrink-0 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
-                    />
+                    <div className="relative w-28 shrink-0">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-zinc-400 pointer-events-none">
+                        R$
+                      </span>
+                      <input
+                        value={precos[item.chave] ?? item.preco}
+                        onChange={(e) => setPrecos((p) => ({ ...p, [item.chave]: formatarMoeda(e.target.value) }))}
+                        inputMode="numeric"
+                        placeholder="0,00"
+                        className="w-full pl-8 pr-2.5 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>

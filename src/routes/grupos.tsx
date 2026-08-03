@@ -11,6 +11,7 @@ import { AppShell } from "@/components/AppShell";
 import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
 import { CriativoCard, type CriativoDados, type LayoutCriativo } from "@/components/CriativoCard";
 import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
+import { formatarMoeda } from "@/lib/moeda";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, getLinkOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus,
@@ -894,12 +895,18 @@ function PassoCriativo({
                     </button>
 
                     {marcado && (
-                      <input
-                        value={precos[p.id] ?? ""}
-                        onChange={(e) => setPrecos((atual) => ({ ...atual, [p.id]: e.target.value }))}
-                        placeholder="R$ 0,00"
-                        className="mt-1 w-full px-2 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
-                      />
+                      <div className="relative mt-1">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-zinc-400 pointer-events-none">
+                          R$
+                        </span>
+                        <input
+                          value={precos[p.id] ?? ""}
+                          onChange={(e) => setPrecos((atual) => ({ ...atual, [p.id]: formatarMoeda(e.target.value) }))}
+                          inputMode="numeric"
+                          placeholder="0,00"
+                          className="w-full pl-8 pr-2 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        />
+                      </div>
                     )}
                   </div>
                 );
