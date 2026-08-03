@@ -28,6 +28,7 @@ function OfertasPublicaPage() {
   const [farmaciaId, setFarmaciaId] = useState<number | null>(null);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [busca, setBusca] = useState("");
+  const [buscaFarmacia, setBuscaFarmacia] = useState("");
   const [produtosLivres, setProdutosLivres] = useState("");
   const [enviadoPor, setEnviadoPor] = useState("");
   const [observacao, setObservacao] = useState("");
@@ -53,6 +54,14 @@ function OfertasPublicaPage() {
   );
 
   const farmacia = dados?.farmacias.find((f) => f.id === farmaciaId) ?? null;
+
+  // Com o link do admin a lista tem todas as farmácias — sem busca não dá
+  const farmaciasFiltradas = useMemo(() => {
+    const filtro = buscaFarmacia.trim().toLowerCase();
+    return (dados?.farmacias ?? []).filter((f) =>
+      f.nome.toLowerCase().includes(filtro)
+      || (f.cidade ?? "").toLowerCase().includes(filtro));
+  }, [dados, buscaFarmacia]);
 
   function alternar(id: number) {
     setSelecionados((atual) => {
@@ -129,8 +138,21 @@ function OfertasPublicaPage() {
           <p className="text-sm text-zinc-500 mt-1 mb-4">
             Toque no nome da sua farmácia para começar.
           </p>
+
+          {(dados?.farmacias.length ?? 0) > 6 && (
+            <div className="flex items-center gap-2 px-3 py-2.5 mb-3 bg-white rounded-xl border border-zinc-200">
+              <Search className="size-4 text-zinc-400 shrink-0" />
+              <input
+                value={buscaFarmacia}
+                onChange={(e) => setBuscaFarmacia(e.target.value)}
+                placeholder="Buscar pelo nome ou cidade..."
+                className="bg-transparent outline-none text-sm flex-1 min-w-0"
+              />
+            </div>
+          )}
+
           <div className="grid gap-2">
-            {(dados?.farmacias ?? []).map((f) => (
+            {farmaciasFiltradas.map((f) => (
               <button
                 key={f.id}
                 onClick={() => setFarmaciaId(f.id)}
@@ -143,6 +165,22 @@ function OfertasPublicaPage() {
                 </div>
               </button>
             ))}
+
+            {farmaciasFiltradas.length === 0 && (
+              <div className="p-6 rounded-xl border border-zinc-200 bg-white text-center">
+                <Store className="size-8 text-zinc-200 mx-auto mb-2" />
+                <p className="text-sm text-zinc-600">
+                  {buscaFarmacia
+                    ? `Nenhuma farmácia encontrada para "${buscaFarmacia}".`
+                    : "Nenhuma farmácia disponível neste link."}
+                </p>
+                {!buscaFarmacia && (
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Avise o seu gestor — ele precisa liberar a sua farmácia.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
