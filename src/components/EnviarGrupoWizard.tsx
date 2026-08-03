@@ -998,7 +998,9 @@ export function EnviarGrupoWizard({
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Como vai chegar no grupo</p>
                 <div className="rounded-xl border border-zinc-200 bg-[#e5ddd5] p-3 max-h-80 overflow-y-auto">
-                  {mensagem.trim() && (
+                  {/* Sem criativo, o texto vai sozinho; com criativo, ele é a
+                      legenda da 1ª imagem (é assim que o backend envia). */}
+                  {mensagem.trim() && midias.length === 0 && !gerando && (
                     <div className="bg-white rounded-lg p-2 shadow-sm mb-2">
                       <p className="text-sm text-zinc-800 whitespace-pre-wrap break-words">{mensagem}</p>
                     </div>
@@ -1011,7 +1013,11 @@ export function EnviarGrupoWizard({
                     midias.map((m, i) => (
                       <div key={i} className="bg-white rounded-lg p-2 shadow-sm mb-2">
                         <img src={`data:${m.mime};base64,${m.b64}`} alt="" className="rounded-md mb-1 max-h-48 mx-auto" />
-                        <p className="text-xs text-zinc-700">{m.rotulo}</p>
+                        <p className="text-xs text-zinc-700 whitespace-pre-wrap break-words">
+                          {i === 0 && mensagem.trim()
+                            ? `${mensagem.trim()}${m.rotulo ? `\n\n${m.rotulo}` : ""}`
+                            : m.rotulo}
+                        </p>
                       </div>
                     ))
                   )}
