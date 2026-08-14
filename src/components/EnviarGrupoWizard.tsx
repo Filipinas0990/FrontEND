@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   conectarMeuWhatsapp, getMeuWhatsappStatus, getMeusGrupos, criarDisparo,
   getConexoesDisparo,
-  getCarteiraOfertas, getLinkOfertas, catalogoImagemUrl,
+  getCarteiraOfertas, catalogoImagemUrl,
   type GrupoWhatsApp, type RepetirDisparo, type InstanciaStatus,
   type ClienteCarteira, type MidiaDisparo, type ConexaoDisparo,
 } from "@/lib/api";
@@ -85,7 +85,6 @@ export function EnviarGrupoWizard({
   const [carregandoStatus, setCarregandoStatus] = useState(true);
   const [erroStatus, setErroStatus] = useState<string | null>(null);
   const [conectando, setConectando] = useState(false);
-  const [linkOfertas, setLinkOfertas] = useState<string | null>(null);
 
   // Etapa 2 — carteira de clientes (quem respondeu e quem não)
   const [carteira, setCarteira] = useState<ClienteCarteira[]>([]);
@@ -165,7 +164,6 @@ export function EnviarGrupoWizard({
   useEffect(() => {
     carregarStatus();
     carregarConexoes();
-    getLinkOfertas().then((l) => setLinkOfertas(l.url)).catch(() => { /* opcional */ });
   }, []);
 
   useEffect(() => {
@@ -246,7 +244,8 @@ export function EnviarGrupoWizard({
     const tratamento = c.responsavel ? `Olá, ${c.responsavel}!` : "Olá!";
     return `${tratamento} Aqui é ${nome}.\n\n`
       + `Preciso da lista de produtos para as ofertas da ${c.farmacia}. `
-      + `É só abrir o link, marcar o que você quer anunciar e enviar:\n\n${linkOfertas ?? ""}\n\n`
+      // Link exclusivo deste cliente: abre direto na farmácia dele.
+      + `É só abrir o link, marcar o que você quer anunciar e enviar:\n\n${c.link ?? ""}\n\n`
       + `Assim que você mandar, eu monto as artes e posto no grupo. 👍`;
   }
 
@@ -287,11 +286,13 @@ export function EnviarGrupoWizard({
   }
 
   // ── Grupos ──────────────────────────────────────────────────────────────────
-  async function carregarGrupos() {
+  /** `forcar` = ignora o cache do servidor e busca no WhatsApp (botão de
+   *  recarregar). Sem ele a lista vem do cache, instantânea. */
+  async function carregarGrupos(forcar = false) {
     setCarregandoGrupos(true);
     setErroGrupos(null);
     try {
-      const lista = await getMeusGrupos(conexaoSel ?? undefined);
+      const { grupos: lista } = await getMeusGrupos(conexaoSel ?? undefined, forcar);
       setGrupos(lista);
       if (lista.length === 0) setErroGrupos("Nenhum grupo encontrado nesta conexão de WhatsApp.");
     } catch (err) {
@@ -575,40 +576,14 @@ export function EnviarGrupoWizard({
                 </>
               )}
 
-              {/* Link que o gestor manda para os donos */}
-              {linkOfertas && (
-                <div className="border border-zinc-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <Link2 className="size-5 text-brand shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-900">
-                        Link para os donos escolherem os produtos
-                      </p>
-                      <p className="text-xs text-zinc-500 mt-0.5 mb-2">
-                        Mande para os seus clientes. Eles escolhem os produtos e aparecem aqui no passo 2.
-                      </p>
-                      <div className="flex gap-2">
-                        <input
-                          readOnly
-                          value={linkOfertas}
-                          onFocus={(e) => e.currentTarget.select()}
-                          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-zinc-200 bg-zinc-50 text-xs text-zinc-600"
-                        />
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(linkOfertas)
-                              .then(() => toast.success("Link copiado!"))
-                              .catch(() => toast.error("Não consegui copiar."));
-                          }}
-                          className="shrink-0 px-3 py-2 rounded-lg border border-brand text-brand hover:bg-brand/5 text-sm font-medium flex items-center gap-1.5 transition"
-                        >
-                          <Copy className="size-3.5" /> Copiar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* O link é por cliente — vai junto na cobrança de cada um */}
+              <div className="border border-zinc-200 rounded-xl p-4 flex items-start gap-3">
+                <Link2 className="size-5 text-brand shrink-0 mt-0.5" />
+                <p className="text-xs text-zinc-500">
+                  Cada cliente tem o seu próprio link, que já abre na farmácia dele. Ao cobrar a
+                  lista, o link certo vai junto na mensagem.
+                </p>
+              </div>
             </div>
           )}
 
@@ -838,9 +813,9 @@ export function EnviarGrupoWizard({
                   />
                 </div>
                 <button
-                  onClick={carregarGrupos}
+                  onClick={() => void carregarGrupos(true)}
                   disabled={carregandoGrupos}
-                  title="Recarregar grupos"
+                  title="Buscar a lista atualizada no WhatsApp (pode demorar)"
                   className="size-9 rounded-lg border border-zinc-200 grid place-items-center text-zinc-500 hover:bg-zinc-50 transition shrink-0"
                 >
                   <RefreshCw className={`size-4 ${carregandoGrupos ? "animate-spin" : ""}`} />

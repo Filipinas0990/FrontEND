@@ -1112,6 +1112,17 @@ export interface GrupoWhatsApp {
   participantes: number | null
 }
 
+/** Listagem de grupos + estado do cache que a serviu. */
+export interface ListagemGrupos {
+  grupos: GrupoWhatsApp[]
+  /** ISO — quando o servidor sincronizou com a Evolution (null = sem conexão). */
+  atualizadoEm: string | null
+  /** true = tem refresh rodando no servidor; a lista pode mudar em instantes. */
+  sincronizando: boolean
+  /** Erro do último sync, com cache antigo ainda sendo exibido. */
+  aviso: string | null
+}
+
 export interface StatusInstancia {
   instancia: string | null
   status: InstanciaStatus
@@ -1203,10 +1214,17 @@ export function getConexoesDisparo(): Promise<ConexaoDisparo[]> {
   return req("/api/disparos/conexoes")
 }
 
-/** Grupos ao vivo — da conexão escolhida (ou a minha, se `instance` vazio). */
-export function getMeusGrupos(instance?: string): Promise<GrupoWhatsApp[]> {
-  const q = instance ? `?instance=${encodeURIComponent(instance)}` : ""
-  return req(`/api/disparos/grupos${q}`)
+/**
+ * Grupos da conexão escolhida (ou a minha, se `instance` vazio).
+ * Vem do cache do servidor — instantâneo. `refresh` força buscar na Evolution
+ * e aí sim espera (é o que o botão "Atualizar" usa).
+ */
+export function getMeusGrupos(instance?: string, refresh = false): Promise<ListagemGrupos> {
+  const p = new URLSearchParams()
+  if (instance) p.set("instance", instance)
+  if (refresh) p.set("refresh", "1")
+  const q = p.toString()
+  return req(`/api/disparos/grupos${q ? `?${q}` : ""}`)
 }
 
 /** Cria o disparo (imediato ou agendado). */
@@ -1234,11 +1252,15 @@ export interface ProdutoOferta {
 
 export interface OfertaPublica {
   gestor: { nome: string }
+  /** Farmácia dona do link — o dono já cai direto nos produtos dela. */
+  farmacia: { id: number; nome: string; cidade: string | null } | null
+  /** Só vem preenchido nos links antigos, em que o dono escolhia a farmácia. */
   farmacias: { id: number; nome: string; cidade: string | null }[]
   produtos: ProdutoOferta[]
 }
 
 export interface EnviarOfertaPayload {
+  /** Ignorado nos links de cliente: lá a farmácia vem do próprio token. */
   farmacia_id: number
   produtos: number[]
   produtos_livres?: string | null
@@ -1291,14 +1313,13 @@ export function ofertaImagemUrl(token: string, produtoId: number): string {
 
 // -- Do gestor --
 
-/** Link de ofertas do gestor (criado na primeira chamada). */
-export function getLinkOfertas(): Promise<LinkOfertas> {
-  return req("/api/ofertas/link")
-}
-
-/** Gera um token novo — o link antigo para de funcionar. */
-export function regenerarLinkOfertas(): Promise<LinkOfertas> {
-  return req("/api/ofertas/link/regenerar", { method: "POST" })
+/**
+ * Gera um token novo para aquele cliente — o link antigo morre na hora.
+ * O link de cada cliente já vem na carteira (`ClienteCarteira.link`); isto
+ * aqui é só para quando ele precisa ser invalidado.
+ */
+export function regenerarLinkOfertas(farmaciaId: number): Promise<LinkOfertas> {
+  return req(`/api/ofertas/link/${farmaciaId}/regenerar`, { method: "POST" })
 }
 
 /** O que os clientes enviaram. */
@@ -1313,6 +1334,8 @@ export interface ClienteCarteira {
   cidade: string | null
   telefone: string | null
   responsavel: string | null
+  /** Link exclusivo deste cliente para ele escolher os produtos. */
+  link: string | null
   /** true = tem pedido aguardando virar disparo */
   respondeu: boolean
   solicitacao: {

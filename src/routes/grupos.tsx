@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
@@ -14,7 +14,7 @@ import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo"
 import { formatarMoeda } from "@/lib/moeda";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
-  getCarteiraOfertas, getLinkOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus,
+  getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus,
   listarCatalogoProdutos, catalogoImagemUrl, criarDisparo,
   type Farmacia, type DisparoResumo, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
@@ -45,9 +45,41 @@ function GruposPage() {
   const [passo, setPasso] = useState<Passo>(1);
   const [farmacia, setFarmacia] = useState<Farmacia | null>(null);
   const [conexao, setConexao] = useState<string | null>(null);
-  const [grupos, setGrupos] = useState<GrupoWhatsApp[]>([]);
   const [gruposSel, setGruposSel] = useState<Set<string>>(new Set());
   const [modelo, setModelo] = useState<ModeloId | null>(null);
+
+  const { data: conexoes = [] } = useQuery({
+    queryKey: ["disparo-conexoes"],
+    queryFn: getConexoesDisparo,
+    staleTime: 60_000,
+  });
+
+  // Escolhe a primeira conexão aberta assim que as conexões chegam. Mora aqui
+  // no topo (e não dentro do passo 2) de propósito: com a conexão já definida
+  // no passo 1, a busca dos grupos roda enquanto o gestor escolhe a farmácia —
+  // quando ele chega no passo 2, a lista já está na tela.
+  useEffect(() => {
+    if (conexao || conexoes.length === 0) return;
+    const aberta = conexoes.find((c) => c.status === "open");
+    if (aberta) setConexao(aberta.instanceName);
+  }, [conexoes, conexao]);
+
+  const { data: listagem } = useGruposDaConexao(conexao);
+  const grupos = useMemo(() => listagem?.grupos ?? [], [listagem]);
+
+  // Marca sozinho os grupos com o nome da farmácia — uma vez por
+  // (conexão, farmácia). Sem essa trava, voltar do passo 3 para o 2 desfaria
+  // o que o gestor tivesse marcado ou desmarcado na mão.
+  const preSelecionado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!farmacia || grupos.length === 0) return;
+    const chave = `${conexao}|${farmacia.id}`;
+    if (preSelecionado.current === chave) return;
+    preSelecionado.current = chave;
+    setGruposSel(new Set(
+      grupos.filter((g) => combina(g.nome, farmacia.nome)).map((g) => g.jid),
+    ));
+  }, [grupos, farmacia, conexao]);
 
   // Disparo por cliente (aba de ofertas) — continua no wizard antigo
   const [clienteDisparo, setClienteDisparo] = useState<number | null>(null);
@@ -62,6 +94,7 @@ function GruposPage() {
   function escolherFarmacia(f: Farmacia) {
     setFarmacia(f);
     setGruposSel(new Set());
+    preSelecionado.current = null;   // deixa a pré-seleção rodar para esta farmácia
     setPasso(2);
   }
 
@@ -69,6 +102,7 @@ function GruposPage() {
     setPasso(1);
     setFarmacia(null);
     setGruposSel(new Set());
+    preSelecionado.current = null;
     setModelo(null);
   }
 
@@ -113,8 +147,6 @@ function GruposPage() {
                 farmacia={farmacia}
                 conexao={conexao}
                 setConexao={setConexao}
-                grupos={grupos}
-                setGrupos={setGrupos}
                 selecionados={gruposSel}
                 setSelecionados={setGruposSel}
                 onVoltar={() => setPasso(1)}
@@ -371,24 +403,53 @@ function combina(nomeGrupo: string, nomeFarmacia: string): boolean {
   return daFarmacia.some((t) => doGrupo.has(t));
 }
 
+/** Chave da query de grupos — o passo 1 e o passo 2 dividem o mesmo cache. */
+function chaveGrupos(conexao: string | null) {
+  return ["grupos-whatsapp", conexao] as const;
+}
+
+/**
+ * Grupos da conexão. O servidor já responde do cache dele e se revalida
+ * sozinho, então aqui o staleTime só evita refazer o request a cada ida e
+ * volta entre os passos do disparo.
+ */
+function useGruposDaConexao(conexao: string | null) {
+  return useQuery({
+    queryKey: chaveGrupos(conexao),
+    queryFn: () => getMeusGrupos(conexao ?? undefined),
+    enabled: !!conexao,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/** "agora há pouco", "há 12 min", "há 3 h" — idade do cache, em português. */
+function desde(iso: string | null): string | null {
+  if (!iso) return null;
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (min < 1)  return "agora há pouco";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  return `há ${Math.floor(h / 24)} d`;
+}
+
 function PassoGrupos({
-  farmacia, conexao, setConexao, grupos, setGrupos, selecionados, setSelecionados,
+  farmacia, conexao, setConexao, selecionados, setSelecionados,
   onVoltar, onContinuar,
 }: {
   farmacia: Farmacia;
   conexao: string | null;
   setConexao: (c: string | null) => void;
-  grupos: GrupoWhatsApp[];
-  setGrupos: (g: GrupoWhatsApp[]) => void;
   selecionados: Set<string>;
   setSelecionados: (s: Set<string>) => void;
   onVoltar: () => void;
   onContinuar: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
   const [soDaFarmacia, setSoDaFarmacia] = useState(true);
-  const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [atualizando, setAtualizando] = useState(false);
 
   const { data: conexoes = [], isLoading: carregandoConexoes, refetch: recarregarConexoes } = useQuery({
     queryKey: ["disparo-conexoes"],
@@ -396,47 +457,50 @@ function PassoGrupos({
     staleTime: 60_000,
   });
 
-  // Sem escolha ainda, assume a primeira conexão conectada
-  useEffect(() => {
-    if (conexao || conexoes.length === 0) return;
-    const aberta = conexoes.find((c) => c.status === "open");
-    if (aberta) setConexao(aberta.instanceName);
-  }, [conexoes, conexao, setConexao]);
-
   const temConexao = conexoes.some((c) => c.status === "open");
+
+  // Mesma query do topo da página (o passo 1 já a disparou) — o react-query
+  // devolve o cache aqui em vez de bater na API de novo.
+  const { data: listagem, isPending, error } = useGruposDaConexao(conexao);
+  const grupos = useMemo(() => listagem?.grupos ?? [], [listagem]);
+  const carregando = !!conexao && isPending;
+  const erro = error instanceof Error ? error.message : null;
 
   const combinam = useMemo(
     () => grupos.filter((g) => combina(g.nome, farmacia.nome)),
     [grupos, farmacia.nome],
   );
 
-  async function carregarGrupos(instancia: string | null) {
-    setCarregando(true);
-    setErro(null);
+  // Nenhum grupo casou com o nome da farmácia: abre já na lista completa,
+  // senão o gestor encara uma tela vazia sem saber que existe o toggle.
+  useEffect(() => {
+    if (grupos.length > 0 && combinam.length === 0) setSoDaFarmacia(false);
+  }, [grupos, combinam]);
+
+  // O servidor devolveu cache velho e foi atualizar por trás: daqui a pouco
+  // buscamos de novo para a tela pegar a lista nova sem o gestor fazer nada.
+  useEffect(() => {
+    if (!listagem?.sincronizando || !conexao) return;
+    const t = setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: chaveGrupos(conexao) });
+    }, 15_000);
+    return () => clearTimeout(t);
+  }, [listagem?.sincronizando, conexao, queryClient]);
+
+  /** Botão "Atualizar": ignora o cache do servidor e espera a Evolution. */
+  async function atualizarGrupos() {
+    if (!conexao || atualizando) return;
+    setAtualizando(true);
     try {
-      const lista = await getMeusGrupos(instancia ?? undefined);
-      setGrupos(lista);
-      if (lista.length === 0) {
-        setErro("Nenhum grupo encontrado nesta conexão de WhatsApp.");
-        return;
-      }
-      // Por padrão já vêm marcados os grupos com o nome da farmácia
-      const doCliente = lista.filter((g) => combina(g.nome, farmacia.nome));
-      setSelecionados(new Set(doCliente.map((g) => g.jid)));
-      setSoDaFarmacia(doCliente.length > 0);
+      const nova = await getMeusGrupos(conexao, true);
+      queryClient.setQueryData(chaveGrupos(conexao), nova);
+      toast.success(`${nova.grupos.length} grupo(s) sincronizado(s).`);
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro ao carregar os grupos.");
+      toast.error(err instanceof Error ? err.message : "Não foi possível atualizar os grupos.");
     } finally {
-      setCarregando(false);
+      setAtualizando(false);
     }
   }
-
-  // Busca os grupos ao abrir o passo e sempre que a conexão muda
-  useEffect(() => {
-    if (!conexao) return;
-    void carregarGrupos(conexao);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conexao, farmacia.id]);
 
   const visiveis = useMemo(() => {
     const base = soDaFarmacia ? combinam : grupos;
@@ -477,15 +541,34 @@ function PassoGrupos({
         ) : (
           <span className="text-sm text-zinc-500">nenhuma conexão disponível</span>
         )}
-        <button
-          onClick={() => conexao && carregarGrupos(conexao)}
-          disabled={!conexao || carregando}
-          title="Recarregar grupos"
-          className="ml-auto size-8 rounded-lg border border-zinc-200 grid place-items-center text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 transition shrink-0"
-        >
-          <RefreshCw className={`size-4 ${carregando ? "animate-spin" : ""}`} />
-        </button>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          {listagem?.atualizadoEm && (
+            <span className="text-[11px] text-zinc-400">
+              {listagem.sincronizando || atualizando
+                ? "sincronizando..."
+                : `lista de ${desde(listagem.atualizadoEm)}`}
+            </span>
+          )}
+          <button
+            onClick={atualizarGrupos}
+            disabled={!conexao || carregando || atualizando}
+            title="Buscar a lista atualizada no WhatsApp (pode demorar)"
+            className="size-8 rounded-lg border border-zinc-200 grid place-items-center text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 transition"
+          >
+            <RefreshCw className={`size-4 ${carregando || atualizando ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
+
+      {/* Cache antigo sendo exibido porque o último sync falhou */}
+      {listagem?.aviso && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5 items-start">
+          <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800">
+            Mostrando a última lista salva — a sincronização com o WhatsApp falhou: {listagem.aviso}
+          </p>
+        </div>
+      )}
 
       {/* Sem WhatsApp conectado não há grupos para listar */}
       {!carregandoConexoes && !temConexao ? (
@@ -1505,15 +1588,21 @@ function AbaClientes({
 }) {
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
-
-  const { data: link } = useQuery({
-    queryKey: ["ofertas-link"],
-    queryFn: getLinkOfertas,
-    staleTime: 10 * 60_000,
-    retry: false,
-  });
+  const [copiado, setCopiado] = useState<number | null>(null);
 
   const responderam = carteira.filter((c) => c.respondeu);
+
+  /** Copia o link daquele cliente. Cada farmácia tem o seu. */
+  function copiarLink(c: ClienteCarteira) {
+    if (!c.link) return;
+    navigator.clipboard.writeText(c.link)
+      .then(() => {
+        setCopiado(c.farmacia_id);
+        toast.success(`Link da ${c.farmacia} copiado!`);
+        setTimeout(() => setCopiado((atual) => (atual === c.farmacia_id ? null : atual)), 2000);
+      })
+      .catch(() => toast.error("Não consegui copiar."));
+  }
 
   const rows = useMemo(() => {
     const filtro = busca.trim().toLowerCase();
@@ -1549,36 +1638,18 @@ function AbaClientes({
         </div>
       </div>
 
-      {/* Link que o gestor manda para os donos escolherem os produtos */}
-      {link?.url && (
-        <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex items-start gap-3">
-          <Link2 className="size-5 text-brand shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-zinc-900">Link para os donos escolherem os produtos</p>
-            <p className="text-xs text-zinc-500 mt-0.5 mb-2">
-              Mande para os seus clientes. O que eles enviarem aparece nesta lista.
-            </p>
-            <div className="flex gap-2 max-w-xl">
-              <input
-                readOnly
-                value={link.url}
-                onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-zinc-200 bg-zinc-50 text-xs text-zinc-600"
-              />
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(link.url)
-                    .then(() => toast.success("Link copiado!"))
-                    .catch(() => toast.error("Não consegui copiar."));
-                }}
-                className="shrink-0 px-3 py-2 rounded-lg border border-brand text-brand hover:bg-brand/5 text-sm font-medium flex items-center gap-1.5 transition"
-              >
-                <Copy className="size-3.5" /> Copiar
-              </button>
-            </div>
-          </div>
+      {/* Cada cliente tem o seu link — o botão fica na linha dele, abaixo */}
+      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex items-start gap-3">
+        <Link2 className="size-5 text-brand shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-zinc-900">Cada cliente tem o seu próprio link</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Use o botão <strong className="text-zinc-600">Copiar link</strong> na linha do cliente e
+            mande para ele. O link já abre na farmácia dele — o dono só escolhe os produtos, e o que
+            ele enviar aparece nesta lista.
+          </p>
         </div>
-      )}
+      </div>
 
       {/* Busca */}
       <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm max-w-xs">
@@ -1601,7 +1672,7 @@ function AbaClientes({
         <div className="px-5 py-3.5 border-b border-zinc-100 grid grid-cols-[1fr_auto_auto] items-center gap-6">
           <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Farmácia</p>
           <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center w-28">Produtos</p>
-          <div className="w-24" />
+          <div className="w-56" />
         </div>
 
         <div className="divide-y divide-zinc-50">
@@ -1649,17 +1720,25 @@ function AbaClientes({
                   )}
                 </div>
 
-                {/* Ação */}
-                <div className="w-24 flex justify-end">
-                  {c.respondeu ? (
+                {/* Ações */}
+                <div className="w-56 flex justify-end items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); copiarLink(c); }}
+                    disabled={!c.link}
+                    title={c.link ?? "Link indisponível"}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-50 disabled:opacity-40 shrink-0 transition"
+                  >
+                    {copiado === c.farmacia_id
+                      ? <><Check className="size-3.5 text-emerald-600" /> Copiado</>
+                      : <><Copy className="size-3.5" /> Copiar link</>}
+                  </button>
+                  {c.respondeu && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onMontar(c); }}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand text-white rounded-lg hover:bg-brand/90 shrink-0"
                     >
                       Montar <ArrowRight className="size-3.5" />
                     </button>
-                  ) : (
-                    <span className="text-[11px] text-zinc-400">—</span>
                   )}
                 </div>
               </div>

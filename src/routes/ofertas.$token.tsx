@@ -46,7 +46,9 @@ function OfertasPublicaPage() {
     getOfertaPublica(token)
       .then((d) => {
         setDados(d);
-        if (d.farmacias.length === 1) setFarmaciaId(d.farmacias[0].id);
+        // Link do cliente: a farmácia vem no token, então já entra nos produtos
+        if (d.farmacia) setFarmaciaId(d.farmacia.id);
+        else if (d.farmacias.length === 1) setFarmaciaId(d.farmacias[0].id);
       })
       .catch(() => setErro("Este link não é válido ou expirou. Peça um link novo ao seu gestor."))
       .finally(() => setCarregando(false));
@@ -58,7 +60,9 @@ function OfertasPublicaPage() {
     [dados, busca],
   );
 
-  const farmacia = dados?.farmacias.find((f) => f.id === farmaciaId) ?? null;
+  // Nos links de cliente a farmácia é fixa: não há lista nem como trocar.
+  const farmaciaFixa = dados?.farmacia ?? null;
+  const farmacia = farmaciaFixa ?? dados?.farmacias.find((f) => f.id === farmaciaId) ?? null;
 
   // A lista só aparece depois que o dono digita — com o link do admin são
   // todas as farmácias da base, e rolar isso no celular é inviável.
@@ -212,12 +216,15 @@ function OfertasPublicaPage() {
       <Cabecalho gestor={dados?.gestor.nome} />
 
       <div className="max-w-lg mx-auto px-4 py-5">
-        <button
-          onClick={() => setFarmaciaId(null)}
-          className="text-sm text-zinc-500 hover:text-zinc-800 flex items-center gap-1.5 mb-3 transition"
-        >
-          <ArrowLeft className="size-4" /> Trocar farmácia
-        </button>
+        {/* No link do cliente não há para onde voltar — a farmácia é a dele */}
+        {!farmaciaFixa && (
+          <button
+            onClick={() => setFarmaciaId(null)}
+            className="text-sm text-zinc-500 hover:text-zinc-800 flex items-center gap-1.5 mb-3 transition"
+          >
+            <ArrowLeft className="size-4" /> Trocar farmácia
+          </button>
+        )}
 
         <div className="bg-white rounded-xl border border-zinc-200 p-3 mb-4 flex items-center gap-2">
           <Store className="size-4 text-brand shrink-0" />
