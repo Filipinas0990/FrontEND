@@ -1255,6 +1255,13 @@ function hojeISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Daqui a um mês, em yyyy-mm-dd — sugestão de término da repetição. */
+function emUmMes(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** Próxima hora cheia, no formato do input datetime-local (yyyy-mm-ddThh:mm). */
 function proximaHoraISO(): string {
   const d = new Date();
@@ -1285,9 +1292,10 @@ function ModalAgendamento({
   // Envio único: um campo só (data + hora). Repetido: janela com início e fim.
   const [envioEm, setEnvioEm] = useState(proximaHoraISO());
   const [dataInicio, setDataInicio] = useState(hojeISO());
-  const [dataFim, setDataFim] = useState(hojeISO());
+  // Repetição sem fim é o padrão; o gestor marca uma data se quiser encerrar.
+  const [temFim, setTemFim] = useState(false);
+  const [dataFim, setDataFim] = useState(emUmMes());
   const [horaInicio, setHoraInicio] = useState("08:00");
-  const [horaFim, setHoraFim] = useState("21:00");
   // Marcado = a hora sai da lista pré-definida, e os campos de hora somem
   const [usarPreset, setUsarPreset] = useState(false);
   // Pode marcar mais de um: o disparo sai em todos, em cada ocorrência
@@ -1358,7 +1366,7 @@ function ModalAgendamento({
       toast.error(repete ? "Informe a data e a hora de início." : "Informe o horário do envio.");
       return;
     }
-    if (repete && dataFim && dataFim < dataInicio) {
+    if (repete && temFim && dataFim < dataInicio) {
       toast.error("A data de término é anterior à de início."); return;
     }
 
@@ -1390,6 +1398,10 @@ function ModalAgendamento({
         repetir:       repete ? frequencia : "nunca",
         // Com 2+ o backend passa por todos antes de avançar a repetição
         horarios:      preset ? horariosOrdenados : undefined,
+        // Fim do dia escolhido: o disparo daquele último dia ainda acontece
+        repetir_ate:   repete && temFim
+          ? new Date(`${dataFim}T23:59:59`).toISOString()
+          : null,
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
         instance:      conexao,
@@ -1546,27 +1558,18 @@ function ModalAgendamento({
               </Campo>
             )
           ) : (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Campo rotulo="Data de início">
-                <input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-                />
-              </Campo>
-              <Campo rotulo="Data de término">
-                <input
-                  type="date"
-                  value={dataFim}
-                  min={dataInicio}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-                />
-              </Campo>
-              {!preset && (
-                <>
-                  <Campo rotulo="Hora de início">
+            <div className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Campo rotulo="Começa em">
+                  <input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  />
+                </Campo>
+                {!preset && (
+                  <Campo rotulo="Horário">
                     <input
                       type="time"
                       value={horaInicio}
@@ -1574,16 +1577,45 @@ function ModalAgendamento({
                       className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
                     />
                   </Campo>
-                  <Campo rotulo="Hora de término">
+                )}
+              </div>
+
+              {/* Fim da repetição: sem data, repete até o gestor cancelar */}
+              <div>
+                <p className="text-sm font-medium text-zinc-700">Repete até quando?</p>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <button
+                    onClick={() => setTemFim(false)}
+                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition ${
+                      !temFim ? "border-brand bg-brand/5 text-brand" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+                    }`}
+                  >
+                    Até eu cancelar
+                  </button>
+                  <button
+                    onClick={() => setTemFim(true)}
+                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition ${
+                      temFim ? "border-brand bg-brand/5 text-brand" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+                    }`}
+                  >
+                    Até uma data
+                  </button>
+                  {temFim && (
                     <input
-                      type="time"
-                      value={horaFim}
-                      onChange={(e) => setHoraFim(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      type="date"
+                      value={dataFim}
+                      min={dataInicio}
+                      onChange={(e) => setDataFim(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
                     />
-                  </Campo>
-                </>
-              )}
+                  )}
+                </div>
+                <p className="text-[11px] text-zinc-400 mt-1.5">
+                  {temFim
+                    ? "No último dia a campanha ainda sai, e depois é finalizada sozinha."
+                    : "A campanha fica repetindo até você cancelar na aba Histórico."}
+                </p>
+              </div>
             </div>
           )}
 
@@ -1610,12 +1642,7 @@ function ModalAgendamento({
             </select>
           </Campo>
 
-          <p className="text-[11px] text-zinc-400">
-            Horário de Brasília.
-            {repete && (preset
-              ? " Hoje o agendador usa a data de início e a repetição — a data de término ainda não é aplicada (falta suporte no backend)."
-              : " Hoje o agendador usa a data/hora de início e a repetição — data de término e hora de término ainda não são aplicadas (falta suporte no backend).")}
-          </p>
+          <p className="text-[11px] text-zinc-400">Horário de Brasília.</p>
         </div>
 
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-zinc-100 bg-zinc-50/50">

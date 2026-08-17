@@ -1165,6 +1165,8 @@ export interface CriarDisparoPayload {
   repetir?: RepetirDisparo
   /** Horários fixos do dia ("HH:MM"). Com 2 ou mais, o disparo sai em todos. */
   horarios?: string[]
+  /** ISO — fim da repetição. Null = repete até o gestor cancelar. */
+  repetir_ate?: string | null
   timezone?: string
   farmacia_id?: number | null
   solicitacao_id?: number | null
