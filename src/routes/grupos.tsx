@@ -1288,6 +1288,8 @@ function ModalAgendamento({
   const [dataFim, setDataFim] = useState(hojeISO());
   const [horaInicio, setHoraInicio] = useState("08:00");
   const [horaFim, setHoraFim] = useState("21:00");
+  // Marcado = a hora sai da lista pré-definida, e os campos de hora somem
+  const [usarPreset, setUsarPreset] = useState(false);
   const [conexao, setConexao] = useState<string | null>(conexaoInicial);
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState(0);
@@ -1311,6 +1313,19 @@ function ModalAgendamento({
 
   /** Hora atualmente escolhida ("HH:MM"), para destacar o chip correspondente. */
   const horaEscolhida = repete ? horaInicio : envioEm.slice(11, 16);
+
+  // Sem lista configurada não há o que oferecer — cai nos campos de hora.
+  const preset = usarPreset && horarios.length > 0;
+
+  /** Liga/desliga os horários pré-definidos. */
+  function alternarPreset(marcado: boolean) {
+    setUsarPreset(marcado);
+    // Marcou e a hora atual não está na lista: já assume o primeiro horário,
+    // senão o gestor marca "sim" e fica sem hora nenhuma escolhida.
+    if (marcado && horarios.length > 0 && !horarios.some((h) => h.horario === horaEscolhida)) {
+      aplicarHorario(horarios[0].horario);
+    }
+  }
 
   /**
    * Aplica um horário pré-definido. No envio único mantém a data que já estava
@@ -1441,48 +1456,79 @@ function ModalAgendamento({
             )}
           </div>
 
-          {/* Horários pré-definidos — um clique em vez de digitar a hora */}
+          {/* Pergunta antes de mostrar a lista — marcando, os campos de hora somem */}
           {horarios.length > 0 && (
             <div>
-              <p className="text-sm font-medium text-zinc-700">Horários pré-definidos</p>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {horarios.map((h) => {
-                  const ativo = horaEscolhida === h.horario;
-                  return (
-                    <button
-                      key={h.id}
-                      onClick={() => aplicarHorario(h.horario)}
-                      title={h.rotulo ?? undefined}
-                      className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
-                        ativo
-                          ? "border-brand bg-brand/5 text-brand"
-                          : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                      }`}
-                    >
-                      {h.horario}
-                      {h.rotulo && (
-                        <span className="text-[11px] font-normal text-zinc-400 ml-1.5">{h.rotulo}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-zinc-400 mt-1.5">
-                Configure a lista em Configurações → Horários de Disparo.
-              </p>
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={usarPreset}
+                  onChange={(e) => alternarPreset(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[var(--brand)] cursor-pointer"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-zinc-700">
+                    Enviar em horários pré-definidos?
+                  </span>
+                  <span className="block text-xs text-zinc-500 mt-0.5">
+                    Escolhe a hora na lista da sua operação em vez de digitar.
+                  </span>
+                </span>
+              </label>
+
+              {preset && (
+                <>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {horarios.map((h) => {
+                      const ativo = horaEscolhida === h.horario;
+                      return (
+                        <button
+                          key={h.id}
+                          onClick={() => aplicarHorario(h.horario)}
+                          title={h.rotulo ?? undefined}
+                          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                            ativo
+                              ? "border-brand bg-brand/5 text-brand"
+                              : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+                          }`}
+                        >
+                          {h.horario}
+                          {h.rotulo && (
+                            <span className="text-[11px] font-normal text-zinc-400 ml-1.5">{h.rotulo}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-1.5">
+                    Configure a lista em Configurações → Horários de Disparo.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
-          {/* Envio único: só o horário do envio. Repetido: a janela inteira. */}
+          {/* Com horário pré-definido, o campo de hora sai — quem manda é o chip. */}
           {!repete ? (
-            <Campo rotulo="Horário do envio">
-              <input
-                type="datetime-local"
-                value={envioEm}
-                onChange={(e) => setEnvioEm(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-              />
-            </Campo>
+            preset ? (
+              <Campo rotulo="Data do envio">
+                <input
+                  type="date"
+                  value={envioEm.slice(0, 10)}
+                  onChange={(e) => setEnvioEm(`${e.target.value}T${horaEscolhida || "08:00"}`)}
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+              </Campo>
+            ) : (
+              <Campo rotulo="Horário do envio">
+                <input
+                  type="datetime-local"
+                  value={envioEm}
+                  onChange={(e) => setEnvioEm(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+              </Campo>
+            )
           ) : (
             <div className="grid sm:grid-cols-2 gap-4">
               <Campo rotulo="Data de início">
@@ -1502,22 +1548,26 @@ function ModalAgendamento({
                   className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
               </Campo>
-              <Campo rotulo="Hora de início">
-                <input
-                  type="time"
-                  value={horaInicio}
-                  onChange={(e) => setHoraInicio(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-                />
-              </Campo>
-              <Campo rotulo="Hora de término">
-                <input
-                  type="time"
-                  value={horaFim}
-                  onChange={(e) => setHoraFim(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-                />
-              </Campo>
+              {!preset && (
+                <>
+                  <Campo rotulo="Hora de início">
+                    <input
+                      type="time"
+                      value={horaInicio}
+                      onChange={(e) => setHoraInicio(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    />
+                  </Campo>
+                  <Campo rotulo="Hora de término">
+                    <input
+                      type="time"
+                      value={horaFim}
+                      onChange={(e) => setHoraFim(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    />
+                  </Campo>
+                </>
+              )}
             </div>
           )}
 
@@ -1546,7 +1596,9 @@ function ModalAgendamento({
 
           <p className="text-[11px] text-zinc-400">
             Horário de Brasília.
-            {repete && " Hoje o agendador usa a data/hora de início e a repetição — data de término e hora de término ainda não são aplicadas (falta suporte no backend)."}
+            {repete && (preset
+              ? " Hoje o agendador usa a data de início e a repetição — a data de término ainda não é aplicada (falta suporte no backend)."
+              : " Hoje o agendador usa a data/hora de início e a repetição — data de término e hora de término ainda não são aplicadas (falta suporte no backend).")}
           </p>
         </div>
 
