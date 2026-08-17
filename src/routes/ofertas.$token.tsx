@@ -7,6 +7,7 @@ import {
   getOfertaPublica, enviarOfertaPublica, ofertaImagemUrl,
   type OfertaPublica,
 } from "@/lib/api";
+import { formatarMoeda } from "@/lib/moeda";
 
 export const Route = createFileRoute("/ofertas/$token")({
   component: OfertasPublicaPage,
@@ -32,6 +33,8 @@ function OfertasPublicaPage() {
 
   const [farmaciaId, setFarmaciaId] = useState<number | null>(null);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  // Preço por produto, no mesmo formato do criativo ("9,90"). Opcional.
+  const [precos, setPrecos] = useState<Record<number, string>>({});
   const [busca, setBusca] = useState("");
   const [buscaFarmacia, setBuscaFarmacia] = useState("");
   const [produtosLivres, setProdutosLivres] = useState("");
@@ -89,7 +92,7 @@ function OfertasPublicaPage() {
     try {
       await enviarOfertaPublica(token, {
         farmacia_id: farmaciaId,
-        produtos: [...selecionados],
+        produtos: [...selecionados].map((id) => ({ id, preco: precos[id]?.trim() || null })),
         produtos_livres: produtosLivres.trim() || null,
         observacao: observacao.trim() || null,
         enviado_por: enviadoPor.trim() || null,
@@ -233,8 +236,8 @@ function OfertasPublicaPage() {
 
         <h2 className="text-lg font-bold text-zinc-900">O que você quer anunciar?</h2>
         <p className="text-sm text-zinc-500 mt-1 mb-3">
-          Marque os produtos que entram na oferta. Não precisa informar preço —
-          seu gestor cuida disso.
+          Marque os produtos que entram na oferta e informe o preço de cada um.
+          Se não souber o preço agora, pode deixar em branco — seu gestor completa.
         </p>
 
         <div className="relative mb-3">
@@ -251,29 +254,38 @@ function OfertasPublicaPage() {
           {produtosFiltrados.map((p) => {
             const marcado = selecionados.has(p.id);
             return (
-              <button
+              <div
                 key={p.id}
-                onClick={() => alternar(p.id)}
-                className={`relative rounded-xl border bg-white p-2 text-left transition ${
+                className={`relative rounded-xl border bg-white p-2 transition ${
                   marcado ? "border-brand ring-2 ring-brand/20" : "border-zinc-200"
                 }`}
               >
-                <div className="aspect-square rounded-lg bg-zinc-50 grid place-items-center overflow-hidden mb-2">
-                  <img
-                    src={ofertaImagemUrl(token, p.id)}
-                    alt={p.nome}
-                    loading="lazy"
-                    className="max-h-full max-w-full object-contain"
-                    onError={(e) => { (e.currentTarget.style.display = "none"); }}
-                  />
-                </div>
-                <p className="text-xs text-zinc-800 leading-snug line-clamp-2">{p.nome}</p>
+                <button onClick={() => alternar(p.id)} className="w-full text-left">
+                  <div className="aspect-square rounded-lg bg-zinc-50 grid place-items-center overflow-hidden mb-2">
+                    <img
+                      src={ofertaImagemUrl(token, p.id)}
+                      alt={p.nome}
+                      loading="lazy"
+                      className="max-h-full max-w-full object-contain"
+                      onError={(e) => { (e.currentTarget.style.display = "none"); }}
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-800 leading-snug line-clamp-2">{p.nome}</p>
+                  {marcado && (
+                    <span className="absolute top-2 right-2 size-6 rounded-full bg-brand text-white grid place-items-center shadow">
+                      <Check className="size-3.5" />
+                    </span>
+                  )}
+                </button>
+
+                {/* Preço só aparece depois de marcar — e é opcional */}
                 {marcado && (
-                  <span className="absolute top-2 right-2 size-6 rounded-full bg-brand text-white grid place-items-center shadow">
-                    <Check className="size-3.5" />
-                  </span>
+                  <CampoPreco
+                    valor={precos[p.id] ?? ""}
+                    onChange={(v) => setPrecos((atual) => ({ ...atual, [p.id]: v }))}
+                  />
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -352,6 +364,34 @@ function OfertasPublicaPage() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Preço do produto no link do dono — opcional, e no mesmo formato que o
+ * criativo espera ("9,90"), para o gestor não ter que redigitar no passo 3.
+ * Campo alto e `inputMode="numeric"` porque o dono abre isto no celular.
+ */
+function CampoPreco({
+  valor, onChange,
+}: {
+  valor: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="relative mt-2">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400 pointer-events-none">
+        R$
+      </span>
+      <input
+        value={valor}
+        onChange={(e) => onChange(formatarMoeda(e.target.value))}
+        inputMode="numeric"
+        placeholder="0,00"
+        aria-label="Preço da oferta"
+        className="w-full pl-8 pr-2 py-2 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
+      />
     </div>
   );
 }

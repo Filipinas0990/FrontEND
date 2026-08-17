@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
-  ChevronRight, QrCode, Smartphone, History, MapPin,
+  ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -14,8 +14,8 @@ import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo"
 import { formatarMoeda } from "@/lib/moeda";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
-  getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus,
-  listarCatalogoProdutos, catalogoImagemUrl, criarDisparo,
+  getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
+  listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo,
   type Farmacia, type DisparoResumo, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
 } from "@/lib/api";
@@ -32,6 +32,13 @@ export const Route = createFileRoute("/grupos")({
 
 /** Passos do disparo: farmácia → grupos → criativo → agendamento (modal). */
 type Passo = 1 | 2 | 3 | 4;
+
+/** Só o dia, em pt-BR ("14/08/2026"). O `fmtData` lá de baixo leva a hora. */
+function fmtDia(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+}
 
 /** Os 3 modelos de criativo do fluxo. */
 type ModeloId = "padrao" | "abre" | "fecha";
@@ -797,17 +804,67 @@ function PassoCriativo({
   const [precosDe, setPrecosDe] = useState<Record<number, string>>({});
   const [subtitulo, setSubtitulo] = useState("");
 
+  // Ver o banco inteiro em vez de só o que o cliente pediu
+  const [verTodos, setVerTodos] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ["catalogo-produtos"],
     queryFn: listarCatalogoProdutos,
     staleTime: 5 * 60_000,
   });
 
+  // O que este cliente escolheu no link dele — é a base do criativo
+  const { data: ultima, isLoading: carregandoEscolha } = useQuery({
+    queryKey: ["ultima-escolha", farmacia.id],
+    queryFn: () => getUltimaEscolha(farmacia.id),
+    staleTime: 60_000,
+  });
+
   // Só o que está ligado no Banco de Imagens entra no criativo
-  const imagens = useMemo(
+  const ativos = useMemo(
     () => (data?.produtos ?? []).filter((p) => p.ativo),
     [data],
   );
+
+  const pedidos = useMemo(
+    () => new Set((ultima?.produtos ?? []).map((p) => p.id)),
+    [ultima],
+  );
+
+  const doCliente = useMemo(
+    () => ativos.filter((p) => pedidos.has(p.id)),
+    [ativos, pedidos],
+  );
+
+  // Sem escolha do cliente não há o que filtrar: cai no banco inteiro.
+  const soDoCliente = pedidos.size > 0 && !verTodos;
+  const imagens = soDoCliente ? doCliente : ativos;
+
+  // Produtos que o dono pediu mas saíram do banco de imagens (ou foram
+  // desativados) — some da grade sem avisar se a gente não contar.
+  const sumiram = pedidos.size - doCliente.length;
+
+  /** Preços que o próprio cliente informou no link dele, por produto. */
+  const precosDoCliente = useMemo(() => {
+    const mapa: Record<number, string> = {};
+    for (const p of ultima?.produtos ?? []) {
+      if (p.preco) mapa[p.id] = p.preco;
+    }
+    return mapa;
+  }, [ultima]);
+
+  // Já vêm marcados os produtos do pedido, com o preço que o cliente mandou.
+  // Uma vez por pedido, para não desfazer o que o gestor mexeu.
+  const preMarcado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ultima || doCliente.length === 0) return;
+    const chave = `${farmacia.id}|${ultima.id}`;
+    if (preMarcado.current === chave) return;
+    preMarcado.current = chave;
+    setEscolhidos(new Set(doCliente.map((p) => p.id)));
+    // Só os do pedido: preço digitado à mão para outro produto fica de pé.
+    setPrecos((atual) => ({ ...atual, ...precosDoCliente }));
+  }, [ultima, doCliente, farmacia.id, precosDoCliente]);
 
   const visiveis = useMemo(() => {
     const filtro = busca.trim().toLowerCase();
@@ -822,9 +879,11 @@ function PassoCriativo({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelo]);
 
+  // Sai de `ativos`, não de `imagens`: alternar "ver todo o banco" não pode
+  // derrubar do criativo um produto que o gestor já tinha marcado.
   const selecionados = useMemo(
-    () => imagens.filter((p) => escolhidos.has(p.id)),
-    [imagens, escolhidos],
+    () => ativos.filter((p) => escolhidos.has(p.id)),
+    [ativos, escolhidos],
   );
 
   function alternar(id: number) {
@@ -931,11 +990,29 @@ function PassoCriativo({
       <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-3 flex-wrap">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-zinc-900">Imagens do banco</p>
+            <p className="text-sm font-semibold text-zinc-900">
+              {soDoCliente ? `Produtos que ${farmacia.nome} pediu` : "Imagens do banco"}
+            </p>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              Escolha os produtos e informe o preço de cada um.
+              {ultima && soDoCliente
+                ? <>
+                    Produtos escolhidos no dia <strong className="text-zinc-700">{fmtDia(ultima.criado_em)}</strong>
+                    {ultima.enviado_por ? ` por ${ultima.enviado_por}` : ""}
+                    {Object.keys(precosDoCliente).length > 0
+                      ? " — os preços vieram no pedido, confira antes de disparar."
+                      : " — o cliente não informou preço, preencha aqui."}
+                  </>
+                : "Escolha os produtos e informe o preço de cada um."}
             </p>
           </div>
+          {pedidos.size > 0 && (
+            <button
+              onClick={() => setVerTodos((v) => !v)}
+              className="text-sm font-medium text-brand hover:underline shrink-0"
+            >
+              {verTodos ? "Só o que o cliente pediu" : "Ver todo o banco de imagens"}
+            </button>
+          )}
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 w-full sm:w-64">
             <Search className="size-4 text-zinc-400 shrink-0" />
             <input
@@ -953,7 +1030,44 @@ function PassoCriativo({
         </div>
 
         <div className="p-5">
-          {isLoading ? (
+          {/* Recados sobre o pedido do cliente */}
+          {!isLoading && !carregandoEscolha && (
+            <div className="space-y-2 mb-4 empty:mb-0">
+              {pedidos.size === 0 && (
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex gap-2.5 items-start">
+                  <Inbox className="size-4 text-zinc-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-zinc-600">
+                    {farmacia.nome} ainda não escolheu os produtos pelo link dela — mostrando o banco
+                    inteiro. O link fica na aba <strong>Ofertas dos clientes</strong>, botão “Copiar link”.
+                  </p>
+                </div>
+              )}
+
+              {ultima?.produtos_livres && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5 items-start">
+                  <PencilLine className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-800 min-w-0">
+                    <p className="font-medium">O cliente também escreveu itens fora do banco de imagens:</p>
+                    <p className="whitespace-pre-line mt-0.5">{ultima.produtos_livres}</p>
+                    <p className="text-amber-700/80 mt-1">
+                      Esses não têm foto pronta — se for anunciar, cadastre a imagem antes.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {sumiram > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5 items-start">
+                  <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    {sumiram} produto(s) que o cliente pediu não estão mais ativos no banco de imagens.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isLoading || carregandoEscolha ? (
             <div className="flex items-center justify-center gap-2 py-12 text-zinc-400 text-sm">
               <Loader2 className="size-4 animate-spin" /> Carregando o banco de imagens...
             </div>
@@ -961,7 +1075,9 @@ function PassoCriativo({
             <div className="py-12 text-center text-sm text-zinc-400">
               {busca
                 ? `Nenhum produto encontrado para "${busca}".`
-                : "Nenhuma imagem ativa no banco. Cadastre em Configurações → Banco de Imagens."}
+                : soDoCliente
+                  ? "Nenhum dos produtos escolhidos pelo cliente está ativo no banco de imagens."
+                  : "Nenhuma imagem ativa no banco. Cadastre em Configurações → Banco de Imagens."}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 max-h-[28rem] overflow-y-auto">
@@ -1017,6 +1133,14 @@ function PassoCriativo({
                           valor={precos[p.id] ?? ""}
                           onChange={(v) => setPrecos((atual) => ({ ...atual, [p.id]: v }))}
                         />
+                        {/* Deixa claro o que veio do cliente e o que o gestor mudou */}
+                        {precosDoCliente[p.id] && (
+                          <p className="text-[10px] text-zinc-400 text-right">
+                            {precos[p.id] === precosDoCliente[p.id]
+                              ? "preço enviado pelo cliente"
+                              : `cliente enviou R$ ${precosDoCliente[p.id]}`}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1174,9 +1298,41 @@ function ModalAgendamento({
     staleTime: 60_000,
   });
 
+  // Horários pré-definidos (Configurações → Horários de Disparo)
+  const { data: horarios = [] } = useQuery({
+    queryKey: ["horarios-disparo"],
+    queryFn: getHorariosDisparo,
+    staleTime: 5 * 60_000,
+  });
+
   // Quando o disparo vai sair, nos dois modos
   const quandoISO = repete ? `${dataInicio}T${horaInicio}` : envioEm;
   const jaPassou = Boolean(quandoISO) && new Date(quandoISO).getTime() < Date.now();
+
+  /** Hora atualmente escolhida ("HH:MM"), para destacar o chip correspondente. */
+  const horaEscolhida = repete ? horaInicio : envioEm.slice(11, 16);
+
+  /**
+   * Aplica um horário pré-definido. No envio único mantém a data que já estava
+   * e troca só a hora; se essa data/hora já passou, joga para amanhã — o
+   * gestor clicou às 16h num preset de 09:00 querendo o próximo, não o de hoje.
+   */
+  function aplicarHorario(hora: string) {
+    if (repete) {
+      setHoraInicio(hora);
+      return;
+    }
+    const dia = envioEm.slice(0, 10) || hojeISO();
+    const candidato = `${dia}T${hora}`;
+    if (new Date(candidato).getTime() < Date.now()) {
+      const amanha = new Date(`${dia}T${hora}`);
+      amanha.setDate(amanha.getDate() + 1);
+      const d = `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, "0")}-${String(amanha.getDate()).padStart(2, "0")}`;
+      setEnvioEm(`${d}T${hora}`);
+      return;
+    }
+    setEnvioEm(candidato);
+  }
 
   async function confirmar() {
     if (!conexao) { toast.error("Escolha a conexão que vai disparar."); return; }
@@ -1284,6 +1440,38 @@ function ModalAgendamento({
               </select>
             )}
           </div>
+
+          {/* Horários pré-definidos — um clique em vez de digitar a hora */}
+          {horarios.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-zinc-700">Horários pré-definidos</p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {horarios.map((h) => {
+                  const ativo = horaEscolhida === h.horario;
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => aplicarHorario(h.horario)}
+                      title={h.rotulo ?? undefined}
+                      className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                        ativo
+                          ? "border-brand bg-brand/5 text-brand"
+                          : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+                      }`}
+                    >
+                      {h.horario}
+                      {h.rotulo && (
+                        <span className="text-[11px] font-normal text-zinc-400 ml-1.5">{h.rotulo}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-1.5">
+                Configure a lista em Configurações → Horários de Disparo.
+              </p>
+            </div>
+          )}
 
           {/* Envio único: só o horário do envio. Repetido: a janela inteira. */}
           {!repete ? (

@@ -1227,6 +1227,34 @@ export function getMeusGrupos(instance?: string, refresh = false): Promise<Lista
   return req(`/api/disparos/grupos${q ? `?${q}` : ""}`)
 }
 
+/** Horário pré-definido de disparo (Configurações → Horários de Disparo). */
+export interface HorarioDisparo {
+  id: number
+  /** "HH:MM" */
+  horario: string
+  rotulo: string | null
+}
+
+/** Meus horários de agendamento (a 1ª chamada já cria os padrões). */
+export function getHorariosDisparo(): Promise<HorarioDisparo[]> {
+  return req("/api/disparos/horarios")
+}
+
+/** Adiciona um horário e devolve a lista já atualizada. */
+export function criarHorarioDisparo(
+  horario: string,
+  rotulo?: string | null,
+): Promise<HorarioDisparo[]> {
+  return req("/api/disparos/horarios", {
+    method: "POST",
+    body: JSON.stringify({ horario, rotulo: rotulo ?? null }),
+  })
+}
+
+export function removerHorarioDisparo(id: number): Promise<void> {
+  return req(`/api/disparos/horarios/${id}`, { method: "DELETE" })
+}
+
 /** Cria o disparo (imediato ou agendado). */
 export function criarDisparo(payload: CriarDisparoPayload): Promise<DisparoCriado> {
   return req("/api/disparos", { method: "POST", body: JSON.stringify(payload) })
@@ -1248,6 +1276,8 @@ export function cancelarDisparo(id: number): Promise<void> {
 export interface ProdutoOferta {
   id: number
   nome: string
+  /** Preço que o dono informou no link ("9,90"). Null = deixou para o gestor. */
+  preco?: string | null
 }
 
 export interface OfertaPublica {
@@ -1262,7 +1292,8 @@ export interface OfertaPublica {
 export interface EnviarOfertaPayload {
   /** Ignorado nos links de cliente: lá a farmácia vem do próprio token. */
   farmacia_id: number
-  produtos: number[]
+  /** O dono manda o preço junto; `preco` null = ele não informou. */
+  produtos: { id: number; preco?: string | null }[]
   produtos_livres?: string | null
   observacao?: string | null
   enviado_por?: string | null
@@ -1325,6 +1356,25 @@ export function regenerarLinkOfertas(farmaciaId: number): Promise<LinkOfertas> {
 /** O que os clientes enviaram. */
 export function getSolicitacoes(): Promise<SolicitacaoOferta[]> {
   return req("/api/ofertas/solicitacoes")
+}
+
+/** A última lista que este cliente mandou pelo link dele. */
+export interface UltimaEscolha {
+  id: number
+  produtos: ProdutoOferta[]
+  produtos_livres: string | null
+  observacao: string | null
+  enviado_por: string | null
+  status: StatusSolicitacao
+  criado_em: string
+}
+
+/**
+ * O que o cliente escolheu da última vez — é o que o passo 3 do disparo
+ * mostra, em vez do banco de imagens inteiro. `null` = nunca enviou nada.
+ */
+export function getUltimaEscolha(farmaciaId: number): Promise<UltimaEscolha | null> {
+  return req(`/api/ofertas/ultima-escolha/${farmaciaId}`)
 }
 
 /** Um cliente da carteira e o estado de resposta dele. */

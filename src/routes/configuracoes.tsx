@@ -11,6 +11,7 @@ import {
   Zap,
   Star,
   CalendarClock,
+  Clock,
   Settings,
   Lock,
 } from "lucide-react";
@@ -33,14 +34,15 @@ type CardItem = {
 function ConfigPage() {
   const isAdmin = getUser()?.is_admin === true;
 
-  // 11 cards → 6 em cima, 5 embaixo (igual ao print).
-  // Ativos: Conexões, Gestores (só admin) e Banco de Imagens. O resto é futuro (cadeado).
+  // Ativos: Conexões, Gestores (só admin), Banco de Imagens e Horários de
+  // Disparo. O resto é futuro (cadeado).
   const cards: CardItem[] = [
     { icon: Waypoints, label: "Conexões", to: "/conexoes" },
     isAdmin
       ? { icon: Users, label: "Gestores", to: "/gestores" }
       : { icon: Users, label: "Gestores", locked: true },
     { icon: Images, label: "Banco de Imagens", to: "/banco-imagens" },
+    { icon: Clock, label: "Horários de Disparo", to: "/horarios" },
     { icon: Puzzle, label: "Integrações de API", locked: true },
     { icon: BarChart3, label: "Power BI", locked: true },
     { icon: Bell, label: "Notificações", locked: true },

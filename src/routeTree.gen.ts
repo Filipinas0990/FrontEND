@@ -17,6 +17,7 @@ import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as OfertasClientesRouteImport } from './routes/ofertas-clientes'
 import { Route as NovidadesRouteImport } from './routes/novidades'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as HorariosRouteImport } from './routes/horarios'
 import { Route as GruposRouteImport } from './routes/grupos'
 import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
@@ -74,6 +75,11 @@ const NovidadesRoute = NovidadesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HorariosRoute = HorariosRouteImport.update({
+  id: '/horarios',
+  path: '/horarios',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GruposRoute = GruposRouteImport.update({
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/grupos': typeof GruposRoute
+  '/horarios': typeof HorariosRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
   '/grupos': typeof GruposRoute
+  '/horarios': typeof HorariosRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
@@ -231,6 +239,7 @@ export interface FileRoutesById {
   '/farmacias': typeof FarmaciasRouteWithChildren
   '/gestores': typeof GestoresRoute
   '/grupos': typeof GruposRoute
+  '/horarios': typeof HorariosRoute
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/farmacias'
     | '/gestores'
     | '/grupos'
+    | '/horarios'
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/gestores'
     | '/grupos'
+    | '/horarios'
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/farmacias'
     | '/gestores'
     | '/grupos'
+    | '/horarios'
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
@@ -343,6 +355,7 @@ export interface RootRouteChildren {
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
   GestoresRoute: typeof GestoresRoute
   GruposRoute: typeof GruposRoute
+  HorariosRoute: typeof HorariosRoute
   LoginRoute: typeof LoginRoute
   NovidadesRoute: typeof NovidadesRoute
   OfertasClientesRoute: typeof OfertasClientesRoute
@@ -411,6 +424,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/horarios': {
+      id: '/horarios'
+      path: '/horarios'
+      fullPath: '/horarios'
+      preLoaderRoute: typeof HorariosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/grupos': {
@@ -594,6 +614,7 @@ const rootRouteChildren: RootRouteChildren = {
   FarmaciasRoute: FarmaciasRouteWithChildren,
   GestoresRoute: GestoresRoute,
   GruposRoute: GruposRoute,
+  HorariosRoute: HorariosRoute,
   LoginRoute: LoginRoute,
   NovidadesRoute: NovidadesRoute,
   OfertasClientesRoute: OfertasClientesRoute,

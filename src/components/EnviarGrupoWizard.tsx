@@ -221,7 +221,8 @@ export function EnviarGrupoWizard({
       chave:  `cat-${p.id}`,
       nome:   p.nome,
       imagem: catalogoImagemUrl(p.id),
-      preco:  "",
+      // O dono já pode ter mandado o preço no link dele
+      preco:  p.preco ?? "",
     }));
 
     const livres: ItemOferta[] = (c.solicitacao.produtos_livres ?? "")
@@ -234,7 +235,10 @@ export function EnviarGrupoWizard({
     setItens(lista);
     // Por padrão já vêm todos marcados — o gestor desmarca o que não quiser
     setEscolhidos(new Set(lista.map((i) => i.chave)));
-    setPrecos({});
+    // Preços que vieram do cliente já entram preenchidos
+    setPrecos(Object.fromEntries(
+      lista.filter((i) => i.preco).map((i) => [i.chave, i.preco]),
+    ));
     setMensagem(`🔥 *OFERTAS* — ${c.farmacia} 🔥`);
   }
 
