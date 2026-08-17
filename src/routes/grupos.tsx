@@ -1290,6 +1290,8 @@ function ModalAgendamento({
   const [horaFim, setHoraFim] = useState("21:00");
   // Marcado = a hora sai da lista pré-definida, e os campos de hora somem
   const [usarPreset, setUsarPreset] = useState(false);
+  // Pode marcar mais de um: o disparo sai em todos, em cada ocorrência
+  const [horariosSel, setHorariosSel] = useState<Set<string>>(new Set());
   const [conexao, setConexao] = useState<string | null>(conexaoInicial);
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState(0);
@@ -1307,50 +1309,51 @@ function ModalAgendamento({
     staleTime: 5 * 60_000,
   });
 
-  // Quando o disparo vai sair, nos dois modos
-  const quandoISO = repete ? `${dataInicio}T${horaInicio}` : envioEm;
-  const jaPassou = Boolean(quandoISO) && new Date(quandoISO).getTime() < Date.now();
-
-  /** Hora atualmente escolhida ("HH:MM"), para destacar o chip correspondente. */
-  const horaEscolhida = repete ? horaInicio : envioEm.slice(11, 16);
-
   // Sem lista configurada não há o que oferecer — cai nos campos de hora.
   const preset = usarPreset && horarios.length > 0;
+
+  const horariosOrdenados = useMemo(() => [...horariosSel].sort(), [horariosSel]);
+
+  /**
+   * Primeiro horário marcado que ainda não passou naquela data — é ele que
+   * vira o `agendado_para`. Marcar 08:00 e 18:00 às 10h da manhã tem que
+   * começar às 18:00 de hoje, não disparar o 08:00 atrasado na hora.
+   */
+  function primeiraHoraDe(data: string): string {
+    const futura = horariosOrdenados.find((h) => new Date(`${data}T${h}`).getTime() > Date.now());
+    return futura ?? horariosOrdenados[0] ?? "";
+  }
+
+  // Quando o primeiro disparo vai sair, nos dois modos
+  const dataEnvio = envioEm.slice(0, 10);
+  const quandoISO = repete
+    ? `${dataInicio}T${preset ? primeiraHoraDe(dataInicio) : horaInicio}`
+    : (preset ? `${dataEnvio}T${primeiraHoraDe(dataEnvio)}` : envioEm);
+  const jaPassou = Boolean(quandoISO) && new Date(quandoISO).getTime() < Date.now();
 
   /** Liga/desliga os horários pré-definidos. */
   function alternarPreset(marcado: boolean) {
     setUsarPreset(marcado);
-    // Marcou e a hora atual não está na lista: já assume o primeiro horário,
-    // senão o gestor marca "sim" e fica sem hora nenhuma escolhida.
-    if (marcado && horarios.length > 0 && !horarios.some((h) => h.horario === horaEscolhida)) {
-      aplicarHorario(horarios[0].horario);
+    // Marcou e não tinha nada marcado: já assume o primeiro da lista, senão o
+    // gestor responde "sim" e fica sem horário nenhum.
+    if (marcado && horariosSel.size === 0 && horarios.length > 0) {
+      setHorariosSel(new Set([horarios[0].horario]));
     }
   }
 
-  /**
-   * Aplica um horário pré-definido. No envio único mantém a data que já estava
-   * e troca só a hora; se essa data/hora já passou, joga para amanhã — o
-   * gestor clicou às 16h num preset de 09:00 querendo o próximo, não o de hoje.
-   */
-  function aplicarHorario(hora: string) {
-    if (repete) {
-      setHoraInicio(hora);
-      return;
-    }
-    const dia = envioEm.slice(0, 10) || hojeISO();
-    const candidato = `${dia}T${hora}`;
-    if (new Date(candidato).getTime() < Date.now()) {
-      const amanha = new Date(`${dia}T${hora}`);
-      amanha.setDate(amanha.getDate() + 1);
-      const d = `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, "0")}-${String(amanha.getDate()).padStart(2, "0")}`;
-      setEnvioEm(`${d}T${hora}`);
-      return;
-    }
-    setEnvioEm(candidato);
+  function alternarHorario(hora: string) {
+    setHorariosSel((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(hora)) novo.delete(hora); else novo.add(hora);
+      return novo;
+    });
   }
 
   async function confirmar() {
     if (!conexao) { toast.error("Escolha a conexão que vai disparar."); return; }
+    if (preset && horariosSel.size === 0) {
+      toast.error("Marque ao menos um horário pré-definido."); return;
+    }
     if (!quandoISO) {
       toast.error(repete ? "Informe a data e a hora de início." : "Informe o horário do envio.");
       return;
@@ -1385,6 +1388,8 @@ function ModalAgendamento({
         quando:        "agendado",
         agendado_para: new Date(quandoISO).toISOString(),
         repetir:       repete ? frequencia : "nunca",
+        // Com 2+ o backend passa por todos antes de avançar a repetição
+        horarios:      preset ? horariosOrdenados : undefined,
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
         instance:      conexao,
@@ -1471,7 +1476,7 @@ function ModalAgendamento({
                     Enviar em horários pré-definidos?
                   </span>
                   <span className="block text-xs text-zinc-500 mt-0.5">
-                    Escolhe a hora na lista da sua operação em vez de digitar.
+                    Marque um ou mais horários da lista — o disparo sai em todos eles.
                   </span>
                 </span>
               </label>
@@ -1480,28 +1485,38 @@ function ModalAgendamento({
                 <>
                   <div className="flex flex-wrap gap-2 mt-3">
                     {horarios.map((h) => {
-                      const ativo = horaEscolhida === h.horario;
+                      const ativo = horariosSel.has(h.horario);
                       return (
                         <button
                           key={h.id}
-                          onClick={() => aplicarHorario(h.horario)}
+                          onClick={() => alternarHorario(h.horario)}
                           title={h.rotulo ?? undefined}
-                          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition flex items-center gap-1.5 ${
                             ativo
                               ? "border-brand bg-brand/5 text-brand"
                               : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
                           }`}
                         >
+                          <span className={`size-4 rounded border grid place-items-center shrink-0 ${
+                            ativo ? "bg-brand border-brand text-white" : "border-zinc-300"
+                          }`}>
+                            {ativo && <Check className="size-3" />}
+                          </span>
                           {h.horario}
                           {h.rotulo && (
-                            <span className="text-[11px] font-normal text-zinc-400 ml-1.5">{h.rotulo}</span>
+                            <span className="text-[11px] font-normal text-zinc-400">{h.rotulo}</span>
                           )}
                         </button>
                       );
                     })}
                   </div>
                   <p className="text-[11px] text-zinc-400 mt-1.5">
-                    Configure a lista em Configurações → Horários de Disparo.
+                    {horariosSel.size === 0
+                      ? "Marque ao menos um horário."
+                      : horariosSel.size === 1
+                        ? `Sai 1x por ocorrência, às ${horariosOrdenados[0]}.`
+                        : `Sai ${horariosSel.size}x por ocorrência: ${horariosOrdenados.join(", ")}.`}
+                    {" "}Configure a lista em Configurações → Horários de Disparo.
                   </p>
                 </>
               )}
@@ -1514,8 +1529,9 @@ function ModalAgendamento({
               <Campo rotulo="Data do envio">
                 <input
                   type="date"
-                  value={envioEm.slice(0, 10)}
-                  onChange={(e) => setEnvioEm(`${e.target.value}T${horaEscolhida || "08:00"}`)}
+                  value={dataEnvio}
+                  // A hora vem dos chips; aqui só troca o dia.
+                  onChange={(e) => setEnvioEm(`${e.target.value}T${envioEm.slice(11, 16) || "08:00"}`)}
                   className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
               </Campo>

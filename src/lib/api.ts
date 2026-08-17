@@ -1163,6 +1163,8 @@ export interface CriarDisparoPayload {
   quando: "agora" | "agendado"
   agendado_para?: string | null
   repetir?: RepetirDisparo
+  /** Horários fixos do dia ("HH:MM"). Com 2 ou mais, o disparo sai em todos. */
+  horarios?: string[]
   timezone?: string
   farmacia_id?: number | null
   solicitacao_id?: number | null
