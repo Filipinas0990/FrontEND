@@ -44,6 +44,34 @@ function valorPreco(preco: string): string {
   return v || "0,00";
 }
 
+/**
+ * Tamanho da fonte do preço, em cqw, para o valor caber na caixa dele.
+ *
+ * O tamanho era fixo (21cqw no banner) e não olhava o texto: "R$0,00" já
+ * transbordava a caixa vermelha, e cada dígito a mais ("1.299,90") empurrava
+ * mais para fora — era o defeito ao lado do zero. Aqui o tamanho cai conforme
+ * o preço cresce, e nunca passa do que era antes, para o criativo curto
+ * continuar com a mesma cara.
+ *
+ * Larguras medidas no Chromium com a marcação real (dígito 0.572em, vírgula e
+ * ponto 0.286em), com ~12% de folga para variação de fonte e arredondamento.
+ */
+const LARGURA_DIGITO    = 0.64;
+const LARGURA_SEPARADOR = 0.32;
+
+function tamanhoQueCabe(
+  valor:      string,
+  prefixoEm:  number,   // largura do "R$" / "POR R$" que vem antes do número
+  utilCqw:    number,   // largura interna da caixa, em % da largura do card
+  maxCqw:     number,   // teto: o tamanho que o design já usava
+): number {
+  let em = prefixoEm;
+  for (const ch of valor) {
+    em += ch === "," || ch === "." ? LARGURA_SEPARADOR : LARGURA_DIGITO;
+  }
+  return Math.min(maxCqw, utilCqw / em);
+}
+
 function Imagem({ imagem, nome, className }: { imagem?: string | null; nome: string; className?: string }) {
   return imagem
     ? <img src={imagem} alt={nome} className={className} />
@@ -52,6 +80,8 @@ function Imagem({ imagem, nome, className }: { imagem?: string | null; nome: str
 
 // ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
 function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: CriativoDados) {
+  // Caixa vermelha: bloco de 46% do card, menos o px-[4%] dos dois lados.
+  const tamanho = tamanhoQueCabe(valorPreco(preco), 0.60, 41, 21);
   return (
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
@@ -94,8 +124,8 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
               De R${valorPreco(precoDe)}
             </span>
           )}
-          <span className="text-white font-black leading-none inline-flex items-start justify-center"
-                style={{ fontSize: "clamp(30px, 21cqw, 140px)" }}>
+          <span className="text-white font-black leading-none inline-flex items-start justify-center whitespace-nowrap"
+                style={{ fontSize: `clamp(10px, ${tamanho.toFixed(2)}cqw, 140px)` }}>
             <span style={{ fontSize: "0.42em" }} className="mt-[0.35em] mr-[0.05em]">R$</span>
             {valorPreco(preco)}
           </span>
@@ -114,6 +144,8 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
 // ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
 function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
+  // Pílula de 60% do card menos o px-[4%]; o prefixo aqui é o "POR R$" inteiro.
+  const tamanho = tamanhoQueCabe(valorPreco(preco), 3.7, 53.5, 8.5);
   return (
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
@@ -127,8 +159,8 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados
               De R${valorPreco(precoDe)}
             </span>
           )}
-          <span className="block text-white font-black uppercase leading-none tracking-tight"
-                style={{ fontSize: "clamp(14px, 8.5cqw, 44px)" }}>
+          <span className="block text-white font-black uppercase leading-none tracking-tight whitespace-nowrap"
+                style={{ fontSize: `clamp(10px, ${tamanho.toFixed(2)}cqw, 44px)` }}>
             POR R${valorPreco(preco)}
           </span>
         </div>
