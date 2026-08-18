@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { createElement } from "react";
+import { flushSync } from "react-dom";
 import { toPng } from "html-to-image";
 import { CriativoCard, type CriativoDados } from "@/components/CriativoCard";
 
@@ -14,10 +15,72 @@ const DIMENSOES: Record<string, { w: number; h: number }> = {
   "9:16": { w: 1080, h: 1920 },
 };
 
+/** Pesos da Inter que o criativo usa. Fonte não carregada = métrica errada no PNG. */
+const PESOS_FONTE = ["400", "700", "800", "900"];
+
+const proximoFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+async function esperarFontes(): Promise<void> {
+  try {
+    await Promise.all(PESOS_FONTE.map((peso) => document.fonts.load(`${peso} 1em Inter`)));
+    await document.fonts.ready;
+  } catch {
+    // Sem a fonte o texto ainda sai, só com o fallback — não vale abortar o PNG.
+  }
+}
+
+/** Espera toda <img> dentro da raiz decodificar. Imagem pendente = buraco no PNG. */
+async function esperarImagens(raiz: HTMLElement, timeoutMs = 8000): Promise<void> {
+  const pendentes = Array.from(raiz.querySelectorAll("img"))
+    .filter((img) => !(img.complete && img.naturalWidth > 0))
+    .map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          img.addEventListener("load", () => resolve(), { once: true });
+          img.addEventListener("error", () => resolve(), { once: true });
+        }),
+    );
+  if (!pendentes.length) return;
+  await Promise.race([
+    Promise.all(pendentes).then(() => undefined),
+    new Promise<void>((r) => setTimeout(r, timeoutMs)),
+  ]);
+}
+
+/**
+ * Baixa a imagem do produto e devolve como data URI.
+ *
+ * O html-to-image monta um SVG e precisa embutir a imagem nele. Se a imagem vier
+ * de outra origem — e vem, o banco de imagens é servido pela API — e o fetch
+ * interno dele falhar, ele desiste em silêncio: o criativo sai com o quadro
+ * vazio, sem erro nenhum. Buscando aqui, a imagem chega garantida ao PNG.
+ */
+async function embutirImagem(src?: string | null): Promise<string | null | undefined> {
+  if (!src || src.startsWith("data:")) return src;
+  try {
+    const res = await fetch(src, { mode: "cors", credentials: "omit" });
+    if (!res.ok) return src;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result as string);
+      fr.onerror = () => reject(new Error("falha ao ler a imagem"));
+      fr.readAsDataURL(blob);
+    });
+  } catch (err) {
+    // Falhar em silêncio aqui é justamente o que fazia o criativo sair sem a
+    // foto do produto — se acontecer, o motivo tem que aparecer no console.
+    console.warn("Não consegui embutir a imagem do produto no criativo:", src, err);
+    return src; // deixa o html-to-image tentar do jeito dele
+  }
+}
+
 export async function exportarCriativoPng(dados: CriativoDados): Promise<string> {
   const dim = DIMENSOES[dados.enquadramento] ?? DIMENSOES["4:5"];
   const largura = dim.w;
   const altura = dim.h;
+
+  const imagem = await embutirImagem(dados.imagem);
 
   // Container escondido, no tamanho final do criativo
   const host = document.createElement("div");
@@ -28,14 +91,26 @@ export async function exportarCriativoPng(dados: CriativoDados): Promise<string>
   const root = createRoot(host);
 
   try {
-    // Renderiza o card e espera imagens/layout assentarem
-    await new Promise<void>((resolve) => {
-      root.render(createElement(CriativoCard, dados));
-      setTimeout(resolve, 350);
-    });
+    // flushSync garante que o card já está no DOM quando lemos firstElementChild
+    flushSync(() => root.render(createElement(CriativoCard, { ...dados, imagem })));
 
-    const alvo = host.firstElementChild as HTMLElement;
-    return await toPng(alvo, { width: largura, height: altura, pixelRatio: 1, cacheBust: true });
+    const alvo = host.firstElementChild as HTMLElement | null;
+    if (!alvo) throw new Error("Criativo não renderizou");
+
+    // Canto arredondado vira canto transparente no PNG — o criativo final é reto.
+    alvo.style.borderRadius = "0";
+
+    await esperarFontes();
+    await esperarImagens(host);
+    await proximoFrame();
+    await proximoFrame();
+
+    return await toPng(alvo, {
+      width: largura,
+      height: altura,
+      pixelRatio: 1,
+      backgroundColor: "#ffffff",
+    });
   } finally {
     root.unmount();
     host.remove();

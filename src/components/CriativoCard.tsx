@@ -23,15 +23,31 @@ export interface CriativoDados {
   subtitulo?: string;       // datas/subtítulo (layout banner) — ex: "DIAS 29 A 31"
 }
 
+/**
+ * REGRA DO CRIATIVO: todo tamanho aqui é proporcional à largura do card (`cqw`).
+ *
+ * O card é renderizado com ~235px na preview e com 1080px na hora de exportar o
+ * PNG. Enquanto as caixas e faixas eram em `%`, os textos usavam
+ * `clamp(min_px, Xcqw, MAX_px)` — e no export TODOS batiam no teto em px: o
+ * título saía com 66% do tamanho certo, o preço do layout azul com 48%. Daí a
+ * preview ficar correta e o PNG sair com o texto encolhido dentro de caixas do
+ * tamanho normal.
+ *
+ * Por isso não entra px em nada que componha o desenho: nem fonte, nem borda,
+ * nem sombra, nem raio. Só `cqw`, `%` e `em`. Assim a miniatura, a preview e o
+ * PNG de 1080px são a mesma arte em escalas diferentes.
+ */
+
 // ── Azul da referência (modelos 1 e 2, com brilho) ────────────────────────────
 const AZUL_GRADIENTE = "linear-gradient(180deg, #3f74dd 0%, #0a2c78 100%)";
-const AZUL_BORDA = "2px solid rgba(205, 226, 255, 0.95)";
-const AZUL_BRILHO = "0 0 18px rgba(90, 150, 255, 0.75), inset 0 1px 0 rgba(255,255,255,0.28)";
+const AZUL_BORDA = "0.6cqw solid rgba(205, 226, 255, 0.95)";
+const AZUL_BRILHO = "0 0 5cqw rgba(90, 150, 255, 0.75), inset 0 0.3cqw 0 rgba(255,255,255,0.28)";
 
 const estiloAzul: React.CSSProperties = {
   background: AZUL_GRADIENTE,
   border: AZUL_BORDA,
   boxShadow: AZUL_BRILHO,
+  borderRadius: "10cqw",
 };
 
 // ── Cores do Modelo 3 (Banner Oferta) ─────────────────────────────────────────
@@ -89,9 +105,9 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
       {/* Título (faixa azul no topo) */}
       <div className="absolute top-[13%] left-[5%] right-[5%]">
         <div className="rounded-full py-[2.5%] px-[4%] text-center"
-             style={{ background: NAVY, border: "3px solid #fff", boxShadow: "0 4px 12px rgba(0,0,0,.18)" }}>
+             style={{ background: NAVY, border: "0.85cqw solid #fff", boxShadow: "0 1.1cqw 3.3cqw rgba(0,0,0,.18)" }}>
           <span className="block text-white font-black uppercase leading-none tracking-tight"
-                style={{ fontSize: "clamp(18px, 13cqw, 92px)" }}>
+                style={{ fontSize: "13cqw" }}>
             {titulo || "FECHA MÊS"}
           </span>
         </div>
@@ -100,9 +116,9 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
       {/* Subtítulo / datas (pílula branca) */}
       <div className="absolute top-[24.5%] left-[15%] right-[15%]">
         <div className="rounded-full py-[1.4%] px-[3%] text-center bg-white"
-             style={{ boxShadow: "0 3px 8px rgba(0,0,0,.14)" }}>
+             style={{ boxShadow: "0 0.8cqw 2.2cqw rgba(0,0,0,.14)" }}>
           <span className="block font-black uppercase leading-none tracking-tight"
-                style={{ color: VERM, fontSize: "clamp(11px, 6cqw, 42px)" }}>
+                style={{ color: VERM, fontSize: "6cqw" }}>
             {subtitulo || "DIAS 00 A 00"}
           </span>
         </div>
@@ -111,21 +127,21 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
       {/* Preço (bloco embaixo-direita) */}
       <div className="absolute bottom-[6%] right-[4%] w-[46%] flex flex-col items-center">
         <div className="rounded-full px-[7%] py-[1.6%] relative z-10"
-             style={{ background: NAVY, border: "2px solid #fff", marginBottom: "-4%" }}>
+             style={{ background: NAVY, border: "0.55cqw solid #fff", marginBottom: "-4%" }}>
           <span className="block text-white font-black uppercase leading-none"
-                style={{ fontSize: "clamp(10px, 5cqw, 34px)" }}>
+                style={{ fontSize: "5cqw" }}>
             POR APENAS
           </span>
         </div>
-        <div className="w-full rounded-xl px-[4%] pt-[7%] pb-[4%] text-center" style={{ background: VERM }}>
+        <div className="w-full px-[4%] pt-[7%] pb-[4%] text-center" style={{ background: VERM, borderRadius: "5cqw" }}>
           {precoDe && (
             <span className="block text-white font-bold uppercase leading-none line-through"
-                  style={{ fontSize: "clamp(9px, 4.6cqw, 30px)", opacity: 0.9, marginBottom: "1.5%" }}>
+                  style={{ fontSize: "4.6cqw", opacity: 0.9, marginBottom: "1.5%" }}>
               De R${valorPreco(precoDe)}
             </span>
           )}
           <span className="text-white font-black leading-none inline-flex items-start justify-center whitespace-nowrap"
-                style={{ fontSize: `clamp(10px, ${tamanho.toFixed(2)}cqw, 140px)` }}>
+                style={{ fontSize: `${tamanho.toFixed(2)}cqw` }}>
             <span style={{ fontSize: "0.42em" }} className="mt-[0.35em] mr-[0.05em]">R$</span>
             {valorPreco(preco)}
           </span>
@@ -152,15 +168,15 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados
 
       {/* Pílula de preço no topo */}
       <div className="absolute top-[5%] left-[5%] w-[60%]">
-        <div className="rounded-[1.4rem] px-[4%] py-[3.5%] text-center" style={estiloAzul}>
+        <div className="px-[4%] py-[3.5%] text-center" style={estiloAzul}>
           {precoDe && (
             <span className="block text-white font-bold uppercase leading-none line-through"
-                  style={{ fontSize: "clamp(9px, 4.8cqw, 24px)", opacity: 0.85, marginBottom: "2.5%" }}>
+                  style={{ fontSize: "4.8cqw", opacity: 0.85, marginBottom: "2.5%" }}>
               De R${valorPreco(precoDe)}
             </span>
           )}
           <span className="block text-white font-black uppercase leading-none tracking-tight whitespace-nowrap"
-                style={{ fontSize: `clamp(10px, ${tamanho.toFixed(2)}cqw, 44px)` }}>
+                style={{ fontSize: `${tamanho.toFixed(2)}cqw` }}>
             POR R${valorPreco(preco)}
           </span>
         </div>
@@ -168,9 +184,9 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados
 
       {/* Barra inferior: farmácia */}
       <div className="absolute bottom-[5%] left-[6%] right-[6%]">
-        <div className="rounded-[1.4rem] flex items-center justify-center px-[5%] py-[3.5%]" style={estiloAzul}>
+        <div className="flex items-center justify-center px-[5%] py-[3.5%]" style={estiloAzul}>
           <span className="text-white font-black uppercase leading-tight tracking-tight break-words text-center"
-                style={{ fontSize: "clamp(12px, 6cqw, 32px)" }}>
+                style={{ fontSize: "6cqw" }}>
             {farmacia}
           </span>
         </div>
