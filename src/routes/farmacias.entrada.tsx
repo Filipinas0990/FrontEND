@@ -252,11 +252,11 @@ function ModalNovo({
   gestores: Gestor[];
 }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ nome: "", responsavel: "", telefone: "", cidade: "", gestor_id: "", tem_chatbot: true });
+  const [form, setForm] = useState({ nome: "", nome_fachada: "", responsavel: "", telefone: "", cidade: "", gestor_id: "", tem_chatbot: true });
   const [showSenha] = useState(false);
 
   useEffect(() => {
-    if (open) setForm({ nome: "", responsavel: "", telefone: "", cidade: "", gestor_id: "", tem_chatbot: true });
+    if (open) setForm({ nome: "", nome_fachada: "", responsavel: "", telefone: "", cidade: "", gestor_id: "", tem_chatbot: true });
   }, [open]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -265,6 +265,7 @@ function ModalNovo({
   const mut = useMutation({
     mutationFn: () => createFarmacia({
       nome: form.nome,
+      nome_fachada: form.nome_fachada,
       fase: "entrada",
       responsavel: form.responsavel || undefined,
       telefone: form.telefone || undefined,
@@ -294,8 +295,13 @@ function ModalNovo({
             Cliente ainda sem credenciais. Será ativado depois com URL + login.
           </p>
           <div>
-            <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Nome *</label>
-            <input required value={form.nome} onChange={set("nome")} className="mt-1 form-input w-full" placeholder="Farmácia Central" />
+            <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Razão social *</label>
+            <input required value={form.nome} onChange={set("nome")} className="mt-1 form-input w-full" placeholder="BARROS E SILVA COMERCIO DE MEDICAMENTOS LTDA" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Nome de fachada *</label>
+            <input required value={form.nome_fachada} onChange={set("nome_fachada")} className="mt-1 form-input w-full" placeholder="Drogaria Bem Estar" />
+            <p className="text-[11px] text-zinc-400 mt-1">É este que vai no criativo do grupo de ofertas.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -338,7 +344,7 @@ function ModalNovo({
           <button
             type="button"
             onClick={() => mut.mutate()}
-            disabled={mut.isPending || !form.nome.trim()}
+            disabled={mut.isPending || !form.nome.trim() || !form.nome_fachada.trim()}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-amber-500 text-white rounded-md hover:opacity-90 disabled:opacity-60"
           >
             {mut.isPending && <RefreshCw className="size-3.5 animate-spin" />}

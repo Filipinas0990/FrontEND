@@ -239,7 +239,8 @@ export function EnviarGrupoWizard({
     setPrecos(Object.fromEntries(
       lista.filter((i) => i.preco).map((i) => [i.chave, i.preco]),
     ));
-    setMensagem(`🔥 *OFERTAS* — ${c.farmacia} 🔥`);
+    // Vai para o grupo: nome de fachada, nunca a razão social
+    setMensagem(`🔥 *OFERTAS* — ${(c.farmacia_visivel ?? c.farmacia)} 🔥`);
   }
 
   /** Texto que o gestor manda para cobrar a lista do dono. */
@@ -247,7 +248,7 @@ export function EnviarGrupoWizard({
     const nome = getUser()?.nome ?? "seu gestor";
     const tratamento = c.responsavel ? `Olá, ${c.responsavel}!` : "Olá!";
     return `${tratamento} Aqui é ${nome}.\n\n`
-      + `Preciso da lista de produtos para as ofertas da ${c.farmacia}. `
+      + `Preciso da lista de produtos para as ofertas da ${(c.farmacia_visivel ?? c.farmacia)}. `
       // Link exclusivo deste cliente: abre direto na farmácia dele.
       + `É só abrir o link, marcar o que você quer anunciar e enviar:\n\n${c.link ?? ""}\n\n`
       + `Assim que você mandar, eu monto as artes e posto no grupo. 👍`;
@@ -318,7 +319,7 @@ export function EnviarGrupoWizard({
     try {
       // Sem localização vinda do fluxo de criativos, usa o nome do cliente na
       // barra do criativo — evita a peça sair com o rodapé em branco.
-      const localizacao = criativosConfig.localizacao || clienteSel?.farmacia || "";
+      const localizacao = criativosConfig.localizacao || (clienteSel?.farmacia_visivel ?? clienteSel?.farmacia) || "";
       const geradas: MidiaDisparo[] = [];
       for (const item of itensEscolhidos) {
         const preco = precos[item.chave] ?? item.preco;
@@ -399,7 +400,7 @@ export function EnviarGrupoWizard({
         .map((g) => ({ jid: g.jid, nome: g.nome }));
 
       const resultado = await criarDisparo({
-        titulo: clienteSel ? `Ofertas — ${clienteSel.farmacia}` : "Ofertas",
+        titulo: clienteSel ? `Ofertas — ${(clienteSel.farmacia_visivel ?? clienteSel.farmacia)}` : "Ofertas",
         mensagem,
         midias,
         grupos: gruposSel,
@@ -642,7 +643,7 @@ export function EnviarGrupoWizard({
                           >
                             <Store className={`size-5 shrink-0 ${c.respondeu ? "text-emerald-600" : "text-zinc-300"}`} />
                             <div className="min-w-0 flex-1">
-                              <p className="font-medium text-zinc-900 truncate">{c.farmacia}</p>
+                              <p className="font-medium text-zinc-900 truncate">{(c.farmacia_visivel ?? c.farmacia)}</p>
                               <p className="text-xs text-zinc-500">
                                 {c.respondeu && c.solicitacao ? (
                                   <>
@@ -694,7 +695,7 @@ export function EnviarGrupoWizard({
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-zinc-900 truncate">
-                        {clienteSel ? clienteSel.farmacia : "Produtos desta tela"}
+                        {clienteSel ? (clienteSel.farmacia_visivel ?? clienteSel.farmacia) : "Produtos desta tela"}
                       </p>
                       <p className="text-xs text-zinc-500">
                         Marque os que entram neste disparo.

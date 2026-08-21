@@ -16,6 +16,7 @@ import {
   deleteFarmacia,
   setFarmaciaMeta,
   ativarFarmacia,
+  nomeVisivel,
   type Farmacia,
   type Gestor,
 } from "@/lib/api";
@@ -75,7 +76,10 @@ function fmtBRL(v: number) {
 
 interface FarmaciaForm {
   fase: "entrada" | "ativo";
+  /** Razão social — nome jurídico, uso interno. */
   nome: string;
+  /** Nome de fachada — é o que o cliente final vê no criativo do grupo. */
+  nome_fachada: string;
   telefone: string;
   responsavel: string;
   cidade: string;
@@ -107,6 +111,7 @@ function FarmaciaDialog({
   const emptyForm = (): FarmaciaForm => ({
     fase: editing?.fase ?? "ativo",
     nome: editing?.nome ?? "",
+    nome_fachada: editing?.nome_fachada ?? "",
     telefone: editing?.telefone ?? "",
     responsavel: editing?.responsavel ?? "",
     cidade: editing?.cidade ?? "",
@@ -185,8 +190,29 @@ function FarmaciaDialog({
             )}
 
             {/* Dados básicos */}
-            <FormField label="Nome *">
-              <input required value={form.nome} onChange={set("nome")} className="form-input" placeholder="Farmácia Central" />
+            <FormField label="Razão social *">
+              <input
+                required
+                value={form.nome}
+                onChange={set("nome")}
+                className="form-input"
+                placeholder="BARROS E SILVA COMERCIO DE MEDICAMENTOS LTDA"
+              />
+              <p className="text-[11px] text-zinc-400 mt-1">
+                Nome jurídico. Só aparece aqui dentro, para você identificar o cliente.
+              </p>
+            </FormField>
+            <FormField label="Nome de fachada *">
+              <input
+                required
+                value={form.nome_fachada}
+                onChange={set("nome_fachada")}
+                className="form-input"
+                placeholder="Drogaria Bem Estar"
+              />
+              <p className="text-[11px] text-zinc-400 mt-1">
+                Como o cliente da farmácia a conhece — é este que vai no criativo do grupo de ofertas.
+              </p>
             </FormField>
             {form.fase === "entrada" && (
               <>
@@ -305,7 +331,8 @@ function FarmaciaDialog({
           </AlertDialogHeader>
 
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 divide-y divide-zinc-200 text-sm overflow-hidden my-1">
-            <Row label="Farmácia" value={confirmPending?.nome ?? "—"} />
+            <Row label="Razão social" value={confirmPending?.nome ?? "—"} />
+            <Row label="Nome de fachada" value={confirmPending?.nome_fachada ?? "—"} />
             <Row label="Gestor" value={gestorNome} />
             <Row
               label="Meta de Receita"
@@ -567,6 +594,7 @@ function FarmaciasPage() {
       if (editTarget) {
         const patch: Parameters<typeof updateFarmacia>[1] = {
           nome: form.nome,
+          nome_fachada: form.nome_fachada,
           telefone: form.telefone || null,
           responsavel: form.responsavel || null,
           cidade: form.cidade || null,
@@ -577,6 +605,7 @@ function FarmaciasPage() {
       } else {
         const result = await createMut.mutateAsync({
           nome: form.nome,
+          nome_fachada: form.nome_fachada,
           fase: form.fase,
           telefone: form.telefone || undefined,
           responsavel: form.responsavel || undefined,
@@ -746,8 +775,19 @@ function FarmaciasPage() {
                           ENTRADA
                         </span>
                       )}
-                      <h3 className="text-sm font-semibold truncate">{p.nome}</h3>
+                      {!p.nome_fachada && (
+                        <span
+                          title="Sem nome de fachada — o criativo do grupo está saindo com a razão social"
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 ring-1 ring-red-200 shrink-0"
+                        >
+                          SEM FACHADA
+                        </span>
+                      )}
+                      <h3 className="text-sm font-semibold truncate">{nomeVisivel(p)}</h3>
                     </div>
+                    {p.nome_fachada && (
+                      <p className="text-[10px] text-zinc-400 truncate">{p.nome}</p>
+                    )}
                     {isEntrada
                       ? <p className="text-[10px] text-amber-600 mt-0.5 italic">Aguardando ativação</p>
                       : semDados

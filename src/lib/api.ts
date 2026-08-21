@@ -84,7 +84,10 @@ export interface AcaoAtiva {
 
 export interface Farmacia {
   id: number
+  /** Razão social — nome jurídico, uso interno. */
   nome: string
+  /** Nome de fachada — o que o cliente final vê. Null nos cadastros antigos. */
+  nome_fachada: string | null
   fase: "entrada" | "ativo"
   telefone: string | null
   responsavel: string | null
@@ -136,6 +139,15 @@ export interface RankingGestor {
 
 /** Snapshot de uma farmácia para um período específico (retornado por /api/farmacias?dias=X) */
 export type FarmaciaSnapshot = Farmacia & { periodo_dias?: 7 | 15 | 30 }
+
+/**
+ * Nome que pode aparecer para o cliente final da farmácia: o de fachada,
+ * caindo na razão social enquanto o cadastro antigo não for completado.
+ * Use em criativo, mensagem de grupo e link público — nunca a razão social.
+ */
+export function nomeVisivel(f: { nome: string; nome_fachada?: string | null }): string {
+  return f.nome_fachada?.trim() || f.nome
+}
 
 export interface FarmaciaEvolucao {
   semana_numero: number
@@ -268,6 +280,7 @@ export function getFarmaciaEvolucaoPorPeriodo(id: number, dias: 7 | 15 | 30): Pr
 
 export function createFarmacia(data: {
   nome: string
+  nome_fachada: string
   fase?: "entrada" | "ativo"
   telefone?: string
   responsavel?: string
@@ -285,6 +298,7 @@ export function updateFarmacia(
   id: number,
   data: Partial<{
     nome: string
+    nome_fachada: string
     fase: "entrada" | "ativo"
     telefone: string | null
     responsavel: string | null
@@ -1384,7 +1398,12 @@ export function getUltimaEscolha(farmaciaId: number): Promise<UltimaEscolha | nu
 /** Um cliente da carteira e o estado de resposta dele. */
 export interface ClienteCarteira {
   farmacia_id: number
+  /** Razão social — uso interno, identifica o cliente. */
   farmacia: string
+  /** Nome de fachada (null nos cadastros antigos). */
+  nome_fachada: string | null
+  /** Fachada com queda para a razão social — use no que sai para o grupo. */
+  farmacia_visivel: string
   cidade: string | null
   telefone: string | null
   responsavel: string | null

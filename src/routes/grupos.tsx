@@ -12,10 +12,11 @@ import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
 import { CriativoCard, type CriativoDados, type LayoutCriativo } from "@/components/CriativoCard";
 import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
+import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
-  listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo,
+  listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo, nomeVisivel,
   type Farmacia, type DisparoResumo, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
 } from "@/lib/api";
@@ -78,13 +79,18 @@ function GruposPage() {
   // (conexão, farmácia). Sem essa trava, voltar do passo 3 para o 2 desfaria
   // o que o gestor tivesse marcado ou desmarcado na mão.
   const preSelecionado = useRef<string | null>(null);
+  // Trava dura: assim que o gestor mexe na seleção, ela é dele. Nenhum
+  // recarregamento de lista, troca de conexão ou remontagem pode re-marcar
+  // grupo por cima — foi assim que uma oferta saiu para 5 grupos.
+  const mexeuNaMao = useRef(false);
   useEffect(() => {
+    if (mexeuNaMao.current) return;
     if (!farmacia || grupos.length === 0) return;
     const chave = `${conexao}|${farmacia.id}`;
     if (preSelecionado.current === chave) return;
     preSelecionado.current = chave;
     setGruposSel(new Set(
-      grupos.filter((g) => combina(g.nome, farmacia.nome)).map((g) => g.jid),
+      grupos.filter((g) => combinaComFarmacia(g.nome, farmacia)).map((g) => g.jid),
     ));
   }, [grupos, farmacia, conexao]);
 
@@ -98,10 +104,17 @@ function GruposPage() {
   });
   const pendentes = carteira.filter((c) => c.respondeu).length;
 
+  /** Seleção feita pelo gestor — a partir daqui a pré-seleção não encosta mais. */
+  function selecionarGrupos(s: Set<string>) {
+    mexeuNaMao.current = true;
+    setGruposSel(s);
+  }
+
   function escolherFarmacia(f: Farmacia) {
     setFarmacia(f);
     setGruposSel(new Set());
     preSelecionado.current = null;   // deixa a pré-seleção rodar para esta farmácia
+    mexeuNaMao.current = false;
     setPasso(2);
   }
 
@@ -110,6 +123,7 @@ function GruposPage() {
     setFarmacia(null);
     setGruposSel(new Set());
     preSelecionado.current = null;
+    mexeuNaMao.current = false;
     setModelo(null);
   }
 
@@ -155,7 +169,7 @@ function GruposPage() {
                 conexao={conexao}
                 setConexao={setConexao}
                 selecionados={gruposSel}
-                setSelecionados={setGruposSel}
+                setSelecionados={selecionarGrupos}
                 onVoltar={() => setPasso(1)}
                 onContinuar={() => setPasso(3)}
               />
@@ -285,7 +299,7 @@ function Stepper({
       {farmacia && (
         <span className="ml-auto flex items-center gap-1.5 text-xs text-zinc-500 min-w-0">
           <Store className="size-3.5 shrink-0 text-brand" />
-          <span className="truncate font-medium text-zinc-700">{farmacia.nome}</span>
+          <span className="truncate font-medium text-zinc-700">{nomeVisivel(farmacia)}</span>
         </span>
       )}
     </div>
@@ -307,7 +321,7 @@ function PassoFarmacia({ onEscolher }: { onEscolher: (f: Farmacia) => void }) {
     const filtro = busca.trim().toLowerCase();
     return farmacias
       .filter((f) =>
-        f.nome.toLowerCase().includes(filtro)
+        (f.nome.toLowerCase().includes(filtro) || (f.nome_fachada ?? "").toLowerCase().includes(filtro))
         || (f.cidade ?? "").toLowerCase().includes(filtro))
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [farmacias, busca]);
@@ -361,10 +375,23 @@ function PassoFarmacia({ onEscolher }: { onEscolher: (f: Farmacia) => void }) {
                 className="w-full px-5 py-4 flex items-center gap-4 text-left hover:bg-brand/5 transition-colors group"
               >
                 <div className="size-9 rounded-full bg-zinc-100 text-zinc-500 grid place-items-center text-[11px] font-bold shrink-0 group-hover:bg-brand group-hover:text-white transition-colors">
-                  {f.nome.slice(0, 2).toUpperCase()}
+                  {nomeVisivel(f).slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-zinc-900 truncate">{f.nome}</p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{nomeVisivel(f)}</p>
+                    {!f.nome_fachada && (
+                      <span
+                        title="Sem nome de fachada — o criativo vai sair com a razão social"
+                        className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 ring-1 ring-red-200"
+                      >
+                        SEM FACHADA
+                      </span>
+                    )}
+                  </div>
+                  {f.nome_fachada && (
+                    <p className="text-[11px] text-zinc-400 truncate">{f.nome}</p>
+                  )}
                   <p className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1">
                     {f.cidade ? <><MapPin className="size-3" /> {f.cidade}</> : "sem cidade cadastrada"}
                     {f.fase === "entrada" && (
@@ -385,30 +412,6 @@ function PassoFarmacia({ onEscolher }: { onEscolher: (f: Farmacia) => void }) {
 }
 
 // ── Passo 2: grupos do WhatsApp ───────────────────────────────────────────────
-
-/** Palavras que não ajudam a casar grupo com farmácia. */
-const PALAVRAS_GENERICAS = new Set([
-  "farmacia", "farmacias", "drogaria", "drogarias", "grupo", "grupos",
-  "oferta", "ofertas", "promocao", "promocoes", "whatsapp", "zap", "clientes",
-  "ltda", "epp", "comercio", "medicamentos", "manipulacao", "filial", "matriz",
-]);
-
-/** Tokens úteis de um nome: sem acento, sem pontuação, sem palavra genérica. */
-function tokens(texto: string): string[] {
-  return texto
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
-    .split(" ")
-    .filter((t) => t.length >= 3 && !PALAVRAS_GENERICAS.has(t));
-}
-
-/** true = o nome do grupo tem a ver com o da farmácia. */
-function combina(nomeGrupo: string, nomeFarmacia: string): boolean {
-  const daFarmacia = tokens(nomeFarmacia);
-  if (daFarmacia.length === 0) return false;
-  const doGrupo = new Set(tokens(nomeGrupo));
-  return daFarmacia.some((t) => doGrupo.has(t));
-}
 
 /** Chave da query de grupos — o passo 1 e o passo 2 dividem o mesmo cache. */
 function chaveGrupos(conexao: string | null) {
@@ -474,8 +477,8 @@ function PassoGrupos({
   const erro = error instanceof Error ? error.message : null;
 
   const combinam = useMemo(
-    () => grupos.filter((g) => combina(g.nome, farmacia.nome)),
-    [grupos, farmacia.nome],
+    () => grupos.filter((g) => combinaComFarmacia(g.nome, farmacia)),
+    [grupos, farmacia],
   );
 
   // Nenhum grupo casou com o nome da farmácia: abre já na lista completa,
@@ -585,7 +588,7 @@ function PassoGrupos({
           <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-zinc-900 truncate">
-                Grupos de {farmacia.nome}
+                Grupos de {nomeVisivel(farmacia)}
               </p>
               <p className="text-[11px] text-zinc-500 mt-0.5">
                 {soDaFarmacia
@@ -631,13 +634,13 @@ function PassoGrupos({
             ) : visiveis.length === 0 ? (
               <div className="py-12 px-5 text-center text-sm text-zinc-400">
                 {soDaFarmacia
-                  ? <>Nenhum grupo com o nome “{farmacia.nome}”. Use <strong className="text-zinc-600">Ver todos os grupos</strong> para escolher na mão.</>
+                  ? <>Nenhum grupo com o nome “{nomeVisivel(farmacia)}”. Use <strong className="text-zinc-600">Ver todos os grupos</strong> para escolher na mão.</>
                   : busca ? `Nenhum grupo encontrado para "${busca}".` : "Nenhum grupo nesta conexão."}
               </div>
             ) : (
               visiveis.map((g) => {
                 const marcado = selecionados.has(g.jid);
-                const daFarmacia = combina(g.nome, farmacia.nome);
+                const daFarmacia = combinaComFarmacia(g.nome, farmacia);
                 return (
                   <button
                     key={g.jid}
@@ -911,7 +914,7 @@ function PassoCriativo({
       preco:         precos[produto.id] ?? "",
       precoDe:       dePor.has(produto.id) ? precosDe[produto.id] : undefined,
       imagem:        catalogoImagemUrl(produto.id),
-      localizacao:   farmacia.nome,
+      localizacao:   nomeVisivel(farmacia),
       titulo:        modeloAtual?.titulo,
       subtitulo,
     };
@@ -933,7 +936,7 @@ function PassoCriativo({
       <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5">
         <p className="text-sm font-semibold text-zinc-900">Modelo do criativo</p>
         <p className="text-[11px] text-zinc-500 mt-0.5">
-          Vai para {grupos.length} grupo(s) de {farmacia.nome}.
+          Vai para {grupos.length} grupo(s) de {nomeVisivel(farmacia)}.
         </p>
 
         <div className="grid sm:grid-cols-3 gap-5 mt-5">
@@ -954,7 +957,7 @@ function PassoCriativo({
                     nome="Produto exemplo"
                     preco="9,90"
                     imagem={null}
-                    localizacao={farmacia.nome}
+                    localizacao={nomeVisivel(farmacia)}
                     titulo={m.titulo}
                     subtitulo={m.subtituloPadrao}
                   />
@@ -991,7 +994,7 @@ function PassoCriativo({
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-3 flex-wrap">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-zinc-900">
-              {soDoCliente ? `Produtos que ${farmacia.nome} pediu` : "Imagens do banco"}
+              {soDoCliente ? `Produtos que ${nomeVisivel(farmacia)} pediu` : "Imagens do banco"}
             </p>
             <p className="text-[11px] text-zinc-500 mt-0.5">
               {ultima && soDoCliente
@@ -1033,11 +1036,21 @@ function PassoCriativo({
           {/* Recados sobre o pedido do cliente */}
           {!isLoading && !carregandoEscolha && (
             <div className="space-y-2 mb-4 empty:mb-0">
+              {!farmacia.nome_fachada && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-2.5 items-start">
+                  <AlertCircle className="size-4 text-red-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-800">
+                    <strong>{farmacia.nome}</strong> está sem <strong>nome de fachada</strong> — o
+                    criativo e a mensagem do grupo vão sair com a razão social, que é o nome jurídico.
+                    Preencha em Farmácias → editar o cliente.
+                  </p>
+                </div>
+              )}
               {pedidos.size === 0 && (
                 <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex gap-2.5 items-start">
                   <Inbox className="size-4 text-zinc-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-zinc-600">
-                    {farmacia.nome} ainda não escolheu os produtos pelo link dela — mostrando o banco
+                    {nomeVisivel(farmacia)} ainda não escolheu os produtos pelo link dela — mostrando o banco
                     inteiro. O link fica na aba <strong>Ofertas dos clientes</strong>, botão “Copiar link”.
                   </p>
                 </div>
@@ -1389,8 +1402,9 @@ function ModalAgendamento({
       }
 
       await criarDisparo({
-        titulo:        `Ofertas — ${farmacia.nome}`,
-        mensagem:      `🔥 *OFERTAS* — ${farmacia.nome} 🔥`,
+        titulo:        `Ofertas — ${nomeVisivel(farmacia)}`,
+        // Vai para o grupo: nome de fachada, nunca a razão social
+        mensagem:      `🔥 *OFERTAS* — ${nomeVisivel(farmacia)} 🔥`,
         midias,
         grupos:        grupos.map((g) => ({ jid: g.jid, nome: g.nome })),
         quando:        "agendado",
@@ -1426,7 +1440,7 @@ function ModalAgendamento({
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-zinc-900 leading-tight">Agendamento</h2>
             <p className="text-sm text-zinc-500">
-              {criativos.length} criativo(s) para {grupos.length} grupo(s) de {farmacia.nome}.
+              {criativos.length} criativo(s) de {nomeVisivel(farmacia)}.
             </p>
           </div>
           <button
@@ -1438,6 +1452,25 @@ function ModalAgendamento({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Onde vai cair. Confirmar por um número já mandou oferta para o
+              grupo de outra farmácia — aqui os nomes ficam à vista. */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3">
+            <p className="text-sm font-medium text-zinc-700">
+              Vai ser postado em {grupos.length} grupo(s):
+            </p>
+            <ul className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+              {grupos.map((g) => (
+                <li key={g.jid} className="flex items-center gap-2 text-sm text-zinc-600">
+                  <Users className="size-3.5 text-zinc-400 shrink-0" />
+                  <span className="truncate">{g.nome}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-zinc-400 mt-2">
+              Confira antes de agendar — a oferta cai no grupo de clientes dessas farmácias.
+            </p>
+          </div>
+
           {/* Repetição */}
           <div>
             <p className="text-sm font-medium text-zinc-700">Essa campanha vai se repetir?</p>
@@ -1881,7 +1914,7 @@ function AbaClientes({
     navigator.clipboard.writeText(c.link)
       .then(() => {
         setCopiado(c.farmacia_id);
-        toast.success(`Link da ${c.farmacia} copiado!`);
+        toast.success(`Link da ${c.farmacia_visivel ?? c.farmacia} copiado!`);
         setTimeout(() => setCopiado((atual) => (atual === c.farmacia_id ? null : atual)), 2000);
       })
       .catch(() => toast.error("Não consegui copiar."));
@@ -1890,7 +1923,9 @@ function AbaClientes({
   const rows = useMemo(() => {
     const filtro = busca.trim().toLowerCase();
     return [...carteira]
-      .filter((c) => c.farmacia.toLowerCase().includes(filtro))
+      .filter((c) =>
+        (c.farmacia_visivel ?? c.farmacia).toLowerCase().includes(filtro)
+        || c.farmacia.toLowerCase().includes(filtro))
       // Quem respondeu primeiro — é onde o gestor consegue agir
       .sort((a, b) => Number(b.respondeu) - Number(a.respondeu) || a.farmacia.localeCompare(b.farmacia, "pt-BR"));
   }, [carteira, busca]);
@@ -1977,10 +2012,13 @@ function AbaClientes({
                   <div className={`size-8 rounded-full grid place-items-center text-[11px] font-bold shrink-0 ${
                     c.respondeu ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-400"
                   }`}>
-                    {c.farmacia.slice(0, 2).toUpperCase()}
+                    {(c.farmacia_visivel ?? c.farmacia).slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-zinc-900 truncate">{c.farmacia}</p>
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{c.farmacia_visivel ?? c.farmacia}</p>
+                    {c.nome_fachada && (
+                      <p className="text-[11px] text-zinc-400 truncate">{c.farmacia}</p>
+                    )}
                     {c.respondeu && c.solicitacao ? (
                       <p className="text-[11px] text-emerald-700 mt-0.5">
                         {c.solicitacao.enviado_por ? `Enviado por ${c.solicitacao.enviado_por}` : "Lista enviada"}
