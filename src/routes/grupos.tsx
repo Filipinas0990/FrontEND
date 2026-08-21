@@ -312,7 +312,11 @@ function PassoFarmacia({ onEscolher }: { onEscolher: (f: Farmacia) => void }) {
   const [busca, setBusca] = useState("");
 
   const { data: farmacias = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["farmacias-grupos"],
+    // ["farmacias", ...] de propósito: quem edita uma farmácia invalida
+    // `["farmacias"]`, e o react-query casa por prefixo. Com a chave antiga
+    // ("farmacias-grupos") esta lista não era invalidada e o passo 1 ficava
+    // até 5 min mostrando o cadastro velho — sem o nome de fachada recém-salvo.
+    queryKey: ["farmacias", "grupos"],
     queryFn: () => getFarmacias(),
     staleTime: 5 * 60_000,
   });
