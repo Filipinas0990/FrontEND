@@ -50,8 +50,6 @@ interface ItemOferta {
   nome:    string;
   imagem?: string | null;
   preco:   string;
-  /** true = digitado pelo dono, fora do catálogo (não tem foto pronta) */
-  livre?:  boolean;
 }
 
 const TITULOS: Record<Etapa, { titulo: string; descricao: string }> = {
@@ -225,13 +223,7 @@ export function EnviarGrupoWizard({
       preco:  p.preco ?? "",
     }));
 
-    const livres: ItemOferta[] = (c.solicitacao.produtos_livres ?? "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((nome, i) => ({ chave: `livre-${i}`, nome, imagem: null, preco: "", livre: true }));
-
-    const lista = [...doCatalogo, ...livres];
+    const lista = doCatalogo;
     setItens(lista);
     // Por padrão já vêm todos marcados — o gestor desmarca o que não quiser
     setEscolhidos(new Set(lista.map((i) => i.chave)));
@@ -648,7 +640,6 @@ export function EnviarGrupoWizard({
                                 {c.respondeu && c.solicitacao ? (
                                   <>
                                     {c.solicitacao.produtos.length} produto(s)
-                                    {c.solicitacao.produtos_livres ? " + itens escritos" : ""}
                                     {c.solicitacao.enviado_por ? ` · por ${c.solicitacao.enviado_por}` : ""}
                                   </>
                                 ) : c.ultimo_envio_em ? (
@@ -709,13 +700,6 @@ export function EnviarGrupoWizard({
                     </button>
                   </div>
 
-                  {clienteSel?.solicitacao?.observacao && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                      <p className="text-xs font-medium text-blue-900">Recado do cliente</p>
-                      <p className="text-sm text-blue-800 mt-0.5">{clienteSel.solicitacao.observacao}</p>
-                    </div>
-                  )}
-
                   <div className="grid sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto">
                     {itens.map((item) => {
                       const marcado = escolhidos.has(item.chave);
@@ -741,9 +725,6 @@ export function EnviarGrupoWizard({
                           )}
                           <span className="flex-1 min-w-0 text-sm text-zinc-800 line-clamp-2">
                             {item.nome}
-                            {item.livre && (
-                              <span className="block text-xs text-amber-600">sem foto no catálogo</span>
-                            )}
                           </span>
                         </button>
                       );

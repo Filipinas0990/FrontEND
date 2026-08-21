@@ -37,9 +37,7 @@ function OfertasPublicaPage() {
   const [precos, setPrecos] = useState<Record<number, string>>({});
   const [busca, setBusca] = useState("");
   const [buscaFarmacia, setBuscaFarmacia] = useState("");
-  const [produtosLivres, setProdutosLivres] = useState("");
   const [enviadoPor, setEnviadoPor] = useState("");
-  const [observacao, setObservacao] = useState("");
 
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -93,8 +91,6 @@ function OfertasPublicaPage() {
       await enviarOfertaPublica(token, {
         farmacia_id: farmaciaId,
         produtos: [...selecionados].map((id) => ({ id, preco: precos[id]?.trim() || null })),
-        produtos_livres: produtosLivres.trim() || null,
-        observacao: observacao.trim() || null,
         enviado_por: enviadoPor.trim() || null,
       });
       setEnviado(true);
@@ -139,7 +135,7 @@ function OfertasPublicaPage() {
     );
   }
 
-  const totalEscolhido = selecionados.size + (produtosLivres.trim() ? 1 : 0);
+  const totalEscolhido = selecionados.size;
 
   // ── Passo 1: escolher a farmácia ────────────────────────────────────────────
 
@@ -297,43 +293,14 @@ function OfertasPublicaPage() {
           </div>
         )}
 
-        {/* Itens fora do catálogo */}
         <div className="mt-6 flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700">
-            Quer anunciar algo que não está na lista?
-          </label>
-          <textarea
-            value={produtosLivres}
-            onChange={(e) => setProdutosLivres(e.target.value)}
-            rows={3}
-            placeholder={"Escreva um produto por linha.\nEx.: Vitamina C 1g com 10 comprimidos"}
-            className="w-full p-3 rounded-lg border border-zinc-200 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-brand/30"
+          <label className="text-sm font-medium text-zinc-700">Seu nome (opcional)</label>
+          <input
+            value={enviadoPor}
+            onChange={(e) => setEnviadoPor(e.target.value)}
+            placeholder="Quem está enviando"
+            className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
-          <p className="text-xs text-zinc-400">
-            Esses não têm foto pronta — seu gestor vai avaliar.
-          </p>
-        </div>
-
-        <div className="mt-4 grid gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-zinc-700">Seu nome (opcional)</label>
-            <input
-              value={enviadoPor}
-              onChange={(e) => setEnviadoPor(e.target.value)}
-              placeholder="Quem está enviando"
-              className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-zinc-700">Observação (opcional)</label>
-            <textarea
-              value={observacao}
-              onChange={(e) => setObservacao(e.target.value)}
-              rows={2}
-              placeholder="Algum recado para o seu gestor?"
-              className="w-full p-3 rounded-lg border border-zinc-200 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-brand/30"
-            />
-          </div>
         </div>
 
         {erroEnvio && (
@@ -349,9 +316,8 @@ function OfertasPublicaPage() {
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <p className="text-sm text-zinc-500 flex-1">
             {totalEscolhido === 0
-              ? "Nenhum item escolhido"
-              : <><strong className="text-zinc-900">{selecionados.size}</strong> produto(s)
-                  {produtosLivres.trim() ? " + itens escritos" : ""}</>}
+              ? "Nenhum produto escolhido"
+              : <><strong className="text-zinc-900">{selecionados.size}</strong> produto(s)</>}
           </p>
           <button
             onClick={enviar}

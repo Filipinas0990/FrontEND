@@ -1060,19 +1060,6 @@ function PassoCriativo({
                 </div>
               )}
 
-              {ultima?.produtos_livres && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5 items-start">
-                  <PencilLine className="size-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-800 min-w-0">
-                    <p className="font-medium">O cliente também escreveu itens fora do banco de imagens:</p>
-                    <p className="whitespace-pre-line mt-0.5">{ultima.produtos_livres}</p>
-                    <p className="text-amber-700/80 mt-1">
-                      Esses não têm foto pronta — se for anunciar, cadastre a imagem antes.
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {sumiram > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5 items-start">
                   <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
@@ -2026,7 +2013,6 @@ function AbaClientes({
                     {c.respondeu && c.solicitacao ? (
                       <p className="text-[11px] text-emerald-700 mt-0.5">
                         {c.solicitacao.enviado_por ? `Enviado por ${c.solicitacao.enviado_por}` : "Lista enviada"}
-                        {c.solicitacao.produtos_livres ? " · com itens escritos" : ""}
                       </p>
                     ) : (
                       <p className="text-[11px] text-zinc-400 mt-0.5 italic flex items-center gap-1">

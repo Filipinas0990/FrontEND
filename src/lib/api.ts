@@ -1312,8 +1312,6 @@ export interface EnviarOfertaPayload {
   farmacia_id: number
   /** O dono manda o preço junto; `preco` null = ele não informou. */
   produtos: { id: number; preco?: string | null }[]
-  produtos_livres?: string | null
-  observacao?: string | null
   enviado_por?: string | null
 }
 
@@ -1324,8 +1322,6 @@ export interface SolicitacaoOferta {
   farmacia_id: number
   farmacia: string
   produtos: ProdutoOferta[]
-  produtos_livres: string | null
-  observacao: string | null
   enviado_por: string | null
   status: StatusSolicitacao
   criado_em: string
@@ -1380,8 +1376,6 @@ export function getSolicitacoes(): Promise<SolicitacaoOferta[]> {
 export interface UltimaEscolha {
   id: number
   produtos: ProdutoOferta[]
-  produtos_livres: string | null
-  observacao: string | null
   enviado_por: string | null
   status: StatusSolicitacao
   criado_em: string
@@ -1414,8 +1408,6 @@ export interface ClienteCarteira {
   solicitacao: {
     id: number
     produtos: ProdutoOferta[]
-    produtos_livres: string | null
-    observacao: string | null
     enviado_por: string | null
     criado_em: string
   } | null
