@@ -1,8 +1,9 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, UploadCloud, Loader2, Check } from "lucide-react";
+import { X, UploadCloud, Loader2, Check, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cadastrarCatalogoProduto, getCategoriasCatalogo } from "@/lib/api";
+import { normalizarCategoria } from "@/lib/categorias";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,149 @@ interface ArquivoPendente {
   file: File;
   nome: string;
   preview: string;
+}
+
+// ── Campo de categoria ────────────────────────────────────────────────────────
+
+/**
+ * Campo de categoria: digita livre OU escolhe da lista.
+ *
+ * Por que não é um `<input list>` com `<datalist>`, que seria uma linha: os
+ * navegadores só abrem a lista do datalist depois que o usuário digita alguma
+ * coisa, e alguns nem isso. Quem clica no campo esperando ver as categorias
+ * que existem não vê nada e conclui que precisa inventar uma. Aqui a lista
+ * abre INTEIRA no clique, que é o comportamento pedido.
+ *
+ * Não é um `<select>` porque categoria nova precisa nascer digitando, sem
+ * passar por cadastro.
+ */
+function CampoCategoria({
+  valor, onChange, opcoes,
+}: {
+  valor: string;
+  onChange: (v: string) => void;
+  opcoes: string[];
+}) {
+  const [aberto, setAberto] = useState(false);
+  const caixa = useRef<HTMLDivElement>(null);
+
+  // Clique fora fecha. O modal inteiro já para a propagação do clique, então
+  // sem isto a lista ficaria aberta para sempre.
+  useEffect(() => {
+    if (!aberto) return;
+    function aoClicar(e: MouseEvent) {
+      if (!caixa.current?.contains(e.target as Node)) setAberto(false);
+    }
+    document.addEventListener("mousedown", aoClicar);
+    return () => document.removeEventListener("mousedown", aoClicar);
+  }, [aberto]);
+
+  const digitado = valor.trim();
+  // Digitar filtra a lista; campo vazio mostra tudo.
+  const filtradas = digitado
+    ? opcoes.filter((c) => normalizarCategoria(c).includes(normalizarCategoria(digitado)))
+    : opcoes;
+  // Só oferece "criar" quando não é igual a uma que já existe — senão o gestor
+  // cria uma segunda "Higiene e Beleza" achando que está criando categoria nova.
+  const jaExiste = opcoes.some((c) => normalizarCategoria(c) === normalizarCategoria(digitado));
+
+  return (
+    <div ref={caixa} className="relative">
+      <div className="relative">
+        <input
+          id="campo-categoria"
+          value={valor}
+          onChange={(e) => { onChange(e.target.value); setAberto(true); }}
+          onFocus={() => setAberto(true)}
+          onClick={() => setAberto(true)}
+          onKeyDown={(e) => { if (e.key === "Escape") setAberto(false); }}
+          maxLength={60}
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={aberto}
+          aria-controls="lista-categorias"
+          placeholder="Clique para ver as categorias ou digite uma nova"
+          className="w-full pl-3 pr-16 py-2 text-sm bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+        />
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+          {valor && (
+            <button
+              type="button"
+              onClick={() => { onChange(""); setAberto(false); }}
+              className="size-7 grid place-items-center text-zinc-400 hover:text-zinc-700 transition"
+              title="Limpar"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setAberto((a) => !a)}
+            className="size-7 grid place-items-center text-zinc-400 hover:text-zinc-700 transition"
+            aria-label={aberto ? "Fechar lista" : "Ver todas as categorias"}
+          >
+            <ChevronDown className={`size-4 transition ${aberto ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {aberto && (
+        <ul
+          id="lista-categorias"
+          role="listbox"
+          className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-zinc-200 rounded-lg shadow-lg py-1"
+        >
+          <li>
+            <button
+              type="button"
+              onClick={() => { onChange(""); setAberto(false); }}
+              className="w-full text-left px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-50 transition"
+            >
+              Sem categoria (classificar depois)
+            </button>
+          </li>
+
+          {filtradas.map((c) => {
+            const escolhida = normalizarCategoria(c) === normalizarCategoria(digitado);
+            return (
+              <li key={c}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={escolhida}
+                  onClick={() => { onChange(c); setAberto(false); }}
+                  className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition ${
+                    escolhida ? "bg-brand/10 text-brand font-medium" : "text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  <span className="truncate">{c}</span>
+                  {escolhida && <Check className="size-3.5 shrink-0" />}
+                </button>
+              </li>
+            );
+          })}
+
+          {digitado && !jaExiste && (
+            <li className="border-t border-zinc-100 mt-1 pt-1">
+              <button
+                type="button"
+                onClick={() => setAberto(false)}
+                className="w-full text-left px-3 py-2 text-sm text-brand font-medium hover:bg-brand/5 transition"
+              >
+                Criar “{digitado}”
+              </button>
+            </li>
+          )}
+
+          {opcoes.length === 0 && (
+            <li className="px-3 py-2 text-xs text-zinc-400">
+              Nenhuma categoria ainda — digite para criar a primeira.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 // ── Modal (somente upload — a listagem fica na tela /banco-imagens) ─────────────
@@ -183,57 +327,18 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
             <div>
               {/* Categoria do lote — antes da lista, porque vale para todas */}
               <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 mb-4">
-                <label htmlFor="categoria-lote" className="block text-xs font-semibold text-zinc-700">
+                <label htmlFor="campo-categoria" className="block text-xs font-semibold text-zinc-700">
                   Categoria destas {pendentes.length} imagem(ns)
                 </label>
                 <p className="text-[11px] text-zinc-500 mt-0.5 mb-2">
                   Vale para o lote inteiro. Suba uma pasta por categoria e classifique
                   tudo de uma vez — dá para trocar depois no Banco de Imagens.
                 </p>
-                {/* input + datalist: digita o que quiser, e o navegador
-                    oferece o que já existe enquanto ele digita. */}
-                <input
-                  id="categoria-lote"
-                  list="categorias-do-banco"
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
-                  maxLength={60}
-                  placeholder="Digite ou escolha — em branco, classifica depois"
-                  className="w-full px-3 py-2 text-sm bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                <CampoCategoria
+                  valor={categoria}
+                  onChange={setCategoria}
+                  opcoes={sugestoes}
                 />
-                <datalist id="categorias-do-banco">
-                  {sugestoes.map((c) => <option key={c} value={c} />)}
-                </datalist>
-
-                {sugestoes.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {/* Atalho para não depender do dropdown do datalist, que
-                        alguns navegadores só abrem depois de digitar algo. */}
-                    {sugestoes.slice(0, 8).map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setCategoria(c)}
-                        className={`px-2 py-1 rounded-full text-[11px] border transition ${
-                          categoria.trim() === c
-                            ? "bg-brand text-white border-brand"
-                            : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400"
-                        }`}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                    {categoria.trim() && (
-                      <button
-                        type="button"
-                        onClick={() => setCategoria("")}
-                        className="px-2 py-1 rounded-full text-[11px] text-zinc-500 hover:text-zinc-800"
-                      >
-                        limpar
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
 
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
