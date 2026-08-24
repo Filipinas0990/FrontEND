@@ -1111,7 +1111,7 @@ export function cadastrarCatalogoProduto(data: {
 export interface CategoriasCatalogo {
   /** Categorias aplicadas a algum produto, com quantos cada uma tem. */
   categorias: { nome: string; total: number }[]
-  /** Dicas de partida — só vêm enquanto ninguém classificou nada. */
+  /** Categorias padrão do negócio — vêm sempre, para somar com as em uso. */
   sugestoes: string[]
 }
 

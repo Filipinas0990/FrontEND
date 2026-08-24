@@ -55,3 +55,22 @@ export function categoriasDe(
     temSemCategoria,
   };
 }
+
+/**
+ * Lista para o campo de classificação: as categorias em uso MAIS as padrão do
+ * negócio, sem repetir e em ordem alfabética.
+ *
+ * A comparação é normalizada, então uma categoria padrão que já existe no
+ * acervo com outra grafia não entra duas vezes — vale a grafia do acervo, que
+ * é a que já está gravada nos produtos.
+ */
+export function mesclarCategorias(emUso: string[], padrao: string[]): string[] {
+  const porChave = new Map<string, string>();
+  for (const c of [...emUso, ...padrao]) {
+    const nome = c.trim();
+    if (!nome) continue;
+    const chave = normalizarCategoria(nome);
+    if (!porChave.has(chave)) porChave.set(chave, nome);
+  }
+  return [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}

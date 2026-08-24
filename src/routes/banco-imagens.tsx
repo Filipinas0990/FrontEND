@@ -10,6 +10,7 @@ import {
   listarCatalogoProdutos,
   setCatalogoProdutoAtivo,
   setCatalogoProdutosCategoria,
+  getCategoriasCatalogo,
   deletarCatalogoProduto,
   catalogoImagemUrl,
   type CatalogoProdutoItem,
@@ -19,6 +20,7 @@ import {
   rotuloCategoria,
   categoriasDe,
   normalizarCategoria,
+  mesclarCategorias,
 } from "@/lib/categorias";
 import {
   AlertDialog,
@@ -140,8 +142,23 @@ function BancoImagensPage() {
     return lista;
   }, [produtos, contagem]);
 
-  /** Sugestões do campo de lote: as categorias já em uso. */
-  const sugestoes = useMemo(() => categoriasDe(produtos).nomes, [produtos]);
+  /**
+   * Opções do campo de lote: as em uso MAIS as padrão do negócio — a mesma
+   * lista do modal de upload. Os CHIPS acima continuam saindo só do acervo:
+   * chip de categoria sem produto nenhum seria um filtro que não filtra.
+   */
+  const { data: cats } = useQuery({
+    queryKey: ["catalogo-categorias"],
+    queryFn: getCategoriasCatalogo,
+    staleTime: 60_000,
+  });
+  const sugestoes = useMemo(
+    () => mesclarCategorias(
+      (cats?.categorias ?? []).map((c) => c.nome),
+      cats?.sugestoes ?? [],
+    ),
+    [cats],
+  );
 
   const visiveis = useMemo(() => {
     const termo = semAcento(busca.trim());

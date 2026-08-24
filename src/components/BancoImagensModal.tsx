@@ -4,6 +4,7 @@ import { X, UploadCloud, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cadastrarCatalogoProduto, getCategoriasCatalogo } from "@/lib/api";
 import { CampoCategoria } from "@/components/CampoCategoria";
+import { mesclarCategorias } from "@/lib/categorias";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -47,9 +48,12 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
     queryFn: getCategoriasCatalogo,
     staleTime: 60_000,
   });
-  const sugestoes = cats?.categorias.length
-    ? cats.categorias.map((c) => c.nome)
-    : (cats?.sugestoes ?? []);
+  // As que já estão em uso MAIS as padrão do negócio — o campo tem de oferecer
+  // o conjunto todo, não só o que por acaso já foi usado alguma vez.
+  const sugestoes = mesclarCategorias(
+    (cats?.categorias ?? []).map((c) => c.nome),
+    cats?.sugestoes ?? [],
+  );
 
   // ── Seleção de arquivos ─────────────────────────────────────────────────────
 

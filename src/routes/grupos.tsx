@@ -4,13 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
-  ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine,
+  ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
 import { CriativoCard, type CriativoDados, type LayoutCriativo } from "@/components/CriativoCard";
-import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
+import { exportarCriativoPng, comprimirParaEnvio, baixarCriativos } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
@@ -819,6 +819,8 @@ function PassoCriativo({
   const [dePor, setDePor] = useState<Set<number>>(new Set());
   const [precosDe, setPrecosDe] = useState<Record<number, string>>({});
   const [subtitulo, setSubtitulo] = useState("");
+  // null = não está baixando; número = quantos PNGs já saíram
+  const [baixando, setBaixando] = useState<number | null>(null);
 
   // Ver o banco inteiro em vez de só o que o cliente pediu
   const [verTodos, setVerTodos] = useState(false);
@@ -995,6 +997,29 @@ function PassoCriativo({
       titulo:        modeloAtual?.titulo,
       subtitulo,
     };
+  }
+
+  /**
+   * Baixa um PNG por criativo, do jeito que vai para o grupo.
+   *
+   * Rasteriza na hora em vez de reaproveitar algo pronto: o PNG do disparo só
+   * é gerado no agendamento, e ainda passa por compressão para caber no limite
+   * da Evolution. Aqui o gestor quer o arquivo em qualidade cheia.
+   */
+  async function baixarTodos() {
+    if (selecionados.length === 0) return;
+    setBaixando(0);
+    try {
+      await baixarCriativos(
+        selecionados.map((p) => ({ dados: dadosCriativo(p), nome: p.nome })),
+        (feitos) => setBaixando(feitos),
+      );
+      toast.success(`${selecionados.length} imagem(ns) baixada(s).`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar as imagens.");
+    } finally {
+      setBaixando(null);
+    }
   }
 
   function abrirAgendamento() {
@@ -1257,10 +1282,36 @@ function PassoCriativo({
       {/* Prévia dos criativos escolhidos */}
       {modelo && selecionados.length > 0 && (
         <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5">
-          <p className="text-sm font-semibold text-zinc-900">Prévia</p>
-          <p className="text-[11px] text-zinc-500 mt-0.5">
-            {selecionados.length} criativo(s) — é assim que vai chegar no grupo.
-          </p>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-semibold text-zinc-900">Prévia</p>
+              <p className="text-[11px] text-zinc-500 mt-0.5">
+                {selecionados.length} criativo(s) — é assim que vai chegar no grupo.
+              </p>
+            </div>
+
+            {/* Baixar sai daqui, e não do rodapé, porque só faz sentido depois
+                que os preços estão preenchidos e a prévia está do jeito certo. */}
+            <button
+              type="button"
+              onClick={baixarTodos}
+              disabled={baixando !== null}
+              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg ring-1 ring-zinc-200 text-zinc-700 bg-white hover:bg-zinc-50 disabled:opacity-60 transition"
+              title="Salva um arquivo PNG por criativo, em qualidade cheia"
+            >
+              {baixando !== null ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Gerando {baixando}/{selecionados.length}...
+                </>
+              ) : (
+                <>
+                  <Download className="size-3.5" />
+                  Baixar {selecionados.length > 1 ? "todas as imagens" : "a imagem"}
+                </>
+              )}
+            </button>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 mt-4">
             {selecionados.map((p) => (
               <div key={p.id} style={{ containerType: "inline-size" }}>

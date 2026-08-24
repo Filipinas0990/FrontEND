@@ -179,3 +179,55 @@ export function baixarPng(dataUrl: string, nomeArquivo: string) {
   a.click();
   a.remove();
 }
+
+// ── Download dos criativos prontos ───────────────────────────────────────────
+
+/** Nome de arquivo seguro a partir do nome do produto. */
+function nomeArquivo(indice: number, nome: string): string {
+  const limpo = nome
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+    .slice(0, 60) || "criativo";
+  // Prefixo numérico mantém a ordem da prévia dentro da pasta de downloads.
+  return `${String(indice + 1).padStart(2, "0")}-${limpo}.png`;
+}
+
+/** Dispara o download de um data URI, sem passar por servidor. */
+function baixarDataUri(dataUri: string, nome: string): void {
+  const a = document.createElement("a");
+  a.href = dataUri;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/**
+ * Rasteriza e baixa todos os criativos, um arquivo PNG por produto.
+ *
+ * Um a um e não um .zip: o projeto não tem lib de compactação, e o gestor quer
+ * justamente os arquivos soltos para postar. Na primeira vez o navegador
+ * pergunta se aceita baixar vários arquivos do site — é uma vez só.
+ *
+ * A pausa entre downloads não é estética: disparar vários `a.click()` no mesmo
+ * tique faz o Chrome descartar os últimos silenciosamente.
+ *
+ * `onProgresso` é chamado a cada arquivo pronto, para a interface contar.
+ */
+export async function baixarCriativos(
+  criativos: Array<{ dados: CriativoDados; nome: string }>,
+  onProgresso?: (feitos: number, total: number) => void,
+): Promise<void> {
+  for (let i = 0; i < criativos.length; i++) {
+    const { dados, nome } = criativos[i];
+    const png = await exportarCriativoPng(dados);
+    baixarDataUri(png, nomeArquivo(i, nome));
+    onProgresso?.(i + 1, criativos.length);
+    if (i < criativos.length - 1) {
+      await new Promise((r) => setTimeout(r, 350));
+    }
+  }
+}
