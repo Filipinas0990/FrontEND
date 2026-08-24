@@ -14,6 +14,7 @@ import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo"
 import { formatarMoeda } from "@/lib/moeda";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
+import { CampoCategoria } from "@/components/CampoCategoria";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
@@ -906,16 +907,16 @@ function PassoCriativo({
   }, [ultima, doCliente, farmacia.id, precosDoCliente]);
 
   /**
-   * Chips do filtro. "Recentes" vem sempre primeiro — repetir a campanha
-   * anterior é o começo mais provável — e some quando não há o que mostrar,
-   * que é o caso de todo cliente ainda não disparado depois da migration 0029.
-   * As categorias seguem, e só entram as que têm produto dentro.
+   * Opções do campo de filtro. "Recentes" vem sempre primeiro — repetir a
+   * campanha anterior é o começo mais provável — e some quando não há o que
+   * mostrar, que é o caso de todo cliente ainda não disparado depois da
+   * migration 0029. As categorias seguem, tiradas do próprio acervo: com texto
+   * livre não existe lista fixa para percorrer.
    */
-  const chips = useMemo(() => {
+  const opcoesFiltro = useMemo(() => {
     const lista: { valor: string; rotulo: string }[] = [];
-    if (recentes.size > 0) lista.push({ valor: RECENTES, rotulo: "Recentes" });
+    if (recentes.size > 0) lista.push({ valor: RECENTES, rotulo: "Recentes — última campanha" });
 
-    // As categorias saem do próprio acervo — com texto livre não há lista fixa.
     const { nomes, temSemCategoria } = categoriasDe(imagens);
     for (const nome of nomes) lista.push({ valor: nome, rotulo: nome });
     if (temSemCategoria) lista.push({ valor: SEM_CATEGORIA, rotulo: "Sem categoria" });
@@ -929,7 +930,9 @@ function PassoCriativo({
       if (!filtroCat) return true;                       // nenhum chip aceso
       if (filtroCat === RECENTES) return recentes.has(p.id);
       if (filtroCat === SEM_CATEGORIA) return !p.categoria?.trim();
-      return normalizarCategoria(p.categoria ?? "") === normalizarCategoria(filtroCat);
+      // "contém" e não igualdade: o campo aceita texto digitado, e meia palavra
+      // ("hig") tem de estreitar a grade em vez de zerá-la.
+      return normalizarCategoria(p.categoria ?? "").includes(normalizarCategoria(filtroCat));
     });
   }, [imagens, busca, filtroCat, recentes]);
 
@@ -1106,38 +1109,25 @@ function PassoCriativo({
           </div>
         </div>
 
-        {/* Chips — aparecem só quando a grade mostra o banco inteiro */}
-        {!soDoCliente && chips.length > 0 && (
-          <div className="px-5 pt-3 flex gap-2 overflow-x-auto">
-            {chips.map((c) => {
-              const aceso = filtroCat === c.valor;
-              const ehRecentes = c.valor === RECENTES;
-              return (
-                <button
-                  key={c.valor}
-                  type="button"
-                  // Interruptor: clicar no chip aceso apaga e devolve a grade
-                  // inteira. É o que substitui o antigo botão "Todas".
-                  onClick={() => setFiltroCat(aceso ? "" : c.valor)}
-                  aria-pressed={aceso}
-                  title={
-                    ehRecentes && ultimoDisparo?.disparado_em
-                      ? `Anunciados no disparo de ${fmtDia(ultimoDisparo.disparado_em)}`
-                      : undefined
-                  }
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
-                    aceso
-                      ? "bg-brand text-white border-brand"
-                      : ehRecentes
-                        ? "bg-white text-brand border-brand/40 hover:border-brand"
-                        : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
-                  }`}
-                >
-                  {ehRecentes && <History className="size-3 inline-block mr-1 -mt-0.5" />}
-                  {c.rotulo}
-                </button>
-              );
-            })}
+        {/* Filtro por categoria — aparece só quando a grade mostra o banco
+            inteiro. Campo digitável em vez de fileira de chips: a fileira não
+            escala quando as categorias passam de meia dúzia. */}
+        {!soDoCliente && opcoesFiltro.length > 0 && (
+          <div className="px-5 pt-3 flex items-center gap-2 flex-wrap">
+            <CampoCategoria
+              valor={filtroCat}
+              onChange={setFiltroCat}
+              opcoes={opcoesFiltro}
+              rotuloVazio="Todas as categorias"
+              placeholder="Filtrar por categoria"
+              className="w-full sm:w-72"
+            />
+            {filtroCat === RECENTES && ultimoDisparo?.disparado_em && (
+              <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+                <History className="size-3" />
+                anunciados em {fmtDia(ultimoDisparo.disparado_em)}
+              </span>
+            )}
           </div>
         )}
 
@@ -1185,9 +1175,9 @@ function PassoCriativo({
               {busca
                 ? `Nenhum produto encontrado para "${busca}".`
                 : filtroCat
-                  // Com filtro aceso a grade vazia é do filtro, não do banco —
+                  // Com filtro aplicado a grade vazia é do filtro, não do banco —
                   // sem isso o gestor lê "banco vazio" e vai cadastrar imagem à toa.
-                  ? "Nenhum produto neste filtro. Clique no chip aceso para ver a grade inteira."
+                  ? "Nenhum produto neste filtro. Limpe o campo de categoria para ver a grade inteira."
                   : soDoCliente
                     ? "Nenhum dos produtos escolhidos pelo cliente está ativo no banco de imagens."
                     : "Nenhuma imagem ativa no banco. Cadastre em Configurações → Banco de Imagens."}
