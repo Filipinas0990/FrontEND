@@ -96,14 +96,16 @@ function Imagem({ imagem, nome, className }: { imagem?: string | null; nome: str
 
 // ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
 function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: CriativoDados) {
-  // Caixa vermelha: bloco de 46% do card, menos o px-[4%] dos dois lados.
-  const tamanho = tamanhoQueCabe(valorPreco(preco), 0.60, 41, 21);
+  // Caixa vermelha: bloco de 38% do card, menos o px-[4%] dos dois lados.
+  // Os três números andam juntos com o w-[38%] lá embaixo: encolher a caixa sem
+  // baixar `utilCqw` e `maxCqw` faz o preço transbordar de novo.
+  const tamanho = tamanhoQueCabe(valorPreco(preco), 0.60, 35, 17.5);
   return (
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
 
       {/* Título (faixa azul no topo) */}
-      <div className="absolute top-[13%] left-[5%] right-[5%]">
+      <div className="absolute top-[3.5%] left-[5%] right-[5%]">
         <div className="rounded-full py-[2.5%] px-[4%] text-center"
              style={{ background: NAVY, border: "0.85cqw solid #fff", boxShadow: "0 1.1cqw 3.3cqw rgba(0,0,0,.18)" }}>
           <span className="block text-white font-black uppercase leading-none tracking-tight"
@@ -114,7 +116,7 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
       </div>
 
       {/* Subtítulo / datas (pílula branca) */}
-      <div className="absolute top-[24.5%] left-[15%] right-[15%]">
+      <div className="absolute top-[15%] left-[15%] right-[15%]">
         <div className="rounded-full py-[1.4%] px-[3%] text-center bg-white"
              style={{ boxShadow: "0 0.8cqw 2.2cqw rgba(0,0,0,.14)" }}>
           <span className="block font-black uppercase leading-none tracking-tight"
@@ -125,18 +127,18 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
       </div>
 
       {/* Preço (bloco embaixo-direita) */}
-      <div className="absolute bottom-[6%] right-[4%] w-[46%] flex flex-col items-center">
+      <div className="absolute bottom-[3.5%] right-[3.5%] w-[38%] flex flex-col items-center">
         <div className="rounded-full px-[7%] py-[1.6%] relative z-10"
              style={{ background: NAVY, border: "0.55cqw solid #fff", marginBottom: "-4%" }}>
           <span className="block text-white font-black uppercase leading-none"
-                style={{ fontSize: "5cqw" }}>
+                style={{ fontSize: "4.2cqw" }}>
             POR APENAS
           </span>
         </div>
         <div className="w-full px-[4%] pt-[7%] pb-[4%] text-center" style={{ background: VERM, borderRadius: "5cqw" }}>
           {precoDe && (
             <span className="block text-white font-bold uppercase leading-none line-through"
-                  style={{ fontSize: "4.6cqw", opacity: 0.9, marginBottom: "1.5%" }}>
+                  style={{ fontSize: "3.8cqw", opacity: 0.9, marginBottom: "1.5%" }}>
               De R${valorPreco(precoDe)}
             </span>
           )}
@@ -160,18 +162,19 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
 // ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
 function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
-  // Pílula de 60% do card menos o px-[4%]; o prefixo aqui é o "POR R$" inteiro.
-  const tamanho = tamanhoQueCabe(valorPreco(preco), 3.7, 53.5, 8.5);
+  // Pílula de 52% do card menos o px-[4%]; o prefixo aqui é o "POR R$" inteiro.
+  // Os três números acompanham o w-[52%] abaixo — ver a nota do ModeloBanner.
+  const tamanho = tamanhoQueCabe(valorPreco(preco), 3.7, 46, 7.4);
   return (
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
 
       {/* Pílula de preço no topo */}
-      <div className="absolute top-[5%] left-[5%] w-[60%]">
-        <div className="px-[4%] py-[3.5%] text-center" style={estiloAzul}>
+      <div className="absolute top-[3.5%] left-[4%] w-[52%]">
+        <div className="px-[4%] py-[3%] text-center" style={estiloAzul}>
           {precoDe && (
             <span className="block text-white font-bold uppercase leading-none line-through"
-                  style={{ fontSize: "4.8cqw", opacity: 0.85, marginBottom: "2.5%" }}>
+                  style={{ fontSize: "4.2cqw", opacity: 0.85, marginBottom: "2.5%" }}>
               De R${valorPreco(precoDe)}
             </span>
           )}
@@ -183,10 +186,10 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados
       </div>
 
       {/* Barra inferior: farmácia */}
-      <div className="absolute bottom-[5%] left-[6%] right-[6%]">
-        <div className="flex items-center justify-center px-[5%] py-[3.5%]" style={estiloAzul}>
+      <div className="absolute bottom-[3%] left-[6%] right-[6%]">
+        <div className="flex items-center justify-center px-[5%] py-[2.8%]" style={estiloAzul}>
           <span className="text-white font-black uppercase leading-tight tracking-tight break-words text-center"
-                style={{ fontSize: "6cqw" }}>
+                style={{ fontSize: "5.4cqw" }}>
             {farmacia}
           </span>
         </div>
