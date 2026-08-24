@@ -13,16 +13,23 @@ import { CriativoCard, type CriativoDados, type LayoutCriativo } from "@/compone
 import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
-import { CATEGORIAS, ROTULOS, SEM_CATEGORIA, type Categoria } from "@/lib/categorias";
+import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
   listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo, nomeVisivel,
+  getUltimosProdutosDisparados,
   type Farmacia, type DisparoResumo, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
 } from "@/lib/api";
 
 type Aba = "disparo" | "clientes" | "historico";
+
+/**
+ * Valor do chip "Recentes" — os produtos do último disparo daquele cliente.
+ * Não é categoria: convive com os slugs de lib/categorias no mesmo filtro.
+ */
+const RECENTES = "__recentes__";
 
 export const Route = createFileRoute("/grupos")({
   component: GruposPage,
@@ -814,9 +821,12 @@ function PassoCriativo({
 
   // Ver o banco inteiro em vez de só o que o cliente pediu
   const [verTodos, setVerTodos] = useState(false);
-  // Filtro por categoria — só faz sentido no modo "banco inteiro"; a lista do
-  // pedido do cliente tem poucos itens e já cabe na tela.
-  const [filtroCat, setFiltroCat] = useState<string>("todas");
+  // Filtro do passo 3 — categoria ou "Recentes". Só faz sentido no modo "banco
+  // inteiro"; a lista do pedido do cliente tem poucos itens e já cabe na tela.
+  // "" = nenhum filtro. Não existe chip "Todas": ele nunca era clicado, porque
+  // já era o estado inicial. No lugar dele, os chips funcionam como interruptor
+  // — clicar no que está aceso apaga e devolve a grade inteira.
+  const [filtroCat, setFiltroCat] = useState<string>("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["catalogo-produtos"],
@@ -828,6 +838,14 @@ function PassoCriativo({
   const { data: ultima, isLoading: carregandoEscolha } = useQuery({
     queryKey: ["ultima-escolha", farmacia.id],
     queryFn: () => getUltimaEscolha(farmacia.id),
+    staleTime: 60_000,
+  });
+
+  // Produtos anunciados na última campanha deste cliente. Volta vazio para quem
+  // ainda não foi disparado depois da migration 0029 — o dado não existia.
+  const { data: ultimoDisparo } = useQuery({
+    queryKey: ["ultimos-produtos", farmacia.id],
+    queryFn: () => getUltimosProdutosDisparados(farmacia.id),
     staleTime: 60_000,
   });
 
@@ -846,6 +864,16 @@ function PassoCriativo({
     () => ativos.filter((p) => pedidos.has(p.id)),
     [ativos, pedidos],
   );
+
+  /**
+   * Ids do último disparo que AINDA existem e estão ligados no banco de
+   * imagens. Produto apagado ou desligado depois da campanha não pode voltar
+   * como sugestão — o criativo não teria imagem.
+   */
+  const recentes = useMemo(() => {
+    const ids = new Set((ultimoDisparo?.produtos ?? []).map((p) => p.id));
+    return new Set(ativos.filter((p) => ids.has(p.id)).map((p) => p.id));
+  }, [ultimoDisparo, ativos]);
 
   // Sem escolha do cliente não há o que filtrar: cai no banco inteiro.
   const soDoCliente = pedidos.size > 0 && !verTodos;
@@ -877,25 +905,48 @@ function PassoCriativo({
     setPrecos((atual) => ({ ...atual, ...precosDoCliente }));
   }, [ultima, doCliente, farmacia.id, precosDoCliente]);
 
-  // Chips só do que existe no recorte atual: chip que não filtra nada é ruído.
+  /**
+   * Chips do filtro. "Recentes" vem sempre primeiro — repetir a campanha
+   * anterior é o começo mais provável — e some quando não há o que mostrar,
+   * que é o caso de todo cliente ainda não disparado depois da migration 0029.
+   * As categorias seguem, e só entram as que têm produto dentro.
+   */
   const chips = useMemo(() => {
-    const conta = new Map<string, number>();
-    for (const p of imagens) conta.set(p.categoria ?? SEM_CATEGORIA, (conta.get(p.categoria ?? SEM_CATEGORIA) ?? 0) + 1);
-    const lista: { valor: string; rotulo: string }[] = [{ valor: "todas", rotulo: "Todas" }];
-    for (const c of CATEGORIAS) if (conta.get(c)) lista.push({ valor: c, rotulo: ROTULOS[c as Categoria] });
-    if (conta.get(SEM_CATEGORIA)) lista.push({ valor: SEM_CATEGORIA, rotulo: "Sem categoria" });
+    const lista: { valor: string; rotulo: string }[] = [];
+    if (recentes.size > 0) lista.push({ valor: RECENTES, rotulo: "Recentes" });
+
+    // As categorias saem do próprio acervo — com texto livre não há lista fixa.
+    const { nomes, temSemCategoria } = categoriasDe(imagens);
+    for (const nome of nomes) lista.push({ valor: nome, rotulo: nome });
+    if (temSemCategoria) lista.push({ valor: SEM_CATEGORIA, rotulo: "Sem categoria" });
     return lista;
-  }, [imagens]);
+  }, [imagens, recentes]);
 
   const visiveis = useMemo(() => {
     const filtro = busca.trim().toLowerCase();
     return imagens.filter((p) => {
       if (filtro && !p.nome.toLowerCase().includes(filtro)) return false;
-      if (filtroCat === "todas") return true;
-      if (filtroCat === SEM_CATEGORIA) return p.categoria == null;
-      return p.categoria === filtroCat;
+      if (!filtroCat) return true;                       // nenhum chip aceso
+      if (filtroCat === RECENTES) return recentes.has(p.id);
+      if (filtroCat === SEM_CATEGORIA) return !p.categoria?.trim();
+      return normalizarCategoria(p.categoria ?? "") === normalizarCategoria(filtroCat);
     });
-  }, [imagens, busca, filtroCat]);
+  }, [imagens, busca, filtroCat, recentes]);
+
+  /**
+   * Quando o cliente não mandou pedido, a tela já abre no banco inteiro e o
+   * gestor está partindo do zero — aí "Recentes" entra aceso, porque a última
+   * campanha dele é o melhor ponto de partida. Se o gestor chegou aqui
+   * clicando em "Ver todo o banco", não: ele pediu para ver tudo.
+   * Uma vez por cliente, para não reacender o chip que ele apagou.
+   */
+  const recentesAplicado = useRef<number | null>(null);
+  useEffect(() => {
+    if (recentesAplicado.current === farmacia.id) return;
+    if (pedidos.size > 0 || recentes.size === 0) return;
+    recentesAplicado.current = farmacia.id;
+    setFiltroCat(RECENTES);
+  }, [farmacia.id, pedidos.size, recentes.size]);
 
   const modeloAtual = MODELOS.find((m) => m.id === modelo);
 
@@ -1033,7 +1084,7 @@ function PassoCriativo({
           </div>
           {pedidos.size > 0 && (
             <button
-              onClick={() => { setVerTodos((v) => !v); setFiltroCat("todas"); }}
+              onClick={() => { setVerTodos((v) => !v); setFiltroCat(""); }}
               className="text-sm font-medium text-brand hover:underline shrink-0"
             >
               {verTodos ? "Só o que o cliente pediu" : "Ver todo o banco de imagens"}
@@ -1055,23 +1106,38 @@ function PassoCriativo({
           </div>
         </div>
 
-        {/* Chips de categoria — aparecem só quando a grade mostra o banco inteiro */}
-        {!soDoCliente && chips.length > 1 && (
+        {/* Chips — aparecem só quando a grade mostra o banco inteiro */}
+        {!soDoCliente && chips.length > 0 && (
           <div className="px-5 pt-3 flex gap-2 overflow-x-auto">
-            {chips.map((c) => (
-              <button
-                key={c.valor}
-                type="button"
-                onClick={() => setFiltroCat(c.valor)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
-                  filtroCat === c.valor
-                    ? "bg-brand text-white border-brand"
-                    : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
-                }`}
-              >
-                {c.rotulo}
-              </button>
-            ))}
+            {chips.map((c) => {
+              const aceso = filtroCat === c.valor;
+              const ehRecentes = c.valor === RECENTES;
+              return (
+                <button
+                  key={c.valor}
+                  type="button"
+                  // Interruptor: clicar no chip aceso apaga e devolve a grade
+                  // inteira. É o que substitui o antigo botão "Todas".
+                  onClick={() => setFiltroCat(aceso ? "" : c.valor)}
+                  aria-pressed={aceso}
+                  title={
+                    ehRecentes && ultimoDisparo?.disparado_em
+                      ? `Anunciados no disparo de ${fmtDia(ultimoDisparo.disparado_em)}`
+                      : undefined
+                  }
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                    aceso
+                      ? "bg-brand text-white border-brand"
+                      : ehRecentes
+                        ? "bg-white text-brand border-brand/40 hover:border-brand"
+                        : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
+                  }`}
+                >
+                  {ehRecentes && <History className="size-3 inline-block mr-1 -mt-0.5" />}
+                  {c.rotulo}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -1118,9 +1184,13 @@ function PassoCriativo({
             <div className="py-12 text-center text-sm text-zinc-400">
               {busca
                 ? `Nenhum produto encontrado para "${busca}".`
-                : soDoCliente
-                  ? "Nenhum dos produtos escolhidos pelo cliente está ativo no banco de imagens."
-                  : "Nenhuma imagem ativa no banco. Cadastre em Configurações → Banco de Imagens."}
+                : filtroCat
+                  // Com filtro aceso a grade vazia é do filtro, não do banco —
+                  // sem isso o gestor lê "banco vazio" e vai cadastrar imagem à toa.
+                  ? "Nenhum produto neste filtro. Clique no chip aceso para ver a grade inteira."
+                  : soDoCliente
+                    ? "Nenhum dos produtos escolhidos pelo cliente está ativo no banco de imagens."
+                    : "Nenhuma imagem ativa no banco. Cadastre em Configurações → Banco de Imagens."}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 max-h-[28rem] overflow-y-auto">
@@ -1231,6 +1301,7 @@ function PassoCriativo({
           grupos={grupos}
           conexaoInicial={conexao}
           criativos={selecionados.map((p) => dadosCriativo(p))}
+          produtos={selecionados.map((p) => ({ id: p.id, nome: p.nome }))}
           onFechar={onFecharAgendamento}
           onPronto={onAgendado}
         />
@@ -1321,12 +1392,14 @@ const FREQUENCIAS: { id: RepetirDisparo; nome: string }[] = [
 ];
 
 function ModalAgendamento({
-  farmacia, grupos, conexaoInicial, criativos, onFechar, onPronto,
+  farmacia, grupos, conexaoInicial, criativos, produtos, onFechar, onPronto,
 }: {
   farmacia: Farmacia;
   grupos: GrupoWhatsApp[];
   conexaoInicial: string | null;
   criativos: CriativoDados[];
+  /** Os mesmos produtos dos criativos, com id — o criativo é só PNG e o perde. */
+  produtos: { id: number; nome: string }[];
   onFechar: () => void;
   onPronto: () => void;
 }) {
@@ -1436,6 +1509,9 @@ function ModalAgendamento({
         // Vai para o grupo: nome de fachada, nunca a razão social
         mensagem:      `🔥 *OFERTAS* — ${nomeVisivel(farmacia)} 🔥`,
         midias,
+        // Sem isto o disparo não deixa rastro de QUAIS produtos saíram — é o
+        // que alimenta o chip "Recentes" na próxima campanha deste cliente.
+        produtos,
         grupos:        grupos.map((g) => ({ jid: g.jid, nome: g.nome })),
         quando:        "agendado",
         agendado_para: new Date(quandoISO).toISOString(),

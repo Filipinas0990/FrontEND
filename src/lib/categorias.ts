@@ -1,44 +1,57 @@
 /**
- * Categorias do banco de imagens.
+ * Categorias do banco de imagens — TEXTO LIVRE, digitado pelo gestor.
  *
- * ESPELHO de Automa-o-Relatorio/pharmaflow-node/src/catalogo/categorias.ts.
- * Os dois projetos são pacotes separados e não compartilham import, então a
- * lista vive duplicada de propósito. Mexeu aqui, mexa lá — o backend valida o
- * slug e devolve 400 para o que não conhece.
+ * Era lista fechada e virou campo aberto (migration 0030). Não existe mais
+ * lista de slugs aqui: as categorias que aparecem nas telas são as que estão
+ * de fato aplicadas a algum produto, vindas de `getCategoriasCatalogo()`.
  *
- * O banco guarda o slug; o rótulo é só apresentação.
+ * Quem impede "Higiene" e "higiene" de virarem dois chips é o backend, que ao
+ * salvar reaproveita a grafia já cadastrada. Aqui só cuidamos de exibição.
  */
-
-export const CATEGORIAS = [
-  "higiene-beleza",
-  "dermocosmeticos",
-  "medicamentos",
-  "mamae-bebe",
-  "vitaminas",
-  "cuidado-pessoal",
-  "sazonais",
-] as const;
-
-export type Categoria = (typeof CATEGORIAS)[number];
-
-export const ROTULOS: Record<Categoria, string> = {
-  "higiene-beleza": "Higiene e Beleza",
-  "dermocosmeticos": "Dermocosméticos",
-  "medicamentos": "Medicamentos (MIP)",
-  "mamae-bebe": "Mamãe e Bebê",
-  "vitaminas": "Vitaminas e Suplementos",
-  "cuidado-pessoal": "Cuidado Pessoal",
-  "sazonais": "Sazonais / Datas",
-};
-
-/** Rótulo de um slug vindo do banco, tolerante a valor desconhecido/NULL. */
-export function rotuloCategoria(slug: string | null | undefined): string {
-  if (!slug) return "Sem categoria";
-  return ROTULOS[slug as Categoria] ?? slug;
-}
 
 /**
  * Valor usado nos filtros para "produtos que ninguém classificou ainda".
- * Não é uma categoria de verdade — no banco esses produtos são NULL.
+ * Não é uma categoria — no banco esses produtos são NULL.
  */
 export const SEM_CATEGORIA = "__sem__";
+
+/** Como a categoria aparece na tela. Null/vazio vira o rótulo de ausência. */
+export function rotuloCategoria(cat: string | null | undefined): string {
+  return cat?.trim() ? cat : "Sem categoria";
+}
+
+/** Mesma chave de comparação do backend — sem acento, minúscula, sem espaço duplo. */
+export function normalizarCategoria(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Categorias presentes numa lista de produtos, em ordem alfabética.
+ *
+ * Alfabética e não por quantidade: a barra de chips fica no mesmo lugar toda
+ * vez que a tela abre. Ordenar por volume faria o chip pular de posição a cada
+ * produto cadastrado, e o gestor perde a memória muscular.
+ */
+export function categoriasDe(
+  produtos: Array<{ categoria?: string | null }>,
+): { nomes: string[]; temSemCategoria: boolean } {
+  const vistas = new Map<string, string>();
+  let temSemCategoria = false;
+
+  for (const p of produtos) {
+    const cat = p.categoria?.trim();
+    if (!cat) { temSemCategoria = true; continue; }
+    const chave = normalizarCategoria(cat);
+    if (!vistas.has(chave)) vistas.set(chave, cat);
+  }
+
+  return {
+    nomes: [...vistas.values()].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    temSemCategoria,
+  };
+}

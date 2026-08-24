@@ -1081,7 +1081,7 @@ export interface CatalogoProdutoItem {
   id: number
   nome: string
   ativo: boolean
-  /** Slug da categoria (ver lib/categorias). Null = ninguém classificou ainda. */
+  /** Categoria digitada pelo gestor. Null = ninguém classificou ainda. */
   categoria: string | null
   criadoEm: string | null
 }
@@ -1102,10 +1102,22 @@ export function cadastrarCatalogoProduto(data: {
   nome: string
   imagem_b64: string
   mime?: string
-  /** Slug da categoria. Omitir preserva a categoria de um produto já existente. */
+  /** Categoria (texto livre). Omitir preserva a de um produto já existente. */
   categoria?: string | null
 }): Promise<{ ok: boolean }> {
   return req("/api/catalogo/produtos", { method: "POST", body: JSON.stringify(data) })
+}
+
+export interface CategoriasCatalogo {
+  /** Categorias aplicadas a algum produto, com quantos cada uma tem. */
+  categorias: { nome: string; total: number }[]
+  /** Dicas de partida — só vêm enquanto ninguém classificou nada. */
+  sugestoes: string[]
+}
+
+/** Categorias em uso — alimenta as sugestões do campo e os chips de filtro. */
+export function getCategoriasCatalogo(): Promise<CategoriasCatalogo> {
+  return req("/api/catalogo/categorias")
 }
 
 /**
@@ -1191,6 +1203,12 @@ export interface CriarDisparoPayload {
   titulo: string
   mensagem: string
   midias?: MidiaDisparo[]
+  /**
+   * Produtos do catálogo que geraram os criativos. É só isso que permite
+   * reconstruir depois o que foi anunciado — as mídias são PNG rasterizado e
+   * não guardam o id do produto. Alimenta o filtro "Recentes" do passo 3.
+   */
+  produtos?: { id: number; nome: string }[]
   grupos: GrupoSelecionado[]
   quando: "agora" | "agendado"
   agendado_para?: string | null
@@ -1306,6 +1324,21 @@ export function cancelarDisparo(id: number): Promise<void> {
   return req(`/api/disparos/${id}`, { method: "DELETE" })
 }
 
+export interface UltimosProdutosDisparados {
+  produtos: { id: number; nome: string }[]
+  /** ISO do disparo de onde saíram. Null = nunca houve disparo com o dado. */
+  disparado_em: string | null
+}
+
+/**
+ * Produtos anunciados na última campanha DESTE cliente.
+ * Volta vazio para quem ainda não foi disparado depois da migration 0029 —
+ * o dado não existia antes e não dá para reconstruir.
+ */
+export function getUltimosProdutosDisparados(farmaciaId: number): Promise<UltimosProdutosDisparados> {
+  return req(`/api/disparos/ultimos-produtos/${farmaciaId}`)
+}
+
 // ── Ofertas enviadas pelo dono da farmácia ────────────────────────────────────
 // O gestor manda um link com token; o dono abre SEM login e escolhe os produtos.
 
@@ -1315,8 +1348,8 @@ export interface ProdutoOferta {
   /** Preço que o dono informou no link ("9,90"). Null = deixou para o gestor. */
   preco?: string | null
   /**
-   * Slug da categoria — só vem na vitrine do link público, para os chips de
-   * filtro. As listas de pedido já enviado gravam {id, nome} e não têm o campo.
+   * Categoria — só vem na vitrine do link público, para os chips de filtro.
+   * As listas de pedido já enviado gravam {id, nome} e não têm o campo.
    */
   categoria?: string | null
 }

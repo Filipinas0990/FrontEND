@@ -8,7 +8,7 @@ import {
   type OfertaPublica,
 } from "@/lib/api";
 import { formatarMoeda } from "@/lib/moeda";
-import { CATEGORIAS, ROTULOS, SEM_CATEGORIA, type Categoria } from "@/lib/categorias";
+import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 
 export const Route = createFileRoute("/ofertas/$token")({
   component: OfertasPublicaPage,
@@ -64,16 +64,12 @@ function OfertasPublicaPage() {
    * Só entram categorias com produto ativo dentro.
    */
   const chips = useMemo(() => {
-    const conta = new Map<string, number>();
-    for (const p of dados?.produtos ?? []) {
-      const chave = p.categoria ?? SEM_CATEGORIA;
-      conta.set(chave, (conta.get(chave) ?? 0) + 1);
-    }
+    const { nomes, temSemCategoria } = categoriasDe(dados?.produtos ?? []);
     const lista: { valor: string; rotulo: string }[] = [{ valor: "todas", rotulo: "Todos" }];
-    for (const c of CATEGORIAS) if (conta.get(c)) lista.push({ valor: c, rotulo: ROTULOS[c as Categoria] });
+    for (const nome of nomes) lista.push({ valor: nome, rotulo: nome });
     // "Outros" e não "Sem categoria": o dono da farmácia não tem por que saber
     // que a classificação do nosso banco está incompleta.
-    if (conta.get(SEM_CATEGORIA)) lista.push({ valor: SEM_CATEGORIA, rotulo: "Outros" });
+    if (temSemCategoria) lista.push({ valor: SEM_CATEGORIA, rotulo: "Outros" });
     return lista;
   }, [dados]);
 
@@ -82,8 +78,8 @@ function OfertasPublicaPage() {
     return (dados?.produtos ?? []).filter((p) => {
       if (termo && !semAcento(p.nome).includes(termo)) return false;
       if (filtroCat === "todas") return true;
-      if (filtroCat === SEM_CATEGORIA) return p.categoria == null;
-      return p.categoria === filtroCat;
+      if (filtroCat === SEM_CATEGORIA) return !p.categoria?.trim();
+      return normalizarCategoria(p.categoria ?? "") === normalizarCategoria(filtroCat);
     });
   }, [dados, busca, filtroCat]);
 

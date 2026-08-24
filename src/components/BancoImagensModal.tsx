@@ -1,9 +1,8 @@
 import { useState, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, UploadCloud, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
-import { cadastrarCatalogoProduto } from "@/lib/api";
-import { CATEGORIAS, ROTULOS, type Categoria } from "@/lib/categorias";
+import { cadastrarCatalogoProduto, getCategoriasCatalogo } from "@/lib/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,8 +36,19 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
   const [arrastando, setArrastando] = useState(false);
   // Categoria vale para o LOTE inteiro, não por imagem. É o que torna a
   // classificação viável: sobe-se a pasta "Higiene" de uma vez e classifica com
-  // um clique, em vez de escolher a categoria 40 vezes seguidas.
-  const [categoria, setCategoria] = useState<Categoria | "">("");
+  // um clique, em vez de digitar a categoria 40 vezes seguidas.
+  const [categoria, setCategoria] = useState("");
+
+  // Sugestões do campo: o que já está em uso. Digitar é livre, mas ver o que
+  // existe evita criar "Higiene" ao lado de um "Higiene e Beleza" que já havia.
+  const { data: cats } = useQuery({
+    queryKey: ["catalogo-categorias"],
+    queryFn: getCategoriasCatalogo,
+    staleTime: 60_000,
+  });
+  const sugestoes = cats?.categorias.length
+    ? cats.categorias.map((c) => c.nome)
+    : (cats?.sugestoes ?? []);
 
   // ── Seleção de arquivos ─────────────────────────────────────────────────────
 
@@ -94,9 +104,9 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
           nome: p.nome.trim(),
           imagem_b64: p.preview, // data URI; o backend remove o prefixo
           mime: p.file.type || "image/png",
-          // Sem escolha, o campo nem vai no corpo: reenviar a foto de um produto
+          // Campo em branco nem vai no corpo: reenviar a foto de um produto
           // já classificado não pode apagar a categoria dele.
-          ...(categoria ? { categoria } : {}),
+          ...(categoria.trim() ? { categoria: categoria.trim() } : {}),
         });
         ok++;
       } catch {
@@ -108,6 +118,7 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
     setCategoria("");
     qc.invalidateQueries({ queryKey: ["catalogo-produtos"] });
     qc.invalidateQueries({ queryKey: ["catalogo-status"] });
+    qc.invalidateQueries({ queryKey: ["catalogo-categorias"] });
     if (ok > 0) {
       toast.success(`${ok} imagem(ns) salva(s) no banco!`);
       onClose();
@@ -179,17 +190,50 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
                   Vale para o lote inteiro. Suba uma pasta por categoria e classifique
                   tudo de uma vez — dá para trocar depois no Banco de Imagens.
                 </p>
-                <select
+                {/* input + datalist: digita o que quiser, e o navegador
+                    oferece o que já existe enquanto ele digita. */}
+                <input
                   id="categoria-lote"
+                  list="categorias-do-banco"
                   value={categoria}
-                  onChange={(e) => setCategoria(e.target.value as Categoria | "")}
+                  onChange={(e) => setCategoria(e.target.value)}
+                  maxLength={60}
+                  placeholder="Digite ou escolha — em branco, classifica depois"
                   className="w-full px-3 py-2 text-sm bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-                >
-                  <option value="">Sem categoria (classificar depois)</option>
-                  {CATEGORIAS.map((c) => (
-                    <option key={c} value={c}>{ROTULOS[c]}</option>
-                  ))}
-                </select>
+                />
+                <datalist id="categorias-do-banco">
+                  {sugestoes.map((c) => <option key={c} value={c} />)}
+                </datalist>
+
+                {sugestoes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {/* Atalho para não depender do dropdown do datalist, que
+                        alguns navegadores só abrem depois de digitar algo. */}
+                    {sugestoes.slice(0, 8).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCategoria(c)}
+                        className={`px-2 py-1 rounded-full text-[11px] border transition ${
+                          categoria.trim() === c
+                            ? "bg-brand text-white border-brand"
+                            : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                    {categoria.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setCategoria("")}
+                        className="px-2 py-1 rounded-full text-[11px] text-zinc-500 hover:text-zinc-800"
+                      >
+                        limpar
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">

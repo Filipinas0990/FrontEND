@@ -15,10 +15,10 @@ import {
   type CatalogoProdutoItem,
 } from "@/lib/api";
 import {
-  CATEGORIAS,
-  ROTULOS,
   SEM_CATEGORIA,
   rotuloCategoria,
+  categoriasDe,
+  normalizarCategoria,
 } from "@/lib/categorias";
 import {
   AlertDialog,
@@ -57,6 +57,8 @@ function BancoImagensPage() {
   const [filtroCat, setFiltroCat] = useState<string>("todas");
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todos");
   const [selecao, setSelecao] = useState<Set<number>>(new Set());
+  // Texto do campo de classificação em lote (a barra escura)
+  const [catLote, setCatLote] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["catalogo-produtos"],
@@ -96,7 +98,9 @@ function BancoImagensPage() {
       setCatalogoProdutosCategoria(ids, categoria),
     onSuccess: (res, { categoria }) => {
       qc.invalidateQueries({ queryKey: ["catalogo-produtos"] });
+      qc.invalidateQueries({ queryKey: ["catalogo-categorias"] });
       setSelecao(new Set());
+      setCatLote("");
       toast.success(
         categoria
           ? `${res.total} produto(s) em ${rotuloCategoria(categoria)}.`
@@ -106,30 +110,38 @@ function BancoImagensPage() {
     onError: () => toast.error("Não foi possível classificar os produtos."),
   });
 
-  // ── Contagem por categoria: alimenta os chips ───────────────────────────────
-  // Só entram chips com produto dentro — chip vazio é ruído numa barra que já
-  // tem sete opções.
+  // ── Chips: as categorias que EXISTEM nos produtos, não uma lista fixa ───────
+  // Com texto livre não há catálogo de categorias para percorrer; a barra é um
+  // reflexo do que está aplicado. Categoria que ficou sem produto some sozinha.
   const contagem = useMemo(() => {
     const mapa = new Map<string, number>();
     for (const p of produtos) {
-      const chave = p.categoria ?? SEM_CATEGORIA;
+      const chave = p.categoria?.trim() ? normalizarCategoria(p.categoria) : SEM_CATEGORIA;
       mapa.set(chave, (mapa.get(chave) ?? 0) + 1);
     }
     return mapa;
   }, [produtos]);
 
   const chips = useMemo(() => {
+    const { nomes, temSemCategoria } = categoriasDe(produtos);
     const lista: { valor: string; rotulo: string; total: number }[] = [
       { valor: "todas", rotulo: "Todas", total: produtos.length },
     ];
-    for (const c of CATEGORIAS) {
-      const total = contagem.get(c) ?? 0;
-      if (total > 0) lista.push({ valor: c, rotulo: ROTULOS[c], total });
+    for (const nome of nomes) {
+      lista.push({ valor: nome, rotulo: nome, total: contagem.get(normalizarCategoria(nome)) ?? 0 });
     }
-    const semCat = contagem.get(SEM_CATEGORIA) ?? 0;
-    if (semCat > 0) lista.push({ valor: SEM_CATEGORIA, rotulo: "Sem categoria", total: semCat });
+    if (temSemCategoria) {
+      lista.push({
+        valor: SEM_CATEGORIA,
+        rotulo: "Sem categoria",
+        total: contagem.get(SEM_CATEGORIA) ?? 0,
+      });
+    }
     return lista;
-  }, [produtos.length, contagem]);
+  }, [produtos, contagem]);
+
+  /** Sugestões do campo de lote: as categorias já em uso. */
+  const sugestoes = useMemo(() => categoriasDe(produtos).nomes, [produtos]);
 
   const visiveis = useMemo(() => {
     const termo = semAcento(busca.trim());
@@ -138,8 +150,10 @@ function BancoImagensPage() {
       if (filtroStatus === "ativos" && !p.ativo) return false;
       if (filtroStatus === "desligados" && p.ativo) return false;
       if (filtroCat === "todas") return true;
-      if (filtroCat === SEM_CATEGORIA) return p.categoria == null;
-      return p.categoria === filtroCat;
+      if (filtroCat === SEM_CATEGORIA) return !p.categoria?.trim();
+      // Compara normalizado: grafias diferentes da mesma categoria caem no
+      // mesmo chip, mesmo que alguma tenha escapado da canonização do backend.
+      return normalizarCategoria(p.categoria ?? "") === normalizarCategoria(filtroCat);
     });
   }, [produtos, busca, filtroCat, filtroStatus]);
 
@@ -261,26 +275,44 @@ function BancoImagensPage() {
             <span className="text-sm font-medium">
               {selecao.size} selecionado{selecao.size > 1 ? "s" : ""}
             </span>
-            <select
-              defaultValue=""
-              disabled={classificarMut.isPending}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (!v) return;
-                classificarMut.mutate({
-                  ids: [...selecao],
-                  categoria: v === SEM_CATEGORIA ? null : v,
-                });
-                e.target.value = "";
+            {/* Digita a categoria (nova ou existente) e aplica na seleção */}
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const texto = catLote.trim();
+                if (!texto) return;
+                classificarMut.mutate({ ids: [...selecao], categoria: texto });
               }}
-              className="px-3 py-1.5 text-sm rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-white/30 [&>option]:text-zinc-900"
             >
-              <option value="">Mover para a categoria...</option>
-              {CATEGORIAS.map((c) => (
-                <option key={c} value={c}>{ROTULOS[c]}</option>
-              ))}
-              <option value={SEM_CATEGORIA}>Sem categoria (limpar)</option>
-            </select>
+              <input
+                list="categorias-em-uso"
+                value={catLote}
+                onChange={(e) => setCatLote(e.target.value)}
+                maxLength={60}
+                placeholder="Mover para a categoria..."
+                className="px-3 py-1.5 text-sm rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/30"
+              />
+              <datalist id="categorias-em-uso">
+                {sugestoes.map((c) => <option key={c} value={c} />)}
+              </datalist>
+              <button
+                type="submit"
+                disabled={!catLote.trim() || classificarMut.isPending}
+                className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-white text-zinc-900 disabled:opacity-40 transition"
+              >
+                Aplicar
+              </button>
+              <button
+                type="button"
+                disabled={classificarMut.isPending}
+                onClick={() => classificarMut.mutate({ ids: [...selecao], categoria: null })}
+                className="px-2 py-1.5 text-xs text-white/70 hover:text-white transition"
+                title="Deixar os selecionados sem categoria"
+              >
+                limpar categoria
+              </button>
+            </form>
             {classificarMut.isPending && <Loader2 className="size-4 animate-spin" />}
             <button
               type="button"
