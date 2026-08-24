@@ -1081,6 +1081,8 @@ export interface CatalogoProdutoItem {
   id: number
   nome: string
   ativo: boolean
+  /** Slug da categoria (ver lib/categorias). Null = ninguém classificou ainda. */
+  categoria: string | null
   criadoEm: string | null
 }
 
@@ -1100,8 +1102,24 @@ export function cadastrarCatalogoProduto(data: {
   nome: string
   imagem_b64: string
   mime?: string
+  /** Slug da categoria. Omitir preserva a categoria de um produto já existente. */
+  categoria?: string | null
 }): Promise<{ ok: boolean }> {
   return req("/api/catalogo/produtos", { method: "POST", body: JSON.stringify(data) })
+}
+
+/**
+ * Classifica vários produtos de uma vez (`categoria: null` limpa).
+ * É o que torna viável organizar o acervo antigo, cadastrado sem categoria.
+ */
+export function setCatalogoProdutosCategoria(
+  ids: number[],
+  categoria: string | null,
+): Promise<{ ok: boolean; total: number }> {
+  return req("/api/catalogo/produtos/categoria", {
+    method: "PATCH",
+    body: JSON.stringify({ ids, categoria }),
+  })
 }
 
 /** Liga/desliga um produto do catálogo (desligado não entra nos criativos). */
@@ -1296,6 +1314,11 @@ export interface ProdutoOferta {
   nome: string
   /** Preço que o dono informou no link ("9,90"). Null = deixou para o gestor. */
   preco?: string | null
+  /**
+   * Slug da categoria — só vem na vitrine do link público, para os chips de
+   * filtro. As listas de pedido já enviado gravam {id, nome} e não têm o campo.
+   */
+  categoria?: string | null
 }
 
 export interface OfertaPublica {
@@ -1312,7 +1335,8 @@ export interface EnviarOfertaPayload {
   farmacia_id: number
   /** O dono manda o preço junto; `preco` null = ele não informou. */
   produtos: { id: number; preco?: string | null }[]
-  enviado_por?: string | null
+  /** Obrigatório: sem nome o envio é recusado. */
+  enviado_por: string
 }
 
 export type StatusSolicitacao = "pendente" | "atendida" | "descartada"
@@ -1322,7 +1346,7 @@ export interface SolicitacaoOferta {
   farmacia_id: number
   farmacia: string
   produtos: ProdutoOferta[]
-  enviado_por: string | null
+  enviado_por: string
   status: StatusSolicitacao
   criado_em: string
   atendida_em: string | null
@@ -1376,7 +1400,7 @@ export function getSolicitacoes(): Promise<SolicitacaoOferta[]> {
 export interface UltimaEscolha {
   id: number
   produtos: ProdutoOferta[]
-  enviado_por: string | null
+  enviado_por: string
   status: StatusSolicitacao
   criado_em: string
 }
@@ -1408,7 +1432,7 @@ export interface ClienteCarteira {
   solicitacao: {
     id: number
     produtos: ProdutoOferta[]
-    enviado_por: string | null
+    enviado_por: string
     criado_em: string
   } | null
   ultimo_envio_em: string | null

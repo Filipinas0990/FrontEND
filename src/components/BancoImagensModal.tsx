@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, UploadCloud, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cadastrarCatalogoProduto } from "@/lib/api";
+import { CATEGORIAS, ROTULOS, type Categoria } from "@/lib/categorias";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,10 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
   const [pendentes, setPendentes] = useState<ArquivoPendente[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [arrastando, setArrastando] = useState(false);
+  // Categoria vale para o LOTE inteiro, não por imagem. É o que torna a
+  // classificação viável: sobe-se a pasta "Higiene" de uma vez e classifica com
+  // um clique, em vez de escolher a categoria 40 vezes seguidas.
+  const [categoria, setCategoria] = useState<Categoria | "">("");
 
   // ── Seleção de arquivos ─────────────────────────────────────────────────────
 
@@ -89,6 +94,9 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
           nome: p.nome.trim(),
           imagem_b64: p.preview, // data URI; o backend remove o prefixo
           mime: p.file.type || "image/png",
+          // Sem escolha, o campo nem vai no corpo: reenviar a foto de um produto
+          // já classificado não pode apagar a categoria dele.
+          ...(categoria ? { categoria } : {}),
         });
         ok++;
       } catch {
@@ -97,6 +105,7 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
     }
     setEnviando(false);
     setPendentes([]);
+    setCategoria("");
     qc.invalidateQueries({ queryKey: ["catalogo-produtos"] });
     qc.invalidateQueries({ queryKey: ["catalogo-status"] });
     if (ok > 0) {
@@ -161,6 +170,28 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
           {/* Pendentes para salvar */}
           {pendentes.length > 0 && (
             <div>
+              {/* Categoria do lote — antes da lista, porque vale para todas */}
+              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 mb-4">
+                <label htmlFor="categoria-lote" className="block text-xs font-semibold text-zinc-700">
+                  Categoria destas {pendentes.length} imagem(ns)
+                </label>
+                <p className="text-[11px] text-zinc-500 mt-0.5 mb-2">
+                  Vale para o lote inteiro. Suba uma pasta por categoria e classifique
+                  tudo de uma vez — dá para trocar depois no Banco de Imagens.
+                </p>
+                <select
+                  id="categoria-lote"
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value as Categoria | "")}
+                  className="w-full px-3 py-2 text-sm bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                >
+                  <option value="">Sem categoria (classificar depois)</option>
+                  {CATEGORIAS.map((c) => (
+                    <option key={c} value={c}>{ROTULOS[c]}</option>
+                  ))}
+                </select>
+              </div>
+
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
                 A enviar ({pendentes.length})
               </p>

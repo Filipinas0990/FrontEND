@@ -8,6 +8,7 @@ import {
   type OfertaPublica,
 } from "@/lib/api";
 import { formatarMoeda } from "@/lib/moeda";
+import { CATEGORIAS, ROTULOS, SEM_CATEGORIA, type Categoria } from "@/lib/categorias";
 
 export const Route = createFileRoute("/ofertas/$token")({
   component: OfertasPublicaPage,
@@ -36,6 +37,7 @@ function OfertasPublicaPage() {
   // Preço por produto, no mesmo formato do criativo ("9,90"). Opcional.
   const [precos, setPrecos] = useState<Record<number, string>>({});
   const [busca, setBusca] = useState("");
+  const [filtroCat, setFiltroCat] = useState<string>("todas");
   const [buscaFarmacia, setBuscaFarmacia] = useState("");
   const [enviadoPor, setEnviadoPor] = useState("");
 
@@ -55,11 +57,35 @@ function OfertasPublicaPage() {
       .finally(() => setCarregando(false));
   }, [token]);
 
-  const produtosFiltrados = useMemo(
-    () => (dados?.produtos ?? []).filter((p) =>
-      p.nome.toLowerCase().includes(busca.toLowerCase())),
-    [dados, busca],
-  );
+  /**
+   * Chips de categoria, estilo iFood. Existem porque esta é a tela mais
+   * castigada pelo tamanho do banco: o dono abre no celular, em duas colunas, e
+   * sem filtro precisa rolar centenas de miniaturas para achar um desodorante.
+   * Só entram categorias com produto ativo dentro.
+   */
+  const chips = useMemo(() => {
+    const conta = new Map<string, number>();
+    for (const p of dados?.produtos ?? []) {
+      const chave = p.categoria ?? SEM_CATEGORIA;
+      conta.set(chave, (conta.get(chave) ?? 0) + 1);
+    }
+    const lista: { valor: string; rotulo: string }[] = [{ valor: "todas", rotulo: "Todos" }];
+    for (const c of CATEGORIAS) if (conta.get(c)) lista.push({ valor: c, rotulo: ROTULOS[c as Categoria] });
+    // "Outros" e não "Sem categoria": o dono da farmácia não tem por que saber
+    // que a classificação do nosso banco está incompleta.
+    if (conta.get(SEM_CATEGORIA)) lista.push({ valor: SEM_CATEGORIA, rotulo: "Outros" });
+    return lista;
+  }, [dados]);
+
+  const produtosFiltrados = useMemo(() => {
+    const termo = semAcento(busca);
+    return (dados?.produtos ?? []).filter((p) => {
+      if (termo && !semAcento(p.nome).includes(termo)) return false;
+      if (filtroCat === "todas") return true;
+      if (filtroCat === SEM_CATEGORIA) return p.categoria == null;
+      return p.categoria === filtroCat;
+    });
+  }, [dados, busca, filtroCat]);
 
   // Nos links de cliente a farmácia é fixa: não há lista nem como trocar.
   const farmaciaFixa = dados?.farmacia ?? null;
@@ -83,15 +109,18 @@ function OfertasPublicaPage() {
     });
   }
 
+  /** Regra: sem nome não envia (o pedido não pode chegar anônimo). */
+  const nomeOk = enviadoPor.trim().length >= 2;
+
   async function enviar() {
-    if (!farmaciaId) return;
+    if (!farmaciaId || !nomeOk) return;
     setEnviando(true);
     setErroEnvio(null);
     try {
       await enviarOfertaPublica(token, {
         farmacia_id: farmaciaId,
         produtos: [...selecionados].map((id) => ({ id, preco: precos[id]?.trim() || null })),
-        enviado_por: enviadoPor.trim() || null,
+        enviado_por: enviadoPor.trim(),
       });
       setEnviado(true);
     } catch (err) {
@@ -246,6 +275,33 @@ function OfertasPublicaPage() {
           />
         </div>
 
+        {chips.length > 1 && (
+          <div className="sticky top-0 z-10 -mx-4 px-4 py-2 mb-2 bg-zinc-50/95 backdrop-blur-sm">
+            <div className="flex gap-2 overflow-x-auto">
+              {chips.map((c) => (
+                <button
+                  key={c.valor}
+                  type="button"
+                  onClick={() => setFiltroCat(c.valor)}
+                  className={`shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border transition ${
+                    filtroCat === c.valor
+                      ? "bg-brand text-white border-brand"
+                      : "bg-white text-zinc-600 border-zinc-200"
+                  }`}
+                >
+                  {c.rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {produtosFiltrados.length === 0 && (
+          <p className="text-center text-sm text-zinc-400 py-10">
+            Nenhum produto {busca ? `para "${busca}"` : "nesta categoria"}.
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           {produtosFiltrados.map((p) => {
             const marcado = selecionados.has(p.id);
@@ -294,13 +350,19 @@ function OfertasPublicaPage() {
         )}
 
         <div className="mt-6 flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700">Seu nome (opcional)</label>
+          <label className="text-sm font-medium text-zinc-700">Seu nome *</label>
           <input
             value={enviadoPor}
             onChange={(e) => setEnviadoPor(e.target.value)}
             placeholder="Quem está enviando"
-            className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+            maxLength={120}
+            className={`w-full px-3 py-2.5 rounded-lg border text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+              enviadoPor.trim() ? "border-zinc-200" : "border-amber-300"
+            }`}
           />
+          <p className="text-xs text-zinc-400">
+            Precisamos saber quem enviou para falar com você se houver dúvida na lista.
+          </p>
         </div>
 
         {erroEnvio && (
@@ -317,11 +379,13 @@ function OfertasPublicaPage() {
           <p className="text-sm text-zinc-500 flex-1">
             {totalEscolhido === 0
               ? "Nenhum produto escolhido"
-              : <><strong className="text-zinc-900">{selecionados.size}</strong> produto(s)</>}
+              : !nomeOk
+                ? "Falta informar o seu nome"
+                : <><strong className="text-zinc-900">{selecionados.size}</strong> produto(s)</>}
           </p>
           <button
             onClick={enviar}
-            disabled={enviando || totalEscolhido === 0}
+            disabled={enviando || totalEscolhido === 0 || !nomeOk}
             className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
           >
             {enviando

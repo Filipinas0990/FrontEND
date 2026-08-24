@@ -13,6 +13,7 @@ import { CriativoCard, type CriativoDados, type LayoutCriativo } from "@/compone
 import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
+import { CATEGORIAS, ROTULOS, SEM_CATEGORIA, type Categoria } from "@/lib/categorias";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
@@ -813,6 +814,9 @@ function PassoCriativo({
 
   // Ver o banco inteiro em vez de só o que o cliente pediu
   const [verTodos, setVerTodos] = useState(false);
+  // Filtro por categoria — só faz sentido no modo "banco inteiro"; a lista do
+  // pedido do cliente tem poucos itens e já cabe na tela.
+  const [filtroCat, setFiltroCat] = useState<string>("todas");
 
   const { data, isLoading } = useQuery({
     queryKey: ["catalogo-produtos"],
@@ -873,10 +877,25 @@ function PassoCriativo({
     setPrecos((atual) => ({ ...atual, ...precosDoCliente }));
   }, [ultima, doCliente, farmacia.id, precosDoCliente]);
 
+  // Chips só do que existe no recorte atual: chip que não filtra nada é ruído.
+  const chips = useMemo(() => {
+    const conta = new Map<string, number>();
+    for (const p of imagens) conta.set(p.categoria ?? SEM_CATEGORIA, (conta.get(p.categoria ?? SEM_CATEGORIA) ?? 0) + 1);
+    const lista: { valor: string; rotulo: string }[] = [{ valor: "todas", rotulo: "Todas" }];
+    for (const c of CATEGORIAS) if (conta.get(c)) lista.push({ valor: c, rotulo: ROTULOS[c as Categoria] });
+    if (conta.get(SEM_CATEGORIA)) lista.push({ valor: SEM_CATEGORIA, rotulo: "Sem categoria" });
+    return lista;
+  }, [imagens]);
+
   const visiveis = useMemo(() => {
     const filtro = busca.trim().toLowerCase();
-    return filtro ? imagens.filter((p) => p.nome.toLowerCase().includes(filtro)) : imagens;
-  }, [imagens, busca]);
+    return imagens.filter((p) => {
+      if (filtro && !p.nome.toLowerCase().includes(filtro)) return false;
+      if (filtroCat === "todas") return true;
+      if (filtroCat === SEM_CATEGORIA) return p.categoria == null;
+      return p.categoria === filtroCat;
+    });
+  }, [imagens, busca, filtroCat]);
 
   const modeloAtual = MODELOS.find((m) => m.id === modelo);
 
@@ -1014,7 +1033,7 @@ function PassoCriativo({
           </div>
           {pedidos.size > 0 && (
             <button
-              onClick={() => setVerTodos((v) => !v)}
+              onClick={() => { setVerTodos((v) => !v); setFiltroCat("todas"); }}
               className="text-sm font-medium text-brand hover:underline shrink-0"
             >
               {verTodos ? "Só o que o cliente pediu" : "Ver todo o banco de imagens"}
@@ -1035,6 +1054,26 @@ function PassoCriativo({
             )}
           </div>
         </div>
+
+        {/* Chips de categoria — aparecem só quando a grade mostra o banco inteiro */}
+        {!soDoCliente && chips.length > 1 && (
+          <div className="px-5 pt-3 flex gap-2 overflow-x-auto">
+            {chips.map((c) => (
+              <button
+                key={c.valor}
+                type="button"
+                onClick={() => setFiltroCat(c.valor)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                  filtroCat === c.valor
+                    ? "bg-brand text-white border-brand"
+                    : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
+                }`}
+              >
+                {c.rotulo}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="p-5">
           {/* Recados sobre o pedido do cliente */}
