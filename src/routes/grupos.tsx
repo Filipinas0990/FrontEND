@@ -5,6 +5,7 @@ import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
   ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine, Download,
+  MessageSquareText, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -1341,6 +1342,8 @@ function PassoCriativo({
           farmacia={farmacia}
           grupos={grupos}
           conexaoInicial={conexao}
+          modelo={modelo}
+          datas={subtitulo}
           criativos={selecionados.map((p) => dadosCriativo(p))}
           produtos={selecionados.map((p) => ({ id: p.id, nome: p.nome }))}
           onFechar={onFecharAgendamento}
@@ -1432,18 +1435,84 @@ const FREQUENCIAS: { id: RepetirDisparo; nome: string }[] = [
   { id: "mensal",  nome: "Todo mês" },
 ];
 
+/**
+ * Legenda de UM criativo: o nome do produto com o preço. É o que o WhatsApp
+ * mostra embaixo daquela foto.
+ *
+ * Vive fora do modal porque a prévia da mensagem precisa dela na hora de
+ * digitar, e o envio precisa dela na hora de montar as mídias — as duas têm de
+ * dizer a mesma coisa, senão a prévia mente.
+ */
+function rotuloDoCriativo(dados: CriativoDados): string {
+  if (dados.precoDe && dados.preco) return `${dados.nome} — de R$${dados.precoDe} por R$${dados.preco}`;
+  if (dados.preco) return `${dados.nome} — R$${dados.preco}`;
+  return dados.nome;
+}
+
+/**
+ * Texto que acompanha a oferta, por modelo de criativo.
+ *
+ * Abre Mês e Fecha Mês têm copy própria, definida pelo dono — a campanha de
+ * início de mês fala de uma coisa e a de fim de mês de outra, e reescrever
+ * isso à mão a cada disparo é onde entra erro. O modelo Padrão segue com o
+ * cabeçalho genérico de sempre.
+ *
+ * `datas` é o subtítulo do criativo (ex.: "DIAS 01 A 10"). Vem do que o gestor
+ * editou na tela anterior, então o texto e a arte nunca divergem. Pode chegar
+ * vazio — daí a linha da validade simplesmente não sai.
+ */
+function mensagemDoModelo(
+  modelo: ModeloId | null,
+  farmacia: Farmacia,
+  datas: string,
+): string {
+  const nome = nomeVisivel(farmacia);
+  const validade = datas.trim();
+
+  if (modelo === "abre")  return TEXTO_ABRE_MES(nome, validade);
+  if (modelo === "fecha") return TEXTO_FECHA_MES(nome, validade);
+  return `🔥 *OFERTAS* — ${nome} 🔥`;
+}
+
+// ── Copy fixa das campanhas de mês ───────────────────────────────────────────
+// É o texto que o dono padronizou; mexer aqui muda o que TODO gestor manda.
+// O gestor ainda pode ajustar no campo antes de agendar — isto é o ponto de
+// partida, não uma trava. No WhatsApp, *texto* fica em negrito.
+
+const TEXTO_ABRE_MES = (nome: string, datas: string): string =>
+  [`🔥 *OFERTAS* — ${nome} 🔥`, datas && `Válidas ${datas.toLowerCase()}.`]
+    .filter(Boolean)
+    .join("\n\n");
+
+const TEXTO_FECHA_MES = (nome: string, datas: string): string =>
+  [`🔥 *OFERTAS* — ${nome} 🔥`, datas && `Válidas ${datas.toLowerCase()}.`]
+    .filter(Boolean)
+    .join("\n\n");
+
+/** Teto da legenda de mídia no WhatsApp. Acima disso a Evolution corta. */
+const MAX_LEGENDA = 1024;
+
 function ModalAgendamento({
-  farmacia, grupos, conexaoInicial, criativos, produtos, onFechar, onPronto,
+  farmacia, grupos, conexaoInicial, modelo, datas, criativos, produtos, onFechar, onPronto,
 }: {
   farmacia: Farmacia;
   grupos: GrupoWhatsApp[];
   conexaoInicial: string | null;
+  /** Modelo do criativo — é ele que decide a copy que vem preenchida. */
+  modelo: ModeloId | null;
+  /** Subtítulo do criativo (ex.: "DIAS 01 A 10"), para a linha de validade. */
+  datas: string;
   criativos: CriativoDados[];
   /** Os mesmos produtos dos criativos, com id — o criativo é só PNG e o perde. */
   produtos: { id: number; nome: string }[];
   onFechar: () => void;
   onPronto: () => void;
 }) {
+  // Texto que vai embaixo da foto. Nasce com o padrão e o gestor edita à
+  // vontade. NÃO é lembrado entre campanhas de propósito: o padrão carrega o
+  // nome da farmácia, e reaproveitar o texto da campanha anterior mandaria o
+  // nome do cliente errado para o grupo.
+  const [mensagem, setMensagem] = useState(() => mensagemDoModelo(modelo, farmacia, datas));
   const [repete, setRepete] = useState(false);
   const [frequencia, setFrequencia] = useState<RepetirDisparo>("semanal");
   // Envio único: um campo só (data + hora). Repetido: janela com início e fim.
@@ -1478,6 +1547,18 @@ function ModalAgendamento({
   const preset = usarPreset && horarios.length > 0;
 
   const horariosOrdenados = useMemo(() => [...horariosSel].sort(), [horariosSel]);
+
+  /**
+   * A legenda exatamente como o backend vai montá-la: a mensagem do gestor,
+   * linha em branco, e o rótulo do primeiro criativo (`montarEnvio`, em
+   * src/disparos/service.ts). Se mudar lá, mude aqui — a prévia só vale se as
+   * duas montarem igual.
+   */
+  const legendaPrevia = useMemo(() => {
+    const texto = mensagem.trim();
+    const rotulo = criativos[0] ? rotuloDoCriativo(criativos[0]) : "";
+    return [texto, rotulo].filter(Boolean).join("\n\n");
+  }, [mensagem, criativos]);
 
   /**
    * Primeiro horário marcado que ainda não passou naquela data — é ele que
@@ -1538,17 +1619,16 @@ function ModalAgendamento({
         midias.push({
           b64:    comprimido.b64,
           mime:   comprimido.mime,
-          rotulo: dados.precoDe && dados.preco
-            ? `${dados.nome} — de R$${dados.precoDe} por R$${dados.preco}`
-            : dados.preco ? `${dados.nome} — R$${dados.preco}` : dados.nome,
+          rotulo: rotuloDoCriativo(dados),
         });
         setProgresso(midias.length);
       }
 
       await criarDisparo({
         titulo:        `Ofertas — ${nomeVisivel(farmacia)}`,
-        // Vai para o grupo: nome de fachada, nunca a razão social
-        mensagem:      `🔥 *OFERTAS* — ${nomeVisivel(farmacia)} 🔥`,
+        // O que o gestor escreveu. Vira a legenda da 1ª imagem no backend
+        // (montarEnvio, em src/disparos/service.ts) — não sai como balão solto.
+        mensagem:      mensagem.trim(),
         midias,
         // Sem isto o disparo não deixa rastro de QUAIS produtos saíram — é o
         // que alimenta o chip "Recentes" na próxima campanha deste cliente.
@@ -1616,6 +1696,61 @@ function ModalAgendamento({
             <p className="text-[11px] text-zinc-400 mt-2">
               Confira antes de agendar — a oferta cai no grupo de clientes dessas farmácias.
             </p>
+          </div>
+
+          {/* Mensagem que acompanha a foto. Fica aqui em cima, antes de data e
+              hora: é conteúdo, e é a última chance de revisar o que o cliente
+              vai ler. */}
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="mensagem-grupo" className="text-sm font-medium text-zinc-700 flex items-center gap-1.5">
+                <MessageSquareText className="size-4 text-zinc-400" />
+                Mensagem que vai com a oferta
+              </label>
+              {mensagem !== mensagemDoModelo(modelo, farmacia, datas) && (
+                <button
+                  type="button"
+                  onClick={() => setMensagem(mensagemDoModelo(modelo, farmacia, datas))}
+                  className="text-[11px] text-zinc-400 hover:text-zinc-700 flex items-center gap-1 transition"
+                >
+                  <RotateCcw className="size-3" /> Voltar ao padrão
+                </button>
+              )}
+            </div>
+
+            <textarea
+              id="mensagem-grupo"
+              value={mensagem}
+              onChange={(e) => setMensagem(e.target.value)}
+              rows={3}
+              maxLength={MAX_LEGENDA - 200}
+              placeholder="Ex.: 🔥 *OFERTAS DA SEMANA* 🔥 Válidas enquanto durar o estoque!"
+              className="w-full mt-2 p-3 rounded-lg border border-zinc-200 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-brand/30"
+            />
+
+            <p className="text-[11px] text-zinc-400 mt-1.5">
+              Vai <strong className="font-medium text-zinc-500">embaixo da foto</strong>, com o
+              produto e o preço logo abaixo. No WhatsApp, *texto* fica em negrito.
+              {criativos.length > 1 && " Com vários criativos, sai embaixo da primeira foto — as outras levam só o produto."}
+            </p>
+
+            {/* Prévia da legenda montada. O gestor digita só a primeira parte;
+                a segunda o sistema acrescenta, e sem ver isso junto é fácil
+                repetir o preço que já vai sair sozinho. */}
+            {criativos.length > 0 && (
+              <div className="mt-2 rounded-xl bg-[#e5ddd5] p-2.5">
+                <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-1.5">
+                  Embaixo da foto vai aparecer
+                </p>
+                <div className="bg-white rounded-lg px-3 py-2 shadow-sm">
+                  <p className="text-xs text-zinc-800 whitespace-pre-wrap break-words">
+                    {legendaPrevia || (
+                      <span className="text-zinc-400 italic">Sem legenda — a foto vai sozinha.</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Repetição */}
