@@ -23,6 +23,7 @@ import { Route as GestoresRouteImport } from './routes/gestores'
 import { Route as FarmaciasRouteImport } from './routes/farmacias'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as ConexoesRouteImport } from './routes/conexoes'
+import { Route as CategoriasRouteImport } from './routes/categorias'
 import { Route as BancoImagensRouteImport } from './routes/banco-imagens'
 import { Route as AnunciosRouteImport } from './routes/anuncios'
 import { Route as AcoesRouteImport } from './routes/acoes'
@@ -107,6 +108,11 @@ const ConexoesRoute = ConexoesRouteImport.update({
   path: '/conexoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CategoriasRoute = CategoriasRouteImport.update({
+  id: '/categorias',
+  path: '/categorias',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BancoImagensRoute = BancoImagensRouteImport.update({
   id: '/banco-imagens',
   path: '/banco-imagens',
@@ -178,6 +184,7 @@ export interface FileRoutesByFullPath {
   '/acoes': typeof AcoesRouteWithChildren
   '/anuncios': typeof AnunciosRoute
   '/banco-imagens': typeof BancoImagensRoute
+  '/categorias': typeof CategoriasRoute
   '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anuncios': typeof AnunciosRoute
   '/banco-imagens': typeof BancoImagensRoute
+  '/categorias': typeof CategoriasRoute
   '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/gestores': typeof GestoresRoute
@@ -234,6 +242,7 @@ export interface FileRoutesById {
   '/acoes': typeof AcoesRouteWithChildren
   '/anuncios': typeof AnunciosRoute
   '/banco-imagens': typeof BancoImagensRoute
+  '/categorias': typeof CategoriasRoute
   '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/farmacias': typeof FarmaciasRouteWithChildren
@@ -265,6 +274,7 @@ export interface FileRouteTypes {
     | '/acoes'
     | '/anuncios'
     | '/banco-imagens'
+    | '/categorias'
     | '/conexoes'
     | '/configuracoes'
     | '/farmacias'
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/'
     | '/anuncios'
     | '/banco-imagens'
+    | '/categorias'
     | '/conexoes'
     | '/configuracoes'
     | '/gestores'
@@ -320,6 +331,7 @@ export interface FileRouteTypes {
     | '/acoes'
     | '/anuncios'
     | '/banco-imagens'
+    | '/categorias'
     | '/conexoes'
     | '/configuracoes'
     | '/farmacias'
@@ -350,6 +362,7 @@ export interface RootRouteChildren {
   AcoesRoute: typeof AcoesRouteWithChildren
   AnunciosRoute: typeof AnunciosRoute
   BancoImagensRoute: typeof BancoImagensRoute
+  CategoriasRoute: typeof CategoriasRoute
   ConexoesRoute: typeof ConexoesRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   FarmaciasRoute: typeof FarmaciasRouteWithChildren
@@ -466,6 +479,13 @@ declare module '@tanstack/react-router' {
       path: '/conexoes'
       fullPath: '/conexoes'
       preLoaderRoute: typeof ConexoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/categorias': {
+      id: '/categorias'
+      path: '/categorias'
+      fullPath: '/categorias'
+      preLoaderRoute: typeof CategoriasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/banco-imagens': {
@@ -609,6 +629,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcoesRoute: AcoesRouteWithChildren,
   AnunciosRoute: AnunciosRoute,
   BancoImagensRoute: BancoImagensRoute,
+  CategoriasRoute: CategoriasRoute,
   ConexoesRoute: ConexoesRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   FarmaciasRoute: FarmaciasRouteWithChildren,

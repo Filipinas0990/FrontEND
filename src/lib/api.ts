@@ -1108,16 +1108,55 @@ export function cadastrarCatalogoProduto(data: {
   return req("/api/catalogo/produtos", { method: "POST", body: JSON.stringify(data) })
 }
 
+export interface CategoriaCadastrada {
+  id: number
+  nome: string
+  /** Produtos classificados nela agora. Zero = criada e ainda sem imagem. */
+  total: number
+  criadoEm: string | null
+}
+
 export interface CategoriasCatalogo {
-  /** Categorias aplicadas a algum produto, com quantos cada uma tem. */
-  categorias: { nome: string; total: number }[]
-  /** Categorias padrão do negócio — vêm sempre, para somar com as em uso. */
+  /** O cadastro completo, com a contagem de produtos de cada categoria. */
+  categorias: CategoriaCadastrada[]
+  /** Os mesmos nomes, em lista simples. Mantido por compatibilidade. */
   sugestoes: string[]
 }
 
-/** Categorias em uso — alimenta as sugestões do campo e os chips de filtro. */
+/**
+ * Cadastro de categorias — alimenta a tela de Categorias e as sugestões dos
+ * campos de classificação.
+ *
+ * Para CHIPS DE FILTRO não use esta lista: uma categoria recém-criada vem aqui
+ * com total 0, e chip que não filtra nada é armadilha. Os chips saem do acervo
+ * (`categoriasDe` em lib/categorias.ts).
+ */
 export function getCategoriasCatalogo(): Promise<CategoriasCatalogo> {
   return req("/api/catalogo/categorias")
+}
+
+/** Cria uma categoria vazia, antes de existir imagem nela. */
+export function criarCategoria(nome: string): Promise<{ ok: true; categoria: CategoriaCadastrada }> {
+  return req("/api/catalogo/categorias", { method: "POST", body: JSON.stringify({ nome }) })
+}
+
+/**
+ * Renomeia a categoria e reclassifica os produtos que estavam nela.
+ * `produtos` é quantos foram reescritos.
+ */
+export function renomearCategoria(
+  id: number,
+  nome: string,
+): Promise<{ ok: true; categoria: CategoriaCadastrada; produtos: number }> {
+  return req(`/api/catalogo/categorias/${id}`, { method: "PATCH", body: JSON.stringify({ nome }) })
+}
+
+/**
+ * Exclui a categoria. Nenhuma imagem é apagada: os produtos dela ficam sem
+ * categoria, e `produtos` diz quantos.
+ */
+export function excluirCategoria(id: number): Promise<{ ok: true; produtos: number }> {
+  return req(`/api/catalogo/categorias/${id}`, { method: "DELETE" })
 }
 
 /**

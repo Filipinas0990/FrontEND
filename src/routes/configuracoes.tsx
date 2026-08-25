@@ -34,8 +34,8 @@ type CardItem = {
 function ConfigPage() {
   const isAdmin = getUser()?.is_admin === true;
 
-  // Ativos: Conexões, Gestores (só admin), Banco de Imagens e Horários de
-  // Disparo. O resto é futuro (cadeado).
+  // Ativos: Conexões, Gestores (só admin), Banco de Imagens, Horários de
+  // Disparo e Categorias. O resto é futuro (cadeado).
   const cards: CardItem[] = [
     { icon: Waypoints, label: "Conexões", to: "/conexoes" },
     isAdmin
@@ -43,10 +43,10 @@ function ConfigPage() {
       : { icon: Users, label: "Gestores", locked: true },
     { icon: Images, label: "Banco de Imagens", to: "/banco-imagens" },
     { icon: Clock, label: "Horários de Disparo", to: "/horarios" },
+    { icon: Tags, label: "Categorias", to: "/categorias" },
     { icon: Puzzle, label: "Integrações de API", locked: true },
     { icon: BarChart3, label: "Power BI", locked: true },
     { icon: Bell, label: "Notificações", locked: true },
-    { icon: Tags, label: "Etiquetas", locked: true },
     { icon: Zap, label: "Mensagens Rápidas", locked: true },
     { icon: Star, label: "Pesquisas de Satisfação", locked: true },
     { icon: CalendarClock, label: "Mensagens Agendadas", locked: true },
@@ -60,7 +60,8 @@ function ConfigPage() {
         <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
           Personalize o sistema de acordo com a operação do seu grupo. Aqui você
           gerencia as conexões, a equipe de gestores e o banco de imagens usado
-          nos criativos. Os demais recursos vão sendo liberados por aqui. 🚀
+          nos criativos, com as categorias que organizam esse acervo. Os demais
+          recursos vão sendo liberados por aqui. 🚀
         </p>
       </div>
 
