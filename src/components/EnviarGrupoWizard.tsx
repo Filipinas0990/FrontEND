@@ -779,7 +779,7 @@ export function EnviarGrupoWizard({
                   className="w-full p-3 rounded-lg border border-zinc-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
                 <p className="text-xs text-zinc-400">
-                  Vai como texto e, na sequência, cada produto como imagem. No WhatsApp, *texto* fica em negrito.
+                  Vai embaixo de cada imagem, com o produto logo abaixo. No WhatsApp, *texto* fica em negrito.
                 </p>
               </div>
             </div>
@@ -960,7 +960,8 @@ export function EnviarGrupoWizard({
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Como vai chegar no grupo</p>
                 <div className="rounded-xl border border-zinc-200 bg-[#e5ddd5] p-3 max-h-80 overflow-y-auto">
                   {/* Sem criativo, o texto vai sozinho; com criativo, ele é a
-                      legenda da 1ª imagem (é assim que o backend envia). */}
+                      legenda de CADA imagem (é assim que o backend envia —
+                      montarEnvio, em src/disparos/service.ts). */}
                   {mensagem.trim() && midias.length === 0 && !gerando && (
                     <div className="bg-white rounded-lg p-2 shadow-sm mb-2">
                       <p className="text-sm text-zinc-800 whitespace-pre-wrap break-words">{mensagem}</p>
@@ -975,7 +976,7 @@ export function EnviarGrupoWizard({
                       <div key={i} className="bg-white rounded-lg p-2 shadow-sm mb-2">
                         <img src={`data:${m.mime};base64,${m.b64}`} alt="" className="rounded-md mb-1 max-h-48 mx-auto" />
                         <p className="text-xs text-zinc-700 whitespace-pre-wrap break-words">
-                          {i === 0 && mensagem.trim()
+                          {mensagem.trim()
                             ? `${mensagem.trim()}${m.rotulo ? `\n\n${m.rotulo}` : ""}`
                             : m.rotulo}
                         </p>

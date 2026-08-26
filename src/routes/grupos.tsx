@@ -5,7 +5,7 @@ import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
   ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine, Download,
-  MessageSquareText, RotateCcw,
+  MessageSquareText, RotateCcw, Upload, ImagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -51,8 +51,14 @@ function fmtDia(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
 }
 
-/** Os 3 modelos de criativo do fluxo. */
-type ModeloId = "padrao" | "abre" | "fecha";
+/**
+ * Como o criativo vai ser montado. Os três primeiros são os templates do
+ * sistema — produto do banco + preço. `novo` não é template: é a arte que o
+ * gestor já editou fora e sobe pronta, para o produto único que não vale
+ * cadastrar no banco. Ela pula a escolha de produto e de preço e vai direto
+ * para o agendamento.
+ */
+type ModeloId = "padrao" | "abre" | "fecha" | "novo";
 
 function GruposPage() {
   const { aba: abaInicial } = Route.useSearch();
@@ -775,6 +781,11 @@ function ConectarWhatsapp({ onConectado }: { onConectado: () => void }) {
 // ── Passo 3: criativo (banco de imagens + modelo + preço) ─────────────────────
 
 /** Os 3 modelos do criativo. "Abre/Fecha Mês" são o banner com a faixa trocada. */
+/**
+ * Os templates que o sistema monta. O modelo "novo" (arte pronta) fica de fora
+ * de propósito: ele não tem layout para renderizar nem copy própria, e cair
+ * neste `find` faria o passo 3 tentar desenhar um CriativoCard sem produto.
+ */
 const MODELOS: {
   id: ModeloId;
   nome: string;
@@ -796,6 +807,19 @@ const MODELOS: {
     desc: "Faixa “FECHA MÊS”, datas e preço em destaque.",
   },
 ];
+
+/** Uma arte que o gestor subiu pronta — vai para o grupo exatamente assim. */
+type ArquivoSubido = { id: string; nome: string; dataUrl: string };
+
+/** Lê um arquivo do disco como data URI, do jeito que a compressão espera. */
+function lerComoDataUrl(file: File): Promise<{ nome: string; dataUrl: string }> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload  = () => resolve({ nome: file.name, dataUrl: fr.result as string });
+    fr.onerror = () => reject(new Error(`Não consegui ler “${file.name}”.`));
+    fr.readAsDataURL(file);
+  });
+}
 
 function PassoCriativo({
   farmacia, grupos, conexao, modelo, setModelo, onVoltar,
@@ -822,6 +846,12 @@ function PassoCriativo({
   const [subtitulo, setSubtitulo] = useState("");
   // null = não está baixando; número = quantos PNGs já saíram
   const [baixando, setBaixando] = useState<number | null>(null);
+
+  // Artes prontas do modelo "Novo". Ficam aqui, e não dentro do bloco de
+  // upload, para sobreviverem a uma ida e volta no modelo — o gestor que sobe
+  // 4 artes e clica sem querer em "Padrão" não perde o upload.
+  const [arquivos, setArquivos] = useState<ArquivoSubido[]>([]);
+  const proximoId = useRef(0);
 
   // Ver o banco inteiro em vez de só o que o cliente pediu
   const [verTodos, setVerTodos] = useState(false);
@@ -955,6 +985,19 @@ function PassoCriativo({
   }, [farmacia.id, pedidos.size, recentes.size]);
 
   const modeloAtual = MODELOS.find((m) => m.id === modelo);
+  /** Arte pronta: sem banco de imagens, sem preço, sem prévia de template. */
+  const ehNovo = modelo === "novo";
+
+  function adicionarArquivos(novos: { nome: string; dataUrl: string }[]) {
+    setArquivos((atual) => [
+      ...atual,
+      ...novos.map((a) => ({ ...a, id: `arq-${proximoId.current++}` })),
+    ]);
+  }
+
+  function removerArquivo(id: string) {
+    setArquivos((atual) => atual.filter((a) => a.id !== id));
+  }
 
   // Ao trocar de modelo, sugere as datas daquele modelo (o gestor pode editar)
   useEffect(() => {
@@ -1001,6 +1044,15 @@ function PassoCriativo({
   }
 
   /**
+   * O que vai virar mídia do disparo. Os dois caminhos do passo 3 desembocam
+   * aqui — arte pronta ou template montado —, e é só isso que o passo 4
+   * conhece: ele não precisa saber de qual dos dois veio.
+   */
+  const pecas: PecaEnvio[] = ehNovo
+    ? arquivos.map((a) => ({ tipo: "arquivo", nome: a.nome, dataUrl: a.dataUrl }))
+    : selecionados.map((p) => ({ tipo: "criativo", dados: dadosCriativo(p) }));
+
+  /**
    * Baixa um PNG por criativo, do jeito que vai para o grupo.
    *
    * Rasteriza na hora em vez de reaproveitar algo pronto: o PNG do disparo só
@@ -1025,6 +1077,12 @@ function PassoCriativo({
 
   function abrirAgendamento() {
     if (!modelo)                 { toast.error("Escolha o modelo do criativo.");   return; }
+    // Arte pronta não passa por produto nem preço — só precisa ter arquivo.
+    if (ehNovo) {
+      if (arquivos.length === 0) { toast.error("Suba ao menos uma arte.");        return; }
+      onAgendar();
+      return;
+    }
     if (selecionados.length === 0) { toast.error("Escolha ao menos uma imagem."); return; }
     const semPreco = selecionados.filter((p) => !(precos[p.id] ?? "").trim());
     if (semPreco.length > 0)     { toast.error(`Falta o preço de ${semPreco.length} produto(s).`); return; }
@@ -1042,7 +1100,38 @@ function PassoCriativo({
           Vai para {grupos.length} grupo(s) de {nomeVisivel(farmacia)}.
         </p>
 
-        <div className="grid sm:grid-cols-3 gap-5 mt-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-5">
+          {/* Arte pronta vem primeiro: quem já editou a peça fora não tem o que
+              procurar nos templates, e assim não precisa varrer a fileira. */}
+          <button
+            onClick={() => setModelo("novo")}
+            className={`rounded-2xl p-4 text-center transition border-2 border-dashed ${
+              ehNovo
+                ? "border-brand ring-2 ring-brand/20 bg-brand/5"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50"
+            }`}
+          >
+            <div className="max-w-[190px] mx-auto aspect-[4/5] rounded-xl bg-zinc-50 border border-zinc-200 grid place-items-center">
+              <div className="flex flex-col items-center gap-2 text-zinc-400 px-3">
+                <Upload className="size-7" />
+                <span className="text-[11px] leading-tight">
+                  {arquivos.length > 0
+                    ? `${arquivos.length} arte(s) prontas`
+                    : "Sua arte já editada"}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-center gap-1.5 mt-4">
+              {ehNovo && <Check className="size-4 text-brand" />}
+              <span className={`text-sm font-semibold ${ehNovo ? "text-brand" : "text-zinc-700"}`}>
+                Novo
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 mt-1">
+              Suba a imagem pronta — sem template, sem preço.
+            </p>
+          </button>
+
           {MODELOS.map((m) => {
             const escolhido = modelo === m.id;
             return (
@@ -1092,7 +1181,17 @@ function PassoCriativo({
         )}
       </div>
 
+      {/* Modelo "Novo": o upload toma o lugar do banco de imagens e dos preços */}
+      {ehNovo && (
+        <UploadCriativos
+          arquivos={arquivos}
+          onAdicionar={adicionarArquivos}
+          onRemover={removerArquivo}
+        />
+      )}
+
       {/* Banco de imagens */}
+      {!ehNovo && (
       <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-3 flex-wrap">
           <div className="min-w-0 flex-1">
@@ -1279,9 +1378,10 @@ function PassoCriativo({
           )}
         </div>
       </div>
+      )}
 
       {/* Prévia dos criativos escolhidos */}
-      {modelo && selecionados.length > 0 && (
+      {modelo && !ehNovo && selecionados.length > 0 && (
         <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
@@ -1325,11 +1425,11 @@ function PassoCriativo({
 
       <Rodape
         onVoltar={onVoltar}
-        info={selecionados.length > 0 ? `${selecionados.length} criativo(s)` : undefined}
+        info={pecas.length > 0 ? `${pecas.length} criativo(s)` : undefined}
         acao={
           <button
             onClick={abrirAgendamento}
-            disabled={!modelo || selecionados.length === 0}
+            disabled={!modelo || pecas.length === 0}
             className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg flex items-center gap-2 transition shadow-sm"
           >
             Continuar <ArrowRight className="size-4" />
@@ -1344,11 +1444,124 @@ function PassoCriativo({
           conexaoInicial={conexao}
           modelo={modelo}
           datas={subtitulo}
-          criativos={selecionados.map((p) => dadosCriativo(p))}
-          produtos={selecionados.map((p) => ({ id: p.id, nome: p.nome }))}
+          pecas={pecas}
+          // Arte pronta não sai do catálogo: sem id de produto para registrar,
+          // e por isso ela não alimenta o chip "Recentes" da próxima campanha.
+          produtos={ehNovo ? [] : selecionados.map((p) => ({ id: p.id, nome: p.nome }))}
           onFechar={onFecharAgendamento}
           onPronto={onAgendado}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Upload das artes prontas — é o que o modelo "Novo" mostra no lugar do banco
+ * de imagens.
+ *
+ * Existe porque nem toda oferta cabe no catálogo: produto único, arte que o
+ * próprio cliente mandou pronta, encarte de fornecedor. Cadastrar isso no
+ * banco de imagens para disparar uma vez só suja o acervo de todas as
+ * farmácias — aqui a imagem vai direto para o disparo, sem passar pelo banco.
+ */
+function UploadCriativos({
+  arquivos, onAdicionar, onRemover,
+}: {
+  arquivos: ArquivoSubido[];
+  onAdicionar: (novos: { nome: string; dataUrl: string }[]) => void;
+  onRemover: (id: string) => void;
+}) {
+  const [arrastando, setArrastando] = useState(false);
+  const campo = useRef<HTMLInputElement>(null);
+
+  async function receber(lista: FileList | null) {
+    const todos = Array.from(lista ?? []);
+    // PDF e vídeo não viram foto de grupo: barrar aqui evita o disparo sair
+    // com uma mídia que o WhatsApp recusa lá na ponta, sem ninguém ver.
+    const fotos = todos.filter((f) => f.type.startsWith("image/"));
+    if (fotos.length < todos.length) {
+      toast.error(`${todos.length - fotos.length} arquivo(s) ignorado(s) — só imagem vai para o grupo.`);
+    }
+    if (fotos.length === 0) return;
+
+    try {
+      onAdicionar(await Promise.all(fotos.map(lerComoDataUrl)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao ler as imagens.");
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5">
+      <p className="text-sm font-semibold text-zinc-900">Artes prontas</p>
+      <p className="text-[11px] text-zinc-500 mt-0.5">
+        Sobe a imagem já editada e segue para o agendamento — sem escolher produto nem preço.
+      </p>
+
+      <input
+        ref={campo}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          void receber(e.target.files);
+          // Zera o campo: sem isso, subir o MESMO arquivo depois de removê-lo
+          // não dispara `change` de novo e a imagem simplesmente não volta.
+          e.target.value = "";
+        }}
+      />
+
+      <button
+        type="button"
+        onClick={() => campo.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+        onDragLeave={() => setArrastando(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setArrastando(false);
+          void receber(e.dataTransfer.files);
+        }}
+        className={`mt-4 w-full rounded-xl border-2 border-dashed py-8 px-4 flex flex-col items-center gap-2 transition ${
+          arrastando ? "border-brand bg-brand/5" : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50"
+        }`}
+      >
+        <ImagePlus className={`size-8 ${arrastando ? "text-brand" : "text-zinc-400"}`} />
+        <span className="text-sm font-medium text-zinc-700">
+          Arraste as imagens aqui ou clique para escolher
+        </span>
+        <span className="text-[11px] text-zinc-400">
+          JPG, PNG ou WebP — pode subir várias de uma vez
+        </span>
+      </button>
+
+      {arquivos.length > 0 && (
+        <>
+          <p className="text-[11px] text-zinc-500 mt-4">
+            {arquivos.length} arte(s) — vão para o grupo nesta ordem, exatamente como estão.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mt-2">
+            {arquivos.map((a) => (
+              <div key={a.id} className="rounded-xl border border-zinc-200 p-2 group relative">
+                <img
+                  src={a.dataUrl}
+                  alt={a.nome}
+                  className="w-full aspect-[4/5] object-contain rounded-lg bg-zinc-50"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1.5 truncate" title={a.nome}>{a.nome}</p>
+                <button
+                  type="button"
+                  onClick={() => onRemover(a.id)}
+                  title="Tirar esta arte do disparo"
+                  className="absolute top-3 right-3 size-6 rounded-full bg-white/90 ring-1 ring-zinc-200 grid place-items-center text-zinc-500 hover:bg-red-50 hover:text-red-600 transition"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -1429,11 +1642,13 @@ function proximaHoraISO(): string {
   return `${data}T${String(d.getHours()).padStart(2, "0")}:00`;
 }
 
-const FREQUENCIAS: { id: RepetirDisparo; nome: string }[] = [
-  { id: "diario",  nome: "Todo dia" },
-  { id: "semanal", nome: "Toda semana" },
-  { id: "mensal",  nome: "Todo mês" },
-];
+/**
+ * Repetição é sempre SEMANAL. Havia um seletor com diário/semanal/mensal e ele
+ * saiu: a operação é semanal na prática, e a pergunta a mais só dava chance de
+ * agendar diário sem querer — o que enche o grupo do cliente e queima o número.
+ * Voltando a existir mais de uma cadência, o seletor volta com ela.
+ */
+const FREQUENCIA: RepetirDisparo = "semanal";
 
 /**
  * Legenda de UM criativo: o nome do produto com o preço. É o que o WhatsApp
@@ -1447,6 +1662,30 @@ function rotuloDoCriativo(dados: CriativoDados): string {
   if (dados.precoDe && dados.preco) return `${dados.nome} — de R$${dados.precoDe} por R$${dados.preco}`;
   if (dados.preco) return `${dados.nome} — R$${dados.preco}`;
   return dados.nome;
+}
+
+/**
+ * Uma foto do disparo. Ou um criativo de template — que só vira imagem no
+ * momento do envio, rasterizado — ou uma arte que o gestor subiu pronta.
+ */
+type PecaEnvio =
+  | { tipo: "criativo"; dados: CriativoDados }
+  | { tipo: "arquivo";  nome: string; dataUrl: string };
+
+/**
+ * Legenda daquela foto. Arte pronta não tem produto nem preço para anunciar —
+ * e o nome do arquivo ("IMG_2934.jpg") não é legenda —, então ela sai sem
+ * rótulo e chega no grupo só com a mensagem que o gestor escreveu.
+ */
+function rotuloDaPeca(peca: PecaEnvio): string {
+  return peca.tipo === "criativo" ? rotuloDoCriativo(peca.dados) : "";
+}
+
+/** A imagem da peça como data URI, do jeito que a compressão espera receber. */
+function imagemDaPeca(peca: PecaEnvio): Promise<string> {
+  return peca.tipo === "criativo"
+    ? exportarCriativoPng(peca.dados)
+    : Promise.resolve(peca.dataUrl);
 }
 
 /**
@@ -1493,7 +1732,7 @@ const TEXTO_FECHA_MES = (nome: string, datas: string): string =>
 const MAX_LEGENDA = 1024;
 
 function ModalAgendamento({
-  farmacia, grupos, conexaoInicial, modelo, datas, criativos, produtos, onFechar, onPronto,
+  farmacia, grupos, conexaoInicial, modelo, datas, pecas, produtos, onFechar, onPronto,
 }: {
   farmacia: Farmacia;
   grupos: GrupoWhatsApp[];
@@ -1502,8 +1741,9 @@ function ModalAgendamento({
   modelo: ModeloId | null;
   /** Subtítulo do criativo (ex.: "DIAS 01 A 10"), para a linha de validade. */
   datas: string;
-  criativos: CriativoDados[];
-  /** Os mesmos produtos dos criativos, com id — o criativo é só PNG e o perde. */
+  /** As fotos do disparo, na ordem em que vão sair. */
+  pecas: PecaEnvio[];
+  /** Os produtos que geraram os criativos, com id — o PNG rasterizado o perde. */
   produtos: { id: number; nome: string }[];
   onFechar: () => void;
   onPronto: () => void;
@@ -1514,7 +1754,6 @@ function ModalAgendamento({
   // nome do cliente errado para o grupo.
   const [mensagem, setMensagem] = useState(() => mensagemDoModelo(modelo, farmacia, datas));
   const [repete, setRepete] = useState(false);
-  const [frequencia, setFrequencia] = useState<RepetirDisparo>("semanal");
   // Envio único: um campo só (data + hora). Repetido: janela com início e fim.
   const [envioEm, setEnvioEm] = useState(proximaHoraISO());
   const [dataInicio, setDataInicio] = useState(hojeISO());
@@ -1556,9 +1795,20 @@ function ModalAgendamento({
    */
   const legendaPrevia = useMemo(() => {
     const texto = mensagem.trim();
-    const rotulo = criativos[0] ? rotuloDoCriativo(criativos[0]) : "";
+    const rotulo = pecas[0] ? rotuloDaPeca(pecas[0]) : "";
     return [texto, rotulo].filter(Boolean).join("\n\n");
-  }, [mensagem, criativos]);
+  }, [mensagem, pecas]);
+
+  /**
+   * Nas fotos seguintes muda só a última linha — o produto e o preço. Arte
+   * pronta não tem rótulo nenhum, e aí não há o que avisar: some da lista.
+   */
+  const outrosRotulos = pecas.slice(1).map(rotuloDaPeca).filter(Boolean);
+
+  // Só os criativos de template levam produto e preço embaixo da foto. Com
+  // arte pronta a legenda é a mensagem e nada mais — prometer a linha do preço
+  // aqui faria o gestor deixar de escrever o preço achando que ele vem sozinho.
+  const temRotulo = pecas.some((p) => rotuloDaPeca(p));
 
   /**
    * Primeiro horário marcado que ainda não passou naquela data — é ele que
@@ -1611,15 +1861,18 @@ function ModalAgendamento({
     setEnviando(true);
     setProgresso(0);
     try {
-      // Rasteriza um criativo por produto e comprime para caber no limite da Evolution
+      // Uma imagem por peça, comprimida para caber no limite da Evolution. O
+      // criativo de template é rasterizado agora; a arte pronta já é imagem e
+      // só passa pela compressão — o nginx da Evolution corta em 1 MB, e foto
+      // tirada no celular passa fácil disso.
       const midias: MidiaDisparo[] = [];
-      for (const dados of criativos) {
-        const png = await exportarCriativoPng(dados);
-        const comprimido = await comprimirParaEnvio(png);
+      for (const peca of pecas) {
+        const imagem = await imagemDaPeca(peca);
+        const comprimido = await comprimirParaEnvio(imagem);
         midias.push({
           b64:    comprimido.b64,
           mime:   comprimido.mime,
-          rotulo: rotuloDoCriativo(dados),
+          rotulo: rotuloDaPeca(peca) || undefined,
         });
         setProgresso(midias.length);
       }
@@ -1636,7 +1889,7 @@ function ModalAgendamento({
         grupos:        grupos.map((g) => ({ jid: g.jid, nome: g.nome })),
         quando:        "agendado",
         agendado_para: new Date(quandoISO).toISOString(),
-        repetir:       repete ? frequencia : "nunca",
+        repetir:       repete ? FREQUENCIA : "nunca",
         // Com 2+ o backend passa por todos antes de avançar a repetição
         horarios:      preset ? horariosOrdenados : undefined,
         // Fim do dia escolhido: o disparo daquele último dia ainda acontece
@@ -1667,7 +1920,7 @@ function ModalAgendamento({
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-zinc-900 leading-tight">Agendamento</h2>
             <p className="text-sm text-zinc-500">
-              {criativos.length} criativo(s) de {nomeVisivel(farmacia)}.
+              {pecas.length} criativo(s) de {nomeVisivel(farmacia)}.
             </p>
           </div>
           <button
@@ -1729,18 +1982,19 @@ function ModalAgendamento({
             />
 
             <p className="text-[11px] text-zinc-400 mt-1.5">
-              Vai <strong className="font-medium text-zinc-500">embaixo da foto</strong>, com o
-              produto e o preço logo abaixo. No WhatsApp, *texto* fica em negrito.
-              {criativos.length > 1 && " Com vários criativos, sai embaixo da primeira foto — as outras levam só o produto."}
+              Vai <strong className="font-medium text-zinc-500">embaixo da foto</strong>
+              {temRotulo ? ", com o produto e o preço logo abaixo." : " — é a legenda inteira."}
+              {" "}No WhatsApp, *texto* fica em negrito.
+              {pecas.length > 1 && ` Repete embaixo das ${pecas.length} fotos — cada uma pode ser encaminhada sozinha.`}
             </p>
 
             {/* Prévia da legenda montada. O gestor digita só a primeira parte;
                 a segunda o sistema acrescenta, e sem ver isso junto é fácil
                 repetir o preço que já vai sair sozinho. */}
-            {criativos.length > 0 && (
+            {pecas.length > 0 && (
               <div className="mt-2 rounded-xl bg-[#e5ddd5] p-2.5">
                 <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-1.5">
-                  Embaixo da foto vai aparecer
+                  {pecas.length > 1 ? "Embaixo de cada foto vai aparecer" : "Embaixo da foto vai aparecer"}
                 </p>
                 <div className="bg-white rounded-lg px-3 py-2 shadow-sm">
                   <p className="text-xs text-zinc-800 whitespace-pre-wrap break-words">
@@ -1749,6 +2003,13 @@ function ModalAgendamento({
                     )}
                   </p>
                 </div>
+                {outrosRotulos.length > 0 && (
+                  <p className="text-[10px] text-zinc-500 mt-1.5">
+                    Nas outras {outrosRotulos.length} foto(s) muda só a última linha:{" "}
+                    {outrosRotulos.slice(0, 2).join("; ")}
+                    {outrosRotulos.length > 2 && "…"}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1773,19 +2034,9 @@ function ModalAgendamento({
                 }`}
               >
                 <p className="font-semibold text-zinc-900 text-sm">Sim, repetir</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Repete até a data de término.</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Toda semana, até a data de término.</p>
               </button>
             </div>
-
-            {repete && (
-              <select
-                value={frequencia}
-                onChange={(e) => setFrequencia(e.target.value as RepetirDisparo)}
-                className="mt-3 w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
-              >
-                {FREQUENCIAS.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-              </select>
-            )}
           </div>
 
           {/* Pergunta antes de mostrar a lista — marcando, os campos de hora somem */}
@@ -1974,7 +2225,7 @@ function ModalAgendamento({
             className="bg-brand hover:bg-brand/90 disabled:opacity-60 text-white font-semibold px-5 py-2 rounded-lg flex items-center gap-2 transition shadow-sm"
           >
             {enviando
-              ? <><Loader2 className="size-4 animate-spin" /> Gerando criativos ({progresso}/{criativos.length})...</>
+              ? <><Loader2 className="size-4 animate-spin" /> Preparando imagens ({progresso}/{pecas.length})...</>
               : <><CalendarClock className="size-4" /> Agendar campanha</>}
           </button>
         </div>
