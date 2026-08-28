@@ -1757,8 +1757,8 @@ function ModalAgendamento({
   // Envio único: um campo só (data + hora). Repetido: janela com início e fim.
   const [envioEm, setEnvioEm] = useState(proximaHoraISO());
   const [dataInicio, setDataInicio] = useState(hojeISO());
-  // Repetição sem fim é o padrão; o gestor marca uma data se quiser encerrar.
-  const [temFim, setTemFim] = useState(false);
+  // Toda repetição tem fim: a data de término é obrigatória, para nenhuma
+  // campanha ficar disparando esquecida.
   const [dataFim, setDataFim] = useState(emUmMes());
   const [horaInicio, setHoraInicio] = useState("08:00");
   // Marcado = a hora sai da lista pré-definida, e os campos de hora somem
@@ -1854,7 +1854,10 @@ function ModalAgendamento({
       toast.error(repete ? "Informe a data e a hora de início." : "Informe o horário do envio.");
       return;
     }
-    if (repete && temFim && dataFim < dataInicio) {
+    if (repete && !dataFim) {
+      toast.error("Informe a data de término da repetição."); return;
+    }
+    if (repete && dataFim < dataInicio) {
       toast.error("A data de término é anterior à de início."); return;
     }
 
@@ -1893,7 +1896,7 @@ function ModalAgendamento({
         // Com 2+ o backend passa por todos antes de avançar a repetição
         horarios:      preset ? horariosOrdenados : undefined,
         // Fim do dia escolhido: o disparo daquele último dia ainda acontece
-        repetir_ate:   repete && temFim
+        repetir_ate:   repete
           ? new Date(`${dataFim}T23:59:59`).toISOString()
           : null,
         timezone:      "America/Sao_Paulo",
@@ -2146,40 +2149,19 @@ function ModalAgendamento({
                 )}
               </div>
 
-              {/* Fim da repetição: sem data, repete até o gestor cancelar */}
+              {/* Fim da repetição: obrigatório — não existe campanha sem fim. */}
               <div>
-                <p className="text-sm font-medium text-zinc-700">Repete até quando?</p>
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <button
-                    onClick={() => setTemFim(false)}
-                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition ${
-                      !temFim ? "border-brand bg-brand/5 text-brand" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                    }`}
-                  >
-                    Até eu cancelar
-                  </button>
-                  <button
-                    onClick={() => setTemFim(true)}
-                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition ${
-                      temFim ? "border-brand bg-brand/5 text-brand" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                    }`}
-                  >
-                    Até uma data
-                  </button>
-                  {temFim && (
-                    <input
-                      type="date"
-                      value={dataFim}
-                      min={dataInicio}
-                      onChange={(e) => setDataFim(e.target.value)}
-                      className="px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
-                    />
-                  )}
-                </div>
+                <Campo rotulo="Termina em">
+                  <input
+                    type="date"
+                    value={dataFim}
+                    min={dataInicio}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-zinc-50/60 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  />
+                </Campo>
                 <p className="text-[11px] text-zinc-400 mt-1.5">
-                  {temFim
-                    ? "No último dia a campanha ainda sai, e depois é finalizada sozinha."
-                    : "A campanha fica repetindo até você cancelar na aba Histórico."}
+                  No último dia a campanha ainda sai, e depois é finalizada sozinha.
                 </p>
               </div>
             </div>
