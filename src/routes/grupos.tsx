@@ -5,7 +5,7 @@ import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
   ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine, Download,
-  MessageSquareText, RotateCcw, Upload, ImagePlus,
+  MessageSquareText, RotateCcw, Upload, ImagePlus, TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -20,6 +20,7 @@ import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
   listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo, nomeVisivel,
+  getDonosDeGrupos,
   getUltimosProdutosDisparados,
   type Farmacia, type DisparoResumo, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
@@ -91,24 +92,21 @@ function GruposPage() {
   const { data: listagem } = useGruposDaConexao(conexao);
   const grupos = useMemo(() => listagem?.grupos ?? [], [listagem]);
 
-  // Marca sozinho os grupos com o nome da farmácia — uma vez por
-  // (conexão, farmácia). Sem essa trava, voltar do passo 3 para o 2 desfaria
-  // o que o gestor tivesse marcado ou desmarcado na mão.
-  const preSelecionado = useRef<string | null>(null);
-  // Trava dura: assim que o gestor mexe na seleção, ela é dele. Nenhum
-  // recarregamento de lista, troca de conexão ou remontagem pode re-marcar
-  // grupo por cima — foi assim que uma oferta saiu para 5 grupos.
-  const mexeuNaMao = useRef(false);
-  useEffect(() => {
-    if (mexeuNaMao.current) return;
-    if (!farmacia || grupos.length === 0) return;
-    const chave = `${conexao}|${farmacia.id}`;
-    if (preSelecionado.current === chave) return;
-    preSelecionado.current = chave;
-    setGruposSel(new Set(
-      grupos.filter((g) => combinaComFarmacia(g.nome, farmacia)).map((g) => g.jid),
-    ));
-  }, [grupos, farmacia, conexao]);
+  /*
+   * NÃO existe pré-marcação. Nenhum grupo é marcado pelo sistema.
+   *
+   * Já existiu: o sistema comparava o nome da farmácia com o nome do grupo e
+   * marcava sozinho o que "casava". Isso causou dois incidentes —
+   * 21/08 (oferta em 5 grupos quando o gestor escolheu 1) e 29/08 (oferta da
+   * Farma Fátima no grupo da Mais Saúde). O padrão dos dois é o mesmo: quando
+   * o palpite acerta, o gestor aprende a confiar e para de conferir; quando
+   * não acha nada, a tela abre a lista inteira com a MESMA cara, e ele escolhe
+   * às cegas entre grupos de clientes diferentes.
+   *
+   * Para disparar, o nome não serve para nada: o envio usa os jid escolhidos.
+   * Adivinhar era conveniência — e a conveniência custou dois incidentes.
+   * Quem marca é o gestor, sempre.
+   */
 
   // Disparo por cliente (aba de ofertas) — continua no wizard antigo
   const [clienteDisparo, setClienteDisparo] = useState<number | null>(null);
@@ -120,17 +118,9 @@ function GruposPage() {
   });
   const pendentes = carteira.filter((c) => c.respondeu).length;
 
-  /** Seleção feita pelo gestor — a partir daqui a pré-seleção não encosta mais. */
-  function selecionarGrupos(s: Set<string>) {
-    mexeuNaMao.current = true;
-    setGruposSel(s);
-  }
-
   function escolherFarmacia(f: Farmacia) {
     setFarmacia(f);
-    setGruposSel(new Set());
-    preSelecionado.current = null;   // deixa a pré-seleção rodar para esta farmácia
-    mexeuNaMao.current = false;
+    setGruposSel(new Set());   // troca de cliente começa sem nada marcado
     setPasso(2);
   }
 
@@ -138,8 +128,6 @@ function GruposPage() {
     setPasso(1);
     setFarmacia(null);
     setGruposSel(new Set());
-    preSelecionado.current = null;
-    mexeuNaMao.current = false;
     setModelo(null);
   }
 
@@ -185,7 +173,7 @@ function GruposPage() {
                 conexao={conexao}
                 setConexao={setConexao}
                 selecionados={gruposSel}
-                setSelecionados={selecionarGrupos}
+                setSelecionados={setGruposSel}
                 onVoltar={() => setPasso(1)}
                 onContinuar={() => setPasso(3)}
               />
@@ -674,9 +662,11 @@ function PassoGrupos({
                     </div>
                     <Users className="size-4 text-zinc-400 shrink-0" />
                     <span className="flex-1 min-w-0 truncate text-sm text-zinc-800">{g.nome}</span>
+                    {/* Dica de busca, não afirmação de posse: é só o nome
+                        parecido. Quem decide de quem é o grupo é o gestor. */}
                     {daFarmacia && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 shrink-0">
-                        desta farmácia
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200 shrink-0">
+                        nome parecido
                       </span>
                     )}
                     {g.participantes !== null && (
@@ -1785,6 +1775,44 @@ function ModalAgendamento({
   // Sem lista configurada não há o que oferecer — cai nos campos de hora.
   const preset = usarPreset && horarios.length > 0;
 
+  /*
+   * Grupos que já foram usados por OUTRA farmácia.
+   *
+   * INCIDENTE 2026-08-29: a Farma Fátima está cadastrada como "M.R CARDOSO
+   * DROGARIA" e sem nome de fachada, então não casa por nome com o grupo dela.
+   * A lista abre inteira, e o gestor marcou o grupo da Mais Saúde em 8
+   * disparos seguidos — a oferta de um cliente caiu no grupo do outro.
+   *
+   * Listar o nome do grupo não bastou: ele confirmou assim mesmo, porque o
+   * nome certo nunca esteve ao lado do errado. O que ele não tinha era o
+   * histórico — e esse grupo já tinha recebido 4 disparos da Mais Saúde.
+   */
+  const jidsSel = useMemo(() => grupos.map((g) => g.jid).sort(), [grupos]);
+
+  const { data: donos = [] } = useQuery({
+    queryKey: ["donos-grupos", jidsSel],
+    queryFn: () => getDonosDeGrupos(jidsSel),
+    enabled: jidsSel.length > 0,
+    staleTime: 60_000,
+  });
+
+  /** Grupo escolhido que pertence ao histórico de outra farmácia. */
+  const estranhos = useMemo(() => {
+    const porJid = new Map<string, Set<string>>();
+    for (const d of donos) {
+      if (d.farmacia_id === farmacia.id) continue;   // é do próprio cliente: ok
+      if (!porJid.has(d.jid)) porJid.set(d.jid, new Set());
+      porJid.get(d.jid)!.add(d.farmacia);
+    }
+    return grupos
+      .filter((g) => porJid.has(g.jid))
+      .map((g) => ({ nome: g.nome, donos: [...porJid.get(g.jid)!] }));
+  }, [donos, grupos, farmacia.id]);
+
+  // Trava: com grupo de outro cliente na lista, agendar exige marcar a ciência.
+  const [cienteEstranhos, setCienteEstranhos] = useState(false);
+  const bloqueado = estranhos.length > 0 && !cienteEstranhos;
+
   const horariosOrdenados = useMemo(() => [...horariosSel].sort(), [horariosSel]);
 
   /**
@@ -1861,6 +1889,13 @@ function ModalAgendamento({
       toast.error("A data de término é anterior à de início."); return;
     }
 
+    // Cinto e suspensório: o botão já fica desabilitado, mas a checagem também
+    // mora aqui — é a última linha antes de a oferta sair para o grupo.
+    if (bloqueado) {
+      toast.error("Há grupo de outro cliente na lista. Confirme a ciência ou troque o grupo.");
+      return;
+    }
+
     setEnviando(true);
     setProgresso(0);
     try {
@@ -1902,6 +1937,8 @@ function ModalAgendamento({
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
         instance:      conexao,
+        // A API repete a checagem do lado dela e recusa com 409 sem isto.
+        confirmar_grupo_de_outro_cliente: cienteEstranhos,
       });
 
       toast.success("Campanha agendada!");
@@ -1953,6 +1990,40 @@ function ModalAgendamento({
               Confira antes de agendar — a oferta cai no grupo de clientes dessas farmácias.
             </p>
           </div>
+
+          {/* Grupo que já foi de outro cliente. Não é palpite de nome: é o
+              histórico de disparos deste gestor. */}
+          {estranhos.length > 0 && (
+            <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3">
+              <p className="text-sm font-bold text-red-800 flex items-center gap-1.5">
+                <TriangleAlert className="size-4 shrink-0" />
+                Este grupo é de outro cliente
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {estranhos.map((e) => (
+                  <li key={e.nome} className="text-sm text-red-800">
+                    <span className="font-medium">{e.nome}</span>
+                    <span className="block text-[12px] text-red-700">
+                      já recebeu disparo de {e.donos.join(", ")} — e agora vai
+                      receber uma oferta de {nomeVisivel(farmacia)}.
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <label className="mt-3 flex items-start gap-2 text-[12px] text-red-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cienteEstranhos}
+                  onChange={(e) => setCienteEstranhos(e.target.checked)}
+                  className="mt-0.5 size-4 accent-red-600 shrink-0"
+                />
+                <span>
+                  Confirmo que é para postar mesmo assim. Se foi engano, volte ao
+                  passo 2 e troque o grupo.
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* Mensagem que acompanha a foto. Fica aqui em cima, antes de data e
               hora: é conteúdo, e é a última chance de revisar o que o cliente
@@ -2203,7 +2274,8 @@ function ModalAgendamento({
           </button>
           <button
             onClick={confirmar}
-            disabled={enviando}
+            disabled={enviando || bloqueado}
+            title={bloqueado ? "Confirme a ciência sobre o grupo de outro cliente" : undefined}
             className="bg-brand hover:bg-brand/90 disabled:opacity-60 text-white font-semibold px-5 py-2 rounded-lg flex items-center gap-2 transition shadow-sm"
           >
             {enviando

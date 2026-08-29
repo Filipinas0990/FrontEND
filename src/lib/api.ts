@@ -1260,6 +1260,8 @@ export interface CriarDisparoPayload {
   farmacia_id?: number | null
   solicitacao_id?: number | null
   instance?: string | null
+  /** Ciência de que um grupo é de outro cliente. Sem isto a API recusa (409). */
+  confirmar_grupo_de_outro_cliente?: boolean
 }
 
 export interface DisparoCriado {
@@ -1318,6 +1320,26 @@ export function getMeusGrupos(instance?: string, refresh = false): Promise<Lista
   if (refresh) p.set("refresh", "1")
   const q = p.toString()
   return req(`/api/disparos/grupos${q ? `?${q}` : ""}`)
+}
+
+/** Farmácia que já recebeu disparo num grupo — o "dono" daquele grupo. */
+export interface DonoDeGrupo {
+  jid: string
+  farmacia_id: number
+  /** Nome visível (fachada, ou razão social quando não há fachada). */
+  farmacia: string
+}
+
+/**
+ * A quem cada grupo já pertenceu, pelo histórico de disparos do gestor.
+ *
+ * Existe por causa do incidente de 29/08: farmácia sem nome de fachada não
+ * casa por nome com o grupo dela, a lista abre inteira e dá para marcar o
+ * grupo do cliente errado. Nome falha; histórico não.
+ */
+export function getDonosDeGrupos(jids: string[]): Promise<DonoDeGrupo[]> {
+  if (jids.length === 0) return Promise.resolve([])
+  return req(`/api/disparos/donos-grupos?jids=${encodeURIComponent(jids.join(","))}`)
 }
 
 /** Horário pré-definido de disparo (Configurações → Horários de Disparo). */
