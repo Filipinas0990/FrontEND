@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { getToken } from "@/lib/auth";
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) ?? "http://localhost:8000";
+// Mesma origem do front — quem alcança a API é o proxy. Ver comentário em @/lib/api.
+const BASE_URL = "";
 const TIMEOUT_MS = 45 * 60 * 1000; // segurança: fecha após 45 min
 
 export interface LogEntry {

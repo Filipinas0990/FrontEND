@@ -171,9 +171,6 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
 const AMARELO = "#ffd200";
 const AZUL_FUNDO = "#0a2c78";
 
-/** Caixa do preço: o mesmo azul com brilho dos outros modelos, menos arredondada. */
-const estiloCaixaPreco: React.CSSProperties = { ...estiloAzul, borderRadius: "6cqw" };
-
 /** O "- - -" amarelo que ladeia os textos do rodapé. */
 function TracoAmarelo({ altura = "0.7cqw" }: { altura?: string }) {
   return (
@@ -267,23 +264,23 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
 
-      {/* Só o rodapé é bloco sólido. A caixa de preço FLUTUA sobre a foto, presa
-          ao topo dele — foi assim que o produto voltou a aparecer: empilhado, o
-          azul comia metade da arte e a foto sobrava só o pedaço de cima. */}
+      {/* Preço no canto de cima — mesma posição, largura e caixa do modelo
+          Padrão, de propósito: os dois modelos mostram o preço no mesmo lugar,
+          e quem edita um espera achar o outro igual. */}
+      <div className="absolute top-[3.5%] left-[4%] w-[58%]">
+        <div className="px-[4%] py-[3%] text-center" style={estiloAzul}>
+          <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
+        </div>
+      </div>
+
+      {/* O rodapé é o que sobra do modelo: farmácia, arco e validade. Sem a
+          caixa de preço aqui, a foto fica livre do meio para cima. */}
       <div className="absolute inset-x-0 bottom-0">
         {/* Véu: o rodapé encosta na foto sem corte seco */}
         <div
           className="absolute bottom-full inset-x-0"
           style={{ height: "16cqw", background: "linear-gradient(180deg, rgba(10,44,120,0) 0%, rgba(10,44,120,.8) 100%)" }}
         />
-
-        {/* Preço */}
-        <div className="absolute bottom-full inset-x-0 px-[14%] pb-[3%]">
-          {/* Caixa de 72% do card menos o px-[5%] de cada lado dela. */}
-          <div className="px-[5%] py-[2.6%] text-center" style={estiloCaixaPreco}>
-            <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={62} maxCqw={15} rotuloCqw={4.8} deCqw={3.2} />
-          </div>
-        </div>
 
         {/* Farmácia */}
         <div className="px-[7%] pt-[3.5%] pb-[3%]" style={{ background: AZUL_FUNDO }}>

@@ -1,6 +1,13 @@
 import { clearAuth, getToken } from "./auth"
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) ?? "http://localhost:8000"
+/**
+ * Vazio de propósito: todo request sai relativo, na mesma origem do front, e é
+ * o proxy quem repassa para a API (api/[...path].ts na Vercel, server.proxy no
+ * `vite dev`). Assim o endereço real do backend não entra no bundle nem aparece
+ * no DevTools. Não volte a ler VITE_API_BASE_URL aqui — variável VITE_* é
+ * embutida no JS público e desfaz exatamente isso.
+ */
+const BASE_URL = ""
 
 export class ApiError extends Error {
   constructor(
