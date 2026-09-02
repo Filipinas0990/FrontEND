@@ -202,15 +202,15 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
   const linhaTopo = partes.length > 1 ? partes[0] : "";
   const linhaNome = partes.length > 1 ? partes.slice(1).join(" ") : farmacia;
   // Nome comprido tem de encolher, senão vaza a largura do card.
-  const fonteNome = Math.min(7.6, 76 / Math.max(linhaNome.length, 7));
+  const fonteNome = Math.min(6.6, 66 / Math.max(linhaNome.length, 7));
 
   const { inteiro, centavos } = partesPreco(preco);
   // Largura ocupada: "R$" (0.40em) + dígitos + vírgula + centavos (0.55em).
   let em = 0.46;
   for (const ch of inteiro) em += ch === "." ? LARGURA_SEPARADOR : LARGURA_DIGITO;
   if (centavos) em += LARGURA_SEPARADOR + centavos.length * LARGURA_DIGITO * 0.55;
-  // Caixa de 80% do card menos o px-[6%] de cada lado dela.
-  const tamanho = Math.min(20, 66 / em);
+  // Caixa de 72% do card menos o px-[5%] de cada lado dela.
+  const tamanho = Math.min(15, 62 / em);
 
   const validade = (subtitulo || "").trim();
 
@@ -218,29 +218,33 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
 
-      <div
-        className="absolute inset-x-0 bottom-0 flex flex-col"
-        style={{
-          background: `linear-gradient(180deg, rgba(10,44,120,0) 0%, rgba(10,44,120,.55) 12%, ${AZUL_FUNDO} 34%)`,
-        }}
-      >
+      {/* Só o rodapé é bloco sólido. A caixa de preço FLUTUA sobre a foto, presa
+          ao topo dele — foi assim que o produto voltou a aparecer: empilhado, o
+          azul comia metade da arte e a foto sobrava só o pedaço de cima. */}
+      <div className="absolute inset-x-0 bottom-0">
+        {/* Véu: o rodapé encosta na foto sem corte seco */}
+        <div
+          className="absolute bottom-full inset-x-0"
+          style={{ height: "16cqw", background: "linear-gradient(180deg, rgba(10,44,120,0) 0%, rgba(10,44,120,.8) 100%)" }}
+        />
+
         {/* Preço */}
-        <div className="px-[10%] pt-[6%]">
-          <div className="px-[6%] py-[3.5%] text-center" style={estiloCaixaPreco}>
-            <span className="block text-white font-black uppercase leading-none" style={{ fontSize: "5.8cqw" }}>
+        <div className="absolute bottom-full inset-x-0 px-[14%] pb-[3%]">
+          <div className="px-[5%] py-[2.6%] text-center" style={estiloCaixaPreco}>
+            <span className="block text-white font-black uppercase leading-none" style={{ fontSize: "4.8cqw" }}>
               POR APENAS
             </span>
             {precoDe && (
               <span
                 className="block text-white font-bold uppercase leading-none line-through"
-                style={{ fontSize: "3.6cqw", opacity: 0.85, marginTop: "2%" }}
+                style={{ fontSize: "3.2cqw", opacity: 0.85, marginTop: "2%" }}
               >
                 De R${valorPreco(precoDe)}
               </span>
             )}
             <span
               className="text-white font-black leading-none inline-flex items-start justify-center whitespace-nowrap"
-              style={{ fontSize: `${tamanho.toFixed(2)}cqw`, marginTop: "3%" }}
+              style={{ fontSize: `${tamanho.toFixed(2)}cqw`, marginTop: "2.5%" }}
             >
               <span style={{ fontSize: "0.40em" }} className="mt-[0.85em] mr-[0.06em]">R$</span>
               {inteiro}
@@ -254,20 +258,20 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
         </div>
 
         {/* Farmácia */}
-        <div className="px-[7%] pt-[4%] pb-[3.5%]">
+        <div className="px-[7%] pt-[3.5%] pb-[3%]" style={{ background: AZUL_FUNDO }}>
           {linhaTopo && (
             <div className="flex items-center gap-[3%]">
               <TracoAmarelo />
               <span
                 className="text-white font-bold uppercase leading-none tracking-wide whitespace-nowrap"
-                style={{ fontSize: "4.6cqw" }}
+                style={{ fontSize: "4cqw" }}
               >
                 {linhaTopo}
               </span>
               <TracoAmarelo />
             </div>
           )}
-          <div className="flex items-center justify-center gap-[3%]" style={{ marginTop: linhaTopo ? "2%" : 0 }}>
+          <div className="flex items-center justify-center gap-[3%]" style={{ marginTop: linhaTopo ? "1.5%" : 0 }}>
             <span
               className="text-white font-black uppercase leading-none tracking-tight text-center break-words"
               style={{ fontSize: `${fonteNome.toFixed(2)}cqw` }}
@@ -277,33 +281,33 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
             <ShoppingCart
               color={AMARELO}
               strokeWidth={2.5}
-              style={{ width: "6.4cqw", height: "6.4cqw", flexShrink: 0 }}
+              style={{ width: "5.6cqw", height: "5.6cqw", flexShrink: 0 }}
             />
           </div>
         </div>
 
         {/* Arco amarelo */}
-        <div style={{ height: "2.6cqw", background: AMARELO, borderRadius: "50% 50% 0 0 / 100% 100% 0 0" }} />
+        <div style={{ height: "2.2cqw", background: AMARELO, borderRadius: "50% 50% 0 0 / 100% 100% 0 0" }} />
 
         {/* Validade — sem data preenchida, a faixa não sai */}
         {validade && (
           <div
-            className="flex items-center justify-center gap-[2.5%] px-[6%] py-[1.8%]"
+            className="flex items-center justify-center gap-[2.5%] px-[6%] py-[1.5%]"
             style={{ background: AZUL_FUNDO }}
           >
-            <TracoAmarelo altura="0.7cqw" />
+            <TracoAmarelo altura="0.6cqw" />
             <CalendarDays
               color={AMARELO}
               strokeWidth={2.5}
-              style={{ width: "3.8cqw", height: "3.8cqw", flexShrink: 0 }}
+              style={{ width: "3.4cqw", height: "3.4cqw", flexShrink: 0 }}
             />
             <span
               className="font-black uppercase leading-none whitespace-nowrap"
-              style={{ color: AMARELO, fontSize: "3.2cqw" }}
+              style={{ color: AMARELO, fontSize: "2.9cqw" }}
             >
               Oferta válida até {validade}
             </span>
-            <TracoAmarelo altura="0.7cqw" />
+            <TracoAmarelo altura="0.6cqw" />
           </div>
         )}
       </div>
