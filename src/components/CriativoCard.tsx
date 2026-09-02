@@ -194,6 +194,63 @@ function partesPreco(preco: string): { inteiro: string; centavos: string } {
   return m ? { inteiro: m[1], centavos: m[2] } : { inteiro: v, centavos: "" };
 }
 
+/**
+ * Bloco de preço "POR APENAS" + valor com os centavos elevados.
+ *
+ * Vive fora dos modelos porque o Padrão e o Destaque mostram o MESMO preço —
+ * era para ser a mesma coisa desenhada duas vezes, e duas cópias divergem na
+ * primeira correção que alguém fizer só num lado.
+ *
+ * `utilCqw` é a largura interna de quem chama (a caixa já sem o padding dela) e
+ * `maxCqw` é o teto do design daquele modelo: o valor encolhe conforme cresce,
+ * senão "1.299,90" vaza a caixa.
+ */
+function BlocoPreco({
+  preco, precoDe, utilCqw, maxCqw, rotuloCqw, deCqw,
+}: {
+  preco: string;
+  precoDe?: string;
+  utilCqw: number;
+  maxCqw: number;
+  rotuloCqw: number;
+  deCqw: number;
+}) {
+  const { inteiro, centavos } = partesPreco(preco);
+  // Largura ocupada: "R$" (0.40em) + dígitos + vírgula + centavos (0.55em).
+  let em = 0.46;
+  for (const ch of inteiro) em += ch === "." ? LARGURA_SEPARADOR : LARGURA_DIGITO;
+  if (centavos) em += LARGURA_SEPARADOR + centavos.length * LARGURA_DIGITO * 0.55;
+  const tamanho = Math.min(maxCqw, utilCqw / em);
+
+  return (
+    <>
+      <span className="block text-white font-black uppercase leading-none" style={{ fontSize: `${rotuloCqw}cqw` }}>
+        POR APENAS
+      </span>
+      {precoDe && (
+        <span
+          className="block text-white font-bold uppercase leading-none line-through"
+          style={{ fontSize: `${deCqw}cqw`, opacity: 0.85, marginTop: "2%" }}
+        >
+          De R${valorPreco(precoDe)}
+        </span>
+      )}
+      <span
+        className="text-white font-black leading-none inline-flex items-start justify-center whitespace-nowrap"
+        style={{ fontSize: `${tamanho.toFixed(2)}cqw`, marginTop: "2.5%" }}
+      >
+        <span style={{ fontSize: "0.40em" }} className="mt-[0.85em] mr-[0.06em]">R$</span>
+        {inteiro}
+        {centavos && (
+          <>
+            ,<span style={{ fontSize: "0.55em" }}>{centavos}</span>
+          </>
+        )}
+      </span>
+    </>
+  );
+}
+
 function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }: CriativoDados) {
   const farmacia = (localizacao || "Sua Farmácia").trim();
   // "DROGARIA BEM ESTAR" -> "DROGARIA" em cima, "BEM ESTAR" grande embaixo.
@@ -203,14 +260,6 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
   const linhaNome = partes.length > 1 ? partes.slice(1).join(" ") : farmacia;
   // Nome comprido tem de encolher, senão vaza a largura do card.
   const fonteNome = Math.min(6.6, 66 / Math.max(linhaNome.length, 7));
-
-  const { inteiro, centavos } = partesPreco(preco);
-  // Largura ocupada: "R$" (0.40em) + dígitos + vírgula + centavos (0.55em).
-  let em = 0.46;
-  for (const ch of inteiro) em += ch === "." ? LARGURA_SEPARADOR : LARGURA_DIGITO;
-  if (centavos) em += LARGURA_SEPARADOR + centavos.length * LARGURA_DIGITO * 0.55;
-  // Caixa de 72% do card menos o px-[5%] de cada lado dela.
-  const tamanho = Math.min(15, 62 / em);
 
   const validade = (subtitulo || "").trim();
 
@@ -230,30 +279,9 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
 
         {/* Preço */}
         <div className="absolute bottom-full inset-x-0 px-[14%] pb-[3%]">
+          {/* Caixa de 72% do card menos o px-[5%] de cada lado dela. */}
           <div className="px-[5%] py-[2.6%] text-center" style={estiloCaixaPreco}>
-            <span className="block text-white font-black uppercase leading-none" style={{ fontSize: "4.8cqw" }}>
-              POR APENAS
-            </span>
-            {precoDe && (
-              <span
-                className="block text-white font-bold uppercase leading-none line-through"
-                style={{ fontSize: "3.2cqw", opacity: 0.85, marginTop: "2%" }}
-              >
-                De R${valorPreco(precoDe)}
-              </span>
-            )}
-            <span
-              className="text-white font-black leading-none inline-flex items-start justify-center whitespace-nowrap"
-              style={{ fontSize: `${tamanho.toFixed(2)}cqw`, marginTop: "2.5%" }}
-            >
-              <span style={{ fontSize: "0.40em" }} className="mt-[0.85em] mr-[0.06em]">R$</span>
-              {inteiro}
-              {centavos && (
-                <>
-                  ,<span style={{ fontSize: "0.55em" }}>{centavos}</span>
-                </>
-              )}
-            </span>
+            <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={62} maxCqw={15} rotuloCqw={4.8} deCqw={3.2} />
           </div>
         </div>
 
@@ -318,26 +346,17 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
 // ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
 function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
-  // Pílula de 52% do card menos o px-[4%]; o prefixo aqui é o "POR R$" inteiro.
-  // Os três números acompanham o w-[52%] abaixo — ver a nota do ModeloBanner.
-  const tamanho = tamanhoQueCabe(valorPreco(preco), 3.7, 46, 7.4);
   return (
     <>
       <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
 
-      {/* Pílula de preço no topo */}
-      <div className="absolute top-[3.5%] left-[4%] w-[52%]">
+      {/* Caixa de preço no topo — a MESMA do modelo Destaque (BlocoPreco).
+          Cresceu de 52% para 58% do card porque o valor agora é grande: na
+          largura antiga, preço de quatro dígitos encolhia até ficar ilegível.
+          O `utilCqw` acompanha esse 58% menos o px-[4%] de cada lado. */}
+      <div className="absolute top-[3.5%] left-[4%] w-[58%]">
         <div className="px-[4%] py-[3%] text-center" style={estiloAzul}>
-          {precoDe && (
-            <span className="block text-white font-bold uppercase leading-none line-through"
-                  style={{ fontSize: "4.2cqw", opacity: 0.85, marginBottom: "2.5%" }}>
-              De R${valorPreco(precoDe)}
-            </span>
-          )}
-          <span className="block text-white font-black uppercase leading-none tracking-tight whitespace-nowrap"
-                style={{ fontSize: `${tamanho.toFixed(2)}cqw` }}>
-            POR R${valorPreco(preco)}
-          </span>
+          <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
         </div>
       </div>
 
