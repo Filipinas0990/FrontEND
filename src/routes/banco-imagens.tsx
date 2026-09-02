@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Search, Plus, Trash2, ImageIcon, Loader2, X, Tag } from "lucide-react";
+import { ChevronLeft, Search, Plus, Trash2, ImageIcon, Loader2, X, Tag, Eye, Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { BancoImagensModal } from "@/components/BancoImagensModal";
+import { ImagemPreviewModal } from "@/components/ImagemPreviewModal";
 import { Switch } from "@/components/ui/switch";
 import {
   listarCatalogoProdutos,
@@ -12,6 +13,7 @@ import {
   setCatalogoProdutosCategoria,
   getCategoriasCatalogo,
   deletarCatalogoProduto,
+  baixarCatalogoImagem,
   catalogoImagemUrl,
   type CatalogoProdutoItem,
 } from "@/lib/api";
@@ -56,6 +58,10 @@ function BancoImagensPage() {
   const [busca, setBusca] = useState("");
   const [showUpload, setShowUpload] = useState(false);
   const [excluir, setExcluir] = useState<CatalogoProdutoItem | null>(null);
+  // Produto aberto na lupa. Guarda o ID, não o objeto: assim o painel do modal
+  // acompanha o toggle de status sem ficar com uma cópia velha na mão.
+  const [preview, setPreview] = useState<number | null>(null);
+  const [baixandoId, setBaixandoId] = useState<number | null>(null);
   const [filtroCat, setFiltroCat] = useState<string>("todas");
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todos");
   const [selecao, setSelecao] = useState<Set<number>>(new Set());
@@ -194,6 +200,22 @@ function BancoImagensPage() {
       return novo;
     });
   }
+
+  async function baixar(p: CatalogoProdutoItem) {
+    setBaixandoId(p.id);
+    try {
+      await baixarCatalogoImagem(p.id, p.nome);
+    } catch {
+      toast.error("Não foi possível baixar a imagem.");
+    } finally {
+      setBaixandoId(null);
+    }
+  }
+
+  // A lupa navega pelo que está na tela — as setas seguem o filtro em uso, não
+  // o acervo inteiro.
+  const idxPreview = preview === null ? -1 : visiveis.findIndex((p) => p.id === preview);
+  const produtoPreview = idxPreview >= 0 ? visiveis[idxPreview] : null;
 
   const todosMarcados = visiveis.length > 0 && selecao.size === visiveis.length;
 
@@ -433,8 +455,8 @@ function BancoImagensPage() {
                     </button>
 
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-100">
-                      <span className="text-[10px] text-zinc-400">{fmtData(p.criadoEm)}</span>
-                      <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-zinc-400 shrink-0">{fmtData(p.criadoEm)}</span>
+                      <div className="flex items-center gap-0.5">
                         <Switch
                           checked={p.ativo}
                           onCheckedChange={(v) => toggleMut.mutate({ id: p.id, ativo: v })}
@@ -442,9 +464,31 @@ function BancoImagensPage() {
                           className="data-[state=checked]:bg-brand scale-90"
                         />
                         <button
+                          onClick={() => setPreview(p.id)}
+                          className="size-7 rounded-lg grid place-items-center text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
+                          title="Ver imagem"
+                          aria-label={`Ver ${p.nome}`}
+                        >
+                          <Eye className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={() => baixar(p)}
+                          disabled={baixandoId === p.id}
+                          className="size-7 rounded-lg grid place-items-center text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-60 transition"
+                          title="Baixar imagem"
+                          aria-label={`Baixar ${p.nome}`}
+                        >
+                          {baixandoId === p.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Download className="size-3.5" />
+                          )}
+                        </button>
+                        <button
                           onClick={() => setExcluir(p)}
                           className="size-7 rounded-lg grid place-items-center text-zinc-400 hover:bg-red-50 hover:text-red-500 transition"
                           title="Remover"
+                          aria-label={`Remover ${p.nome}`}
                         >
                           <Trash2 className="size-3.5" />
                         </button>
@@ -459,6 +503,26 @@ function BancoImagensPage() {
       </div>
 
       {showUpload && <BancoImagensModal onClose={() => setShowUpload(false)} />}
+
+      {produtoPreview && (
+        <ImagemPreviewModal
+          produto={produtoPreview}
+          onAnterior={
+            idxPreview > 0 ? () => setPreview(visiveis[idxPreview - 1].id) : undefined
+          }
+          onProximo={
+            idxPreview < visiveis.length - 1
+              ? () => setPreview(visiveis[idxPreview + 1].id)
+              : undefined
+          }
+          onToggleAtivo={(ativo) => toggleMut.mutate({ id: produtoPreview.id, ativo })}
+          onExcluir={() => {
+            setExcluir(produtoPreview);
+            setPreview(null);
+          }}
+          onClose={() => setPreview(null)}
+        />
+      )}
 
       <AlertDialog open={!!excluir} onOpenChange={(open) => !open && setExcluir(null)}>
         <AlertDialogContent>

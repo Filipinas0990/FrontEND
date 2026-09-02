@@ -1097,6 +1097,50 @@ export function catalogoImagemUrl(id: number): string {
   return `${BASE_URL}/api/catalogo/produtos/${id}/imagem${token ? `?token=${token}` : ""}`
 }
 
+const EXT_POR_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+}
+
+/** Nome do produto virando nome de arquivo: sem acento, sem barra, sem espaço. */
+function nomeDeArquivo(nome: string): string {
+  const limpo = nome
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+  return limpo || "imagem"
+}
+
+/**
+ * Baixa a imagem de um produto.
+ *
+ * Não dá para usar <a download> na URL da imagem: ela é servida pela API (outra
+ * origem), e aí o navegador ignora o `download` e só navega para o arquivo. Por
+ * isso busca o blob com o token e dispara o download a partir dele.
+ */
+export async function baixarCatalogoImagem(id: number, nome: string): Promise<void> {
+  const token = getToken()
+  const res = await fetch(`${BASE_URL}/api/catalogo/produtos/${id}/imagem`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw new ApiError(res.status, "Não foi possível baixar a imagem")
+
+  const blob = await res.blob()
+  const ext = EXT_POR_MIME[blob.type] ?? "jpg"
+  const a = document.createElement("a")
+  a.href = URL.createObjectURL(blob)
+  a.download = `${nomeDeArquivo(nome)}.${ext}`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(a.href)
+}
+
 /** Cadastra/atualiza um produto do catálogo com sua imagem (base64 data URI ou puro). */
 export function cadastrarCatalogoProduto(data: {
   nome: string
