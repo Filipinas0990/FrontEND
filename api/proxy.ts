@@ -9,6 +9,13 @@
  * Runtime edge: repassa o corpo da resposta como stream, o que mantém o SSE de
  * /api/pipeline/logs/stream e os downloads binários (xlsx, csv, imagens) funcionando.
  *
+ * A ROTA É EXPLÍCITA, no vercel.json, e não pelo nome do arquivo. Este arquivo
+ * já se chamou `[...path].ts` contando com o catch-all da Vercel, e lá ele casou
+ * só UM segmento: /api/status passava e /api/auth/login voltava 404 da própria
+ * Vercel, sem nem chegar aqui. Agora o rewrite manda todo /api/* para cá e
+ * entrega o caminho original em `upstreamPath` — comportamento que não depende
+ * de como a plataforma interpreta colchetes em nome de arquivo.
+ *
  * Variáveis de ambiente (Vercel → Settings → Environment Variables):
  *   API_BASE_URL        obrigatória. Ex.: https://api.seudominio.com.br  (sem barra no fim)
  *   PROXY_SHARED_SECRET opcional. Se definida, vai como header X-Proxy-Secret
@@ -80,8 +87,14 @@ export default async function handler(request: Request): Promise<Response> {
     return Response.json({ detail: "Proxy sem API_BASE_URL configurada." }, { status: 500 });
   }
 
+  // `upstreamPath` é o que o rewrite capturou de /api/(.*) — o pathname aqui
+  // já é /api/proxy, então usá-lo mandaria todo request para a rota errada.
   const url = new URL(request.url);
-  const alvo = `${UPSTREAM}${url.pathname}${url.search}`;
+  const busca = new URLSearchParams(url.search);
+  const caminho = busca.get("upstreamPath") ?? "";
+  busca.delete("upstreamPath");
+  const query = busca.toString();
+  const alvo = `${UPSTREAM}/api/${caminho}${query ? `?${query}` : ""}`;
 
   // Corpo lido inteiro de propósito: repassar o stream do request exigiria
   // `duplex: "half"`, que nem todo runtime da Vercel aceita. As requisições
