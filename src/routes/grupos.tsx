@@ -59,7 +59,7 @@ function fmtDia(iso: string | null): string {
  * cadastrar no banco. Ela pula a escolha de produto e de preço e vai direto
  * para o agendamento.
  */
-type ModeloId = "padrao" | "abre" | "fecha" | "novo";
+type ModeloId = "padrao" | "abre" | "fecha" | "destaque" | "novo";
 
 function GruposPage() {
   const { aba: abaInicial } = Route.useSearch();
@@ -796,6 +796,10 @@ const MODELOS: {
     id: "fecha", nome: "Fecha Mês", layout: "banner", titulo: "FECHA MÊS", subtituloPadrao: "DIAS 25 A 31",
     desc: "Faixa “FECHA MÊS”, datas e preço em destaque.",
   },
+  {
+    id: "destaque", nome: "Destaque", layout: "destaque", subtituloPadrao: "00/00",
+    desc: "Preço grande no meio, farmácia e validade no rodapé.",
+  },
 ];
 
 /** Uma arte que o gestor subiu pronta — vai para o grupo exatamente assim. */
@@ -1156,17 +1160,23 @@ function PassoCriativo({
           })}
         </div>
 
-        {/* Datas da faixa — só os modelos Abre/Fecha Mês têm */}
-        {modeloAtual?.titulo && (
+        {/* Data na arte — Abre/Fecha Mês (faixa) e Destaque (validade do rodapé) */}
+        {modeloAtual?.subtituloPadrao && (
           <div className="mt-5 flex items-center gap-3 flex-wrap">
-            <label className="text-sm font-medium text-zinc-700">Datas na arte</label>
+            <label className="text-sm font-medium text-zinc-700">
+              {modelo === "destaque" ? "Validade na arte" : "Datas na arte"}
+            </label>
             <input
               value={subtitulo}
               onChange={(e) => setSubtitulo(e.target.value)}
               placeholder={modeloAtual.subtituloPadrao}
               className="px-3 py-1.5 rounded-lg border border-zinc-200 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-brand/30"
             />
-            <span className="text-xs text-zinc-400">aparece na pílula branca embaixo da faixa</span>
+            <span className="text-xs text-zinc-400">
+              {modelo === "destaque"
+                ? "aparece no rodapé, depois de “Oferta válida até”"
+                : "aparece na pílula branca embaixo da faixa"}
+            </span>
           </div>
         )}
       </div>

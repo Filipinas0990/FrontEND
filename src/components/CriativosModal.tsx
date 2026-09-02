@@ -28,6 +28,7 @@ interface CriativosModalProps {
 const LAYOUTS: { id: LayoutCriativo; nome: string; desc: string }[] = [
   { id: "azul",   nome: "Azul",          desc: "Preço no topo, barra da farmácia embaixo." },
   { id: "banner", nome: "Banner Oferta", desc: "Faixa no topo, datas e preço em destaque." },
+  { id: "destaque", nome: "Destaque",     desc: "Preço grande no meio, farmácia e validade no rodapé." },
 ];
 
 const ENQUADRAMENTOS: { id: Enquadramento; nome: string; desc: string }[] = [
@@ -160,7 +161,11 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
                   </div>
                 </div>
 
-                {layout === "banner" ? (
+                {/* Cada layout pede o seu: o banner tem faixa e datas; o destaque
+                    tem a farmácia no rodapé e a validade da oferta; o azul, só a
+                    farmácia. Mostrar campo que o layout não desenha é convidar o
+                    gestor a preencher algo que não vai aparecer. */}
+                {layout === "banner" && (
                   <>
                     <div>
                       <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2 block">Título (faixa do topo)</label>
@@ -173,13 +178,24 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
                         className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand" />
                     </div>
                   </>
-                ) : (
+                )}
+
+                {layout !== "banner" && (
                   <div>
                     <label className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
                       <MapPin className="size-3.5" /> Farmácia / Localização
                     </label>
                     <input value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} placeholder="Ex: Farmácia dos Aposentados"
                       className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand" />
+                  </div>
+                )}
+
+                {layout === "destaque" && (
+                  <div>
+                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2 block">Oferta válida até</label>
+                    <input value={subtitulo} onChange={(e) => setSubtitulo(e.target.value)} placeholder="Ex: 23/08"
+                      className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand" />
+                    <p className="text-[11px] text-zinc-400 mt-1.5">Em branco, a faixa do rodapé não aparece.</p>
                   </div>
                 )}
               </div>

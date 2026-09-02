@@ -1,7 +1,7 @@
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, ShoppingCart, CalendarDays } from "lucide-react";
 
 // Layout = o design (elementos). Enquadramento = a proporção (formato).
-export type LayoutCriativo = "azul" | "banner";
+export type LayoutCriativo = "azul" | "banner" | "destaque";
 export type Enquadramento = "4:5" | "1:1" | "9:16";
 
 const ASPECTO: Record<Enquadramento, string> = {
@@ -159,6 +159,158 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
   );
 }
 
+// ── Modelo 4: Destaque ───────────────────────────────────────────────────────
+// Foto de fundo inteira, caixa de preço grande no meio, o nome da farmácia em
+// duas linhas e a validade da oferta numa faixa no rodapé.
+//
+// O bloco de baixo é uma PILHA em fluxo normal ancorada no rodapé, não um monte
+// de `absolute` com `bottom` em %: a altura dele vem das fontes, que são em cqw
+// (proporcionais à largura). Com `bottom` fixo, trocar o enquadramento de 4:5
+// para 9:16 abriria um buraco entre o preço e a farmácia — empilhado, o
+// espaçamento acompanha a arte em qualquer proporção.
+const AMARELO = "#ffd200";
+const AZUL_FUNDO = "#0a2c78";
+
+/** Caixa do preço: o mesmo azul com brilho dos outros modelos, menos arredondada. */
+const estiloCaixaPreco: React.CSSProperties = { ...estiloAzul, borderRadius: "6cqw" };
+
+/** O "- - -" amarelo que ladeia os textos do rodapé. */
+function TracoAmarelo({ altura = "0.7cqw" }: { altura?: string }) {
+  return (
+    <div
+      className="flex-1"
+      style={{
+        height: altura,
+        backgroundImage: `repeating-linear-gradient(90deg, ${AMARELO} 0 2cqw, transparent 2cqw 4cqw)`,
+      }}
+    />
+  );
+}
+
+/** "16,99" -> { inteiro: "16", centavos: "99" }. Sem centavos, devolve tudo em `inteiro`. */
+function partesPreco(preco: string): { inteiro: string; centavos: string } {
+  const v = valorPreco(preco);
+  const m = v.match(/^(.*?)[.,](\d{1,2})$/);
+  return m ? { inteiro: m[1], centavos: m[2] } : { inteiro: v, centavos: "" };
+}
+
+function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }: CriativoDados) {
+  const farmacia = (localizacao || "Sua Farmácia").trim();
+  // "DROGARIA BEM ESTAR" -> "DROGARIA" em cima, "BEM ESTAR" grande embaixo.
+  // Nome de uma palavra só não ganha linha de cima vazia.
+  const partes = farmacia.split(/\s+/);
+  const linhaTopo = partes.length > 1 ? partes[0] : "";
+  const linhaNome = partes.length > 1 ? partes.slice(1).join(" ") : farmacia;
+  // Nome comprido tem de encolher, senão vaza a largura do card.
+  const fonteNome = Math.min(7.6, 76 / Math.max(linhaNome.length, 7));
+
+  const { inteiro, centavos } = partesPreco(preco);
+  // Largura ocupada: "R$" (0.40em) + dígitos + vírgula + centavos (0.55em).
+  let em = 0.46;
+  for (const ch of inteiro) em += ch === "." ? LARGURA_SEPARADOR : LARGURA_DIGITO;
+  if (centavos) em += LARGURA_SEPARADOR + centavos.length * LARGURA_DIGITO * 0.55;
+  // Caixa de 80% do card menos o px-[6%] de cada lado dela.
+  const tamanho = Math.min(20, 66 / em);
+
+  const validade = (subtitulo || "").trim();
+
+  return (
+    <>
+      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+
+      <div
+        className="absolute inset-x-0 bottom-0 flex flex-col"
+        style={{
+          background: `linear-gradient(180deg, rgba(10,44,120,0) 0%, rgba(10,44,120,.55) 12%, ${AZUL_FUNDO} 34%)`,
+        }}
+      >
+        {/* Preço */}
+        <div className="px-[10%] pt-[6%]">
+          <div className="px-[6%] py-[3.5%] text-center" style={estiloCaixaPreco}>
+            <span className="block text-white font-black uppercase leading-none" style={{ fontSize: "5.8cqw" }}>
+              POR APENAS
+            </span>
+            {precoDe && (
+              <span
+                className="block text-white font-bold uppercase leading-none line-through"
+                style={{ fontSize: "3.6cqw", opacity: 0.85, marginTop: "2%" }}
+              >
+                De R${valorPreco(precoDe)}
+              </span>
+            )}
+            <span
+              className="text-white font-black leading-none inline-flex items-start justify-center whitespace-nowrap"
+              style={{ fontSize: `${tamanho.toFixed(2)}cqw`, marginTop: "3%" }}
+            >
+              <span style={{ fontSize: "0.40em" }} className="mt-[0.85em] mr-[0.06em]">R$</span>
+              {inteiro}
+              {centavos && (
+                <>
+                  ,<span style={{ fontSize: "0.55em" }}>{centavos}</span>
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {/* Farmácia */}
+        <div className="px-[7%] pt-[4%] pb-[3.5%]">
+          {linhaTopo && (
+            <div className="flex items-center gap-[3%]">
+              <TracoAmarelo />
+              <span
+                className="text-white font-bold uppercase leading-none tracking-wide whitespace-nowrap"
+                style={{ fontSize: "4.6cqw" }}
+              >
+                {linhaTopo}
+              </span>
+              <TracoAmarelo />
+            </div>
+          )}
+          <div className="flex items-center justify-center gap-[3%]" style={{ marginTop: linhaTopo ? "2%" : 0 }}>
+            <span
+              className="text-white font-black uppercase leading-none tracking-tight text-center break-words"
+              style={{ fontSize: `${fonteNome.toFixed(2)}cqw` }}
+            >
+              {linhaNome}
+            </span>
+            <ShoppingCart
+              color={AMARELO}
+              strokeWidth={2.5}
+              style={{ width: "6.4cqw", height: "6.4cqw", flexShrink: 0 }}
+            />
+          </div>
+        </div>
+
+        {/* Arco amarelo */}
+        <div style={{ height: "2.6cqw", background: AMARELO, borderRadius: "50% 50% 0 0 / 100% 100% 0 0" }} />
+
+        {/* Validade — sem data preenchida, a faixa não sai */}
+        {validade && (
+          <div
+            className="flex items-center justify-center gap-[2.5%] px-[6%] py-[1.8%]"
+            style={{ background: AZUL_FUNDO }}
+          >
+            <TracoAmarelo altura="0.7cqw" />
+            <CalendarDays
+              color={AMARELO}
+              strokeWidth={2.5}
+              style={{ width: "3.8cqw", height: "3.8cqw", flexShrink: 0 }}
+            />
+            <span
+              className="font-black uppercase leading-none whitespace-nowrap"
+              style={{ color: AMARELO, fontSize: "3.2cqw" }}
+            >
+              Oferta válida até {validade}
+            </span>
+            <TracoAmarelo altura="0.7cqw" />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
 function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
@@ -208,7 +360,11 @@ export function CriativoCard(props: CriativoDados) {
       className={`relative w-full ${ASPECTO[props.enquadramento]} rounded-xl overflow-hidden bg-zinc-200`}
       style={{ containerType: "inline-size" }}
     >
-      {props.layout === "banner" ? <ModeloBanner {...props} /> : <ModeloAzul {...props} />}
+      {props.layout === "banner"
+        ? <ModeloBanner {...props} />
+        : props.layout === "destaque"
+          ? <ModeloDestaque {...props} />
+          : <ModeloAzul {...props} />}
     </div>
   );
 }
@@ -225,7 +381,7 @@ export function ModeloThumb({ layout, enquadramento = "4:5" }: { layout: LayoutC
         imagem={null}
         localizacao="Sua Farmácia"
         titulo="FECHA MÊS"
-        subtitulo="DIAS 29 A 31"
+        subtitulo={layout === "destaque" ? "00/00" : "DIAS 29 A 31"}
       />
     </div>
   );
