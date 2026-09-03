@@ -1,7 +1,7 @@
 import { ImageIcon, ShoppingCart, CalendarDays } from "lucide-react";
 
 // Layout = o design (elementos). Enquadramento = a proporção (formato).
-export type LayoutCriativo = "azul" | "banner" | "destaque";
+export type LayoutCriativo = "azul" | "banner" | "destaque" | "vermelho";
 export type Enquadramento = "4:5" | "1:1" | "9:16";
 
 const ASPECTO: Record<Enquadramento, string> = {
@@ -248,13 +248,21 @@ function BlocoPreco({
   );
 }
 
-function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }: CriativoDados) {
+/**
+ * Quebra o nome da farmácia em duas linhas: "DROGARIA BEM ESTAR" vira
+ * "DROGARIA" em cima e "BEM ESTAR" embaixo. Nome de uma palavra só devolve a
+ * linha de cima vazia, para quem desenha não abrir um espaço à toa.
+ */
+function duasLinhas(localizacao?: string): { topo: string; nome: string } {
   const farmacia = (localizacao || "Sua Farmácia").trim();
-  // "DROGARIA BEM ESTAR" -> "DROGARIA" em cima, "BEM ESTAR" grande embaixo.
-  // Nome de uma palavra só não ganha linha de cima vazia.
   const partes = farmacia.split(/\s+/);
-  const linhaTopo = partes.length > 1 ? partes[0] : "";
-  const linhaNome = partes.length > 1 ? partes.slice(1).join(" ") : farmacia;
+  return partes.length > 1
+    ? { topo: partes[0], nome: partes.slice(1).join(" ") }
+    : { topo: "", nome: farmacia };
+}
+
+function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }: CriativoDados) {
+  const { topo: linhaTopo, nome: linhaNome } = duasLinhas(localizacao);
   // Nome comprido tem de encolher, senão vaza a largura do card.
   const fonteNome = Math.min(6.6, 66 / Math.max(linhaNome.length, 7));
 
@@ -340,6 +348,90 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
   );
 }
 
+// ── Modelo 5: Vermelho ───────────────────────────────────────────────────────
+// Faixa vermelha com a farmácia no topo, foto ocupando o miolo, preço numa
+// caixa vermelha embaixo e uma tarja preta com o aviso da oferta no pé.
+//
+// Ao contrário do Destaque, o preço aqui é UMA linha ("POR R$14,99"): é o que a
+// arte de referência faz, e caixa larga e baixa não comporta valor gigante com
+// centavos elevados sem estourar a altura.
+const VERMELHO_GRADIENTE = "linear-gradient(180deg, #f2353c 0%, #cf1a22 100%)";
+const VERMELHO_BRILHO = "0 0 5cqw rgba(242, 60, 68, 0.65), inset 0 0.3cqw 0 rgba(255,255,255,0.25)";
+
+const estiloVermelho: React.CSSProperties = {
+  background: VERMELHO_GRADIENTE,
+  border: "0.7cqw solid #fff",
+  boxShadow: VERMELHO_BRILHO,
+  borderRadius: "4.5cqw",
+};
+
+function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }: CriativoDados) {
+  const { topo: linhaTopo, nome: linhaNome } = duasLinhas(localizacao);
+  // Nome comprido encolhe; o teto é o tamanho da arte de referência.
+  const fonteNome = Math.min(7.2, 72 / Math.max(linhaNome.length, 9));
+  // Caixa de 68% do card menos o px-[5%] dela; o prefixo é o "POR R$" inteiro.
+  const tamanho = tamanhoQueCabe(valorPreco(preco), 3.6, 58, 9);
+  const aviso = (subtitulo || "").trim();
+
+  return (
+    <>
+      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+
+      {/* Farmácia — faixa do topo */}
+      <div className="absolute top-[4%] left-[13%] right-[13%]">
+        <div className="px-[4%] py-[2.4%] text-center" style={estiloVermelho}>
+          {linhaTopo && (
+            <span
+              className="block text-white font-black uppercase leading-none tracking-tight"
+              style={{ fontSize: `${fonteNome.toFixed(2)}cqw` }}
+            >
+              {linhaTopo}
+            </span>
+          )}
+          <span
+            className="block text-white font-black uppercase leading-none tracking-tight break-words"
+            style={{ fontSize: `${fonteNome.toFixed(2)}cqw`, marginTop: linhaTopo ? "2%" : 0 }}
+          >
+            {linhaNome}
+          </span>
+        </div>
+      </div>
+
+      {/* Preço — caixa de baixo. Sobe quando há tarja, para não encostar nela. */}
+      <div className="absolute left-[16%] right-[16%]" style={{ bottom: aviso ? "9%" : "4%" }}>
+        <div className="px-[5%] py-[2%] text-center" style={estiloVermelho}>
+          {precoDe && (
+            <span
+              className="block text-white font-bold uppercase leading-none line-through"
+              style={{ fontSize: "4cqw", opacity: 0.9, marginBottom: "1.5%" }}
+            >
+              De R${valorPreco(precoDe)}
+            </span>
+          )}
+          <span
+            className="block text-white font-black uppercase leading-none tracking-tight whitespace-nowrap"
+            style={{ fontSize: `${tamanho.toFixed(2)}cqw` }}
+          >
+            POR R${valorPreco(preco)}
+          </span>
+        </div>
+      </div>
+
+      {/* Aviso — tarja preta no pé. Sem texto, a tarja não sai. */}
+      {aviso && (
+        <div className="absolute bottom-0 inset-x-0 bg-black px-[4%] py-[1.3%]">
+          <span
+            className="block text-white font-bold uppercase leading-tight text-center"
+            style={{ fontSize: "2.8cqw" }}
+          >
+            {aviso}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
 function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
@@ -384,7 +476,9 @@ export function CriativoCard(props: CriativoDados) {
         ? <ModeloBanner {...props} />
         : props.layout === "destaque"
           ? <ModeloDestaque {...props} />
-          : <ModeloAzul {...props} />}
+          : props.layout === "vermelho"
+            ? <ModeloVermelho {...props} />
+            : <ModeloAzul {...props} />}
     </div>
   );
 }
@@ -401,7 +495,11 @@ export function ModeloThumb({ layout, enquadramento = "4:5" }: { layout: LayoutC
         imagem={null}
         localizacao="Sua Farmácia"
         titulo="FECHA MÊS"
-        subtitulo={layout === "destaque" ? "00/00" : "DIAS 29 A 31"}
+        subtitulo={
+          layout === "destaque" ? "00/00"
+          : layout === "vermelho" ? "OFERTA VÁLIDA ATÉ 00/00"
+          : "DIAS 29 A 31"
+        }
       />
     </div>
   );

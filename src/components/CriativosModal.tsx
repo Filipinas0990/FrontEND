@@ -28,7 +28,8 @@ interface CriativosModalProps {
 const LAYOUTS: { id: LayoutCriativo; nome: string; desc: string }[] = [
   { id: "azul",   nome: "Azul",          desc: "Preço no topo, barra da farmácia embaixo." },
   { id: "banner", nome: "Banner Oferta", desc: "Faixa no topo, datas e preço em destaque." },
-  { id: "destaque", nome: "Destaque",     desc: "Preço grande no meio, farmácia e validade no rodapé." },
+  { id: "destaque", nome: "Destaque",     desc: "Preço no canto, farmácia e validade no rodapé." },
+  { id: "vermelho", nome: "Vermelho",     desc: "Farmácia no topo, preço embaixo e aviso na tarja preta." },
 ];
 
 const ENQUADRAMENTOS: { id: Enquadramento; nome: string; desc: string }[] = [
@@ -190,12 +191,19 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
                   </div>
                 )}
 
-                {layout === "destaque" && (
+                {(layout === "destaque" || layout === "vermelho") && (
                   <div>
-                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2 block">Oferta válida até</label>
-                    <input value={subtitulo} onChange={(e) => setSubtitulo(e.target.value)} placeholder="Ex: 23/08"
+                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2 block">
+                      {layout === "destaque" ? "Oferta válida até" : "Aviso do rodapé"}
+                    </label>
+                    <input value={subtitulo} onChange={(e) => setSubtitulo(e.target.value)}
+                      placeholder={layout === "destaque" ? "Ex: 23/08" : "Ex: OFERTA VÁLIDA SOMENTE NA UNIDADE X ATÉ 08/09."}
                       className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand" />
-                    <p className="text-[11px] text-zinc-400 mt-1.5">Em branco, a faixa do rodapé não aparece.</p>
+                    <p className="text-[11px] text-zinc-400 mt-1.5">
+                      {layout === "destaque"
+                        ? "Em branco, a faixa do rodapé não aparece."
+                        : "Em branco, a tarja preta não aparece."}
+                    </p>
                   </div>
                 )}
               </div>

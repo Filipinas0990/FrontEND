@@ -59,7 +59,7 @@ function fmtDia(iso: string | null): string {
  * cadastrar no banco. Ela pula a escolha de produto e de preço e vai direto
  * para o agendamento.
  */
-type ModeloId = "padrao" | "abre" | "fecha" | "destaque" | "novo";
+type ModeloId = "padrao" | "abre" | "fecha" | "destaque" | "vermelho" | "novo";
 
 function GruposPage() {
   const { aba: abaInicial } = Route.useSearch();
@@ -782,7 +782,13 @@ const MODELOS: {
   desc: string;
   layout: LayoutCriativo;
   titulo?: string;
+  /** Sugestão do campo de texto livre. Ter isto é o que faz o campo aparecer. */
   subtituloPadrao?: string;
+  /** Como o campo se chama e onde o texto sai — muda de modelo para modelo:
+   *  num é intervalo de dias na pílula, no outro é validade, no outro é o
+   *  aviso da tarja preta. */
+  rotuloData?: string;
+  dicaData?: string;
 }[] = [
   {
     id: "padrao", nome: "Padrão", layout: "azul",
@@ -798,7 +804,16 @@ const MODELOS: {
   },
   {
     id: "destaque", nome: "Destaque", layout: "destaque", subtituloPadrao: "00/00",
-    desc: "Preço grande no meio, farmácia e validade no rodapé.",
+    desc: "Preço no canto, farmácia e validade no rodapé.",
+    rotuloData: "Validade na arte",
+    dicaData: "aparece no rodapé, depois de “Oferta válida até”",
+  },
+  {
+    id: "vermelho", nome: "Vermelho", layout: "vermelho",
+    subtituloPadrao: "OFERTA VÁLIDA ATÉ 00/00",
+    desc: "Farmácia no topo, preço embaixo e aviso na tarja preta.",
+    rotuloData: "Aviso do rodapé",
+    dicaData: "texto livre — cabe restrição de unidade e validade",
   },
 ];
 
@@ -1164,7 +1179,7 @@ function PassoCriativo({
         {modeloAtual?.subtituloPadrao && (
           <div className="mt-5 flex items-center gap-3 flex-wrap">
             <label className="text-sm font-medium text-zinc-700">
-              {modelo === "destaque" ? "Validade na arte" : "Datas na arte"}
+              {modeloAtual.rotuloData ?? "Datas na arte"}
             </label>
             <input
               value={subtitulo}
@@ -1173,9 +1188,7 @@ function PassoCriativo({
               className="px-3 py-1.5 rounded-lg border border-zinc-200 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-brand/30"
             />
             <span className="text-xs text-zinc-400">
-              {modelo === "destaque"
-                ? "aparece no rodapé, depois de “Oferta válida até”"
-                : "aparece na pílula branca embaixo da faixa"}
+              {modeloAtual.dicaData ?? "aparece na pílula branca embaixo da faixa"}
             </span>
           </div>
         )}
