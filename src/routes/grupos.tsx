@@ -5,12 +5,14 @@ import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
   ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine, Download,
-  MessageSquareText, RotateCcw, Upload, ImagePlus, TriangleAlert,
+  MessageSquareText, RotateCcw, Upload, ImagePlus, TriangleAlert, Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
 import { CriativoCard, type CriativoDados, type LayoutCriativo } from "@/components/CriativoCard";
+import { EditorCriativoModal } from "@/components/EditorCriativoModal";
+import { pecasAjustadas, type AjustesCriativo } from "@/lib/ajustesCriativo";
 import { exportarCriativoPng, comprimirParaEnvio, baixarCriativos } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
@@ -853,6 +855,10 @@ function PassoCriativo({
   const [dePor, setDePor] = useState<Set<number>>(new Set());
   const [precosDe, setPrecosDe] = useState<Record<number, string>>({});
   const [subtitulo, setSubtitulo] = useState("");
+  // Ajuste fino da arte, por produto — o que a tela de edição ampliada devolve.
+  const [ajustes, setAjustes] = useState<Record<number, AjustesCriativo>>({});
+  // Produto com a tela de edição aberta; null = fechada.
+  const [editando, setEditando] = useState<number | null>(null);
   // null = não está baixando; número = quantos PNGs já saíram
   const [baixando, setBaixando] = useState<number | null>(null);
 
@@ -1011,6 +1017,10 @@ function PassoCriativo({
   // Ao trocar de modelo, sugere as datas daquele modelo (o gestor pode editar)
   useEffect(() => {
     if (modeloAtual?.subtituloPadrao && !subtitulo) setSubtitulo(modeloAtual.subtituloPadrao);
+    // Cada modelo põe as peças em lugares diferentes: o deslocamento que
+    // ajeitava o preço do Vermelho joga o do Banner para fora da arte.
+    setAjustes({});
+    setEditando(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelo]);
 
@@ -1049,6 +1059,9 @@ function PassoCriativo({
       localizacao:   nomeVisivel(farmacia),
       titulo:        modeloAtual?.titulo,
       subtitulo,
+      // Vai junto para o PNG e para o disparo: quem exporta renderiza este
+      // mesmo componente, então o ajuste não precisa ser aplicado duas vezes.
+      ajustes:       ajustes[produto.id],
     };
   }
 
@@ -1401,6 +1414,7 @@ function PassoCriativo({
               <p className="text-sm font-semibold text-zinc-900">Prévia</p>
               <p className="text-[11px] text-zinc-500 mt-0.5">
                 {selecionados.length} criativo(s) — é assim que vai chegar no grupo.
+                Clique em <strong>Ajustar</strong> para mexer nas peças da arte.
               </p>
             </div>
 
@@ -1427,11 +1441,31 @@ function PassoCriativo({
             </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 mt-4">
-            {selecionados.map((p) => (
-              <div key={p.id} style={{ containerType: "inline-size" }}>
-                <CriativoCard {...dadosCriativo(p)} />
-              </div>
-            ))}
+            {selecionados.map((p) => {
+              const mexido = pecasAjustadas(ajustes[p.id]) > 0;
+              return (
+                <div key={p.id} className="relative group" style={{ containerType: "inline-size" }}>
+                  <CriativoCard {...dadosCriativo(p)} />
+
+                  {/* Abrir a arte em tela grande: nesta miniatura de 200px não
+                      dá para acertar posição de nada no olho. */}
+                  <button
+                    type="button"
+                    onClick={() => setEditando(p.id)}
+                    className="absolute top-1.5 right-1.5 flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/95 text-zinc-700 text-[11px] font-semibold shadow-sm ring-1 ring-black/5 hover:bg-white transition"
+                    title="Abrir em tela cheia para mover e redimensionar as peças"
+                  >
+                    <Maximize2 className="size-3.5" /> Ajustar
+                  </button>
+
+                  {mexido && (
+                    <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-semibold">
+                      arte ajustada
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1449,6 +1483,23 @@ function PassoCriativo({
           </button>
         }
       />
+
+      {editando !== null && (() => {
+        const produto = selecionados.find((p) => p.id === editando);
+        if (!produto) return null;
+        return (
+          <EditorCriativoModal
+            dados={dadosCriativo(produto)}
+            titulo={produto.nome}
+            onFechar={() => setEditando(null)}
+            onSalvar={(novos) => {
+              setAjustes((atual) => ({ ...atual, [produto.id]: novos }));
+              setEditando(null);
+              toast.success("Arte ajustada.");
+            }}
+          />
+        );
+      })()}
 
       {agendando && (
         <ModalAgendamento

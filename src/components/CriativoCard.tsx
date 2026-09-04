@@ -1,4 +1,11 @@
+import { createContext, useContext, useMemo, useRef } from "react";
 import { ImageIcon, ShoppingCart, CalendarDays } from "lucide-react";
+import {
+  AJUSTE_ZERO, ajusteNeutro,
+  type AjusteElemento, type AjustesCriativo, type AlvoCriativo,
+} from "@/lib/ajustesCriativo";
+
+export type { AjusteElemento, AjustesCriativo, AlvoCriativo };
 
 // Layout = o design (elementos). Enquadramento = a proporção (formato).
 export type LayoutCriativo = "azul" | "banner" | "destaque" | "vermelho";
@@ -9,6 +16,14 @@ const ASPECTO: Record<Enquadramento, string> = {
   "1:1":  "aspect-square",
   "9:16": "aspect-[9/16]",
 };
+
+/** Ligada só pela tela de edição: seleção, contorno e arrasto dos elementos. */
+export interface EdicaoCriativo {
+  selecionado: AlvoCriativo | null;
+  onSelecionar: (alvo: AlvoCriativo) => void;
+  /** Deltas já convertidos para % da largura do criativo. */
+  onMover: (alvo: AlvoCriativo, dx: number, dy: number) => void;
+}
 
 export interface CriativoDados {
   nome: string;
@@ -21,6 +36,8 @@ export interface CriativoDados {
   enquadramento: Enquadramento;
   titulo?: string;          // título do topo (layout banner) — ex: "FECHA MÊS"
   subtitulo?: string;       // datas/subtítulo (layout banner) — ex: "DIAS 29 A 31"
+  /** Ajuste fino feito na tela de edição. Ausente = arte no lugar padrão. */
+  ajustes?: AjustesCriativo;
 }
 
 /**
@@ -88,10 +105,137 @@ function tamanhoQueCabe(
   return Math.min(maxCqw, utilCqw / em);
 }
 
-function Imagem({ imagem, nome, className }: { imagem?: string | null; nome: string; className?: string }) {
+function Imagem({ imagem, nome, className, style }: {
+  imagem?: string | null;
+  nome: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return imagem
-    ? <img src={imagem} alt={nome} className={className} />
-    : <div className={`grid place-items-center bg-zinc-100 ${className}`}><ImageIcon className="size-8 text-zinc-300" /></div>;
+    ? <img src={imagem} alt={nome} className={className} style={style} />
+    : <div className={`grid place-items-center bg-zinc-100 ${className}`} style={style}><ImageIcon className="size-8 text-zinc-300" /></div>;
+}
+
+// ── Ajuste fino: contexto, arrasto e os invólucros que movem cada peça ────────
+//
+// Os modelos não sabem que existe edição: eles só trocam o `<div absolute>` de
+// cada bloco por `<Movivel alvo="...">`. O que move o bloco é uma transform em
+// `cqw`, pela mesma razão de todo o resto do arquivo ser em cqw — a preview de
+// 235px e o PNG de 1080px têm de ser a mesma arte.
+
+const CtxCriativo = createContext<{
+  ajustes: AjustesCriativo;
+  edicao?: EdicaoCriativo;
+  /** Largura do card em px, lida na hora do arrasto (preview e export diferem). */
+  largura: () => number;
+} | null>(null);
+
+function useAjuste(alvo: AlvoCriativo): AjusteElemento {
+  return useContext(CtxCriativo)?.ajustes[alvo] ?? AJUSTE_ZERO;
+}
+
+/** `undefined` quando a peça está no lugar padrão — sem transform à toa. */
+function transformDe(a: AjusteElemento): string | undefined {
+  if (ajusteNeutro(a)) return undefined;
+  return `translate(${a.x}cqw, ${a.y}cqw) scale(${a.escala})`;
+}
+
+/**
+ * Seleção + arrasto de uma peça. Fora da tela de edição devolve objeto vazio,
+ * e o criativo sai exatamente como antes.
+ *
+ * O contorno é o ÚNICO lugar do arquivo com px: ele é interface da edição, não
+ * desenho — não entra no PNG, e em cqw ficaria grosso demais na tela grande.
+ */
+function useEdicao(alvo: AlvoCriativo): {
+  style?: React.CSSProperties;
+  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
+} {
+  const ctx = useContext(CtxCriativo);
+  const ed = ctx?.edicao;
+  if (!ctx || !ed) return {};
+
+  const selecionado = ed.selecionado === alvo;
+  return {
+    style: {
+      cursor: "move",
+      touchAction: "none",
+      // Tracejado azul-claro na peça ociosa: é a única cor que aparece tanto
+      // sobre foto clara quanto sobre as caixas vermelhas e azuis dos modelos.
+      outline: selecionado ? "2px solid var(--brand)" : "1px dashed rgba(56, 189, 248, 0.9)",
+      outlineOffset: "1px",
+    },
+    onPointerDown: (e) => {
+      // Sem isto, arrastar o preço também arrastaria a foto que está atrás.
+      e.stopPropagation();
+      e.preventDefault();
+      ed.onSelecionar(alvo);
+
+      const largura = ctx.largura();
+      if (!largura) return;
+
+      const el = e.currentTarget;
+      el.setPointerCapture(e.pointerId);
+      let ultimoX = e.clientX;
+      let ultimoY = e.clientY;
+
+      const mover = (ev: PointerEvent) => {
+        ed.onMover(alvo, ((ev.clientX - ultimoX) / largura) * 100, ((ev.clientY - ultimoY) / largura) * 100);
+        ultimoX = ev.clientX;
+        ultimoY = ev.clientY;
+      };
+      const soltar = () => {
+        el.removeEventListener("pointermove", mover);
+        el.removeEventListener("pointerup", soltar);
+        el.removeEventListener("pointercancel", soltar);
+      };
+      el.addEventListener("pointermove", mover);
+      el.addEventListener("pointerup", soltar);
+      el.addEventListener("pointercancel", soltar);
+    },
+  };
+}
+
+/** Bloco do desenho que o gestor pode empurrar e redimensionar. */
+function Movivel({ alvo, className, style, children }: {
+  alvo: AlvoCriativo;
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  const ajuste = useAjuste(alvo);
+  const edicao = useEdicao(alvo);
+  return (
+    <div
+      className={className}
+      style={{ ...style, transform: transformDe(ajuste), ...edicao.style }}
+      onPointerDown={edicao.onPointerDown}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Foto do produto ocupando o criativo inteiro.
+ *
+ * Aqui a transform vai na <img>, e não no quadro: o quadro é o recorte e tem de
+ * ficar parado, senão empurrar a foto deixaria uma faixa vazia na borda. Com
+ * escala abaixo de 1 o produto encolhe dentro do criativo e o que sobra é
+ * branco — é justamente o que se quer quando a foto é maior que a arte.
+ */
+function Foto({ imagem, nome }: { imagem?: string | null; nome: string }) {
+  const ajuste = useAjuste("foto");
+  const edicao = useEdicao("foto");
+  return (
+    <div
+      className="absolute inset-0 overflow-hidden bg-white"
+      style={edicao.style}
+      onPointerDown={edicao.onPointerDown}
+    >
+      <Imagem imagem={imagem} nome={nome} className="size-full object-cover" style={{ transform: transformDe(ajuste) }} />
+    </div>
+  );
 }
 
 // ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
@@ -102,10 +246,10 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
   const tamanho = tamanhoQueCabe(valorPreco(preco), 0.60, 35, 17.5);
   return (
     <>
-      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+      <Foto imagem={imagem} nome={nome} />
 
       {/* Título (faixa azul no topo) */}
-      <div className="absolute top-[3.5%] left-[5%] right-[5%]">
+      <Movivel alvo="titulo" className="absolute top-[3.5%] left-[5%] right-[5%]">
         <div className="rounded-full py-[2.5%] px-[4%] text-center"
              style={{ background: NAVY, border: "0.85cqw solid #fff", boxShadow: "0 1.1cqw 3.3cqw rgba(0,0,0,.18)" }}>
           <span className="block text-white font-black uppercase leading-none tracking-tight"
@@ -113,10 +257,10 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
             {titulo || "FECHA MÊS"}
           </span>
         </div>
-      </div>
+      </Movivel>
 
       {/* Subtítulo / datas (pílula branca) */}
-      <div className="absolute top-[15%] left-[15%] right-[15%]">
+      <Movivel alvo="subtitulo" className="absolute top-[15%] left-[15%] right-[15%]">
         <div className="rounded-full py-[1.4%] px-[3%] text-center bg-white"
              style={{ boxShadow: "0 0.8cqw 2.2cqw rgba(0,0,0,.14)" }}>
           <span className="block font-black uppercase leading-none tracking-tight"
@@ -124,10 +268,10 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
             {subtitulo || "DIAS 00 A 00"}
           </span>
         </div>
-      </div>
+      </Movivel>
 
       {/* Preço (bloco embaixo-direita) */}
-      <div className="absolute bottom-[3.5%] right-[3.5%] w-[38%] flex flex-col items-center">
+      <Movivel alvo="preco" className="absolute bottom-[3.5%] right-[3.5%] w-[38%] flex flex-col items-center">
         <div className="rounded-full px-[7%] py-[1.6%] relative z-10"
              style={{ background: NAVY, border: "0.55cqw solid #fff", marginBottom: "-4%" }}>
           <span className="block text-white font-black uppercase leading-none"
@@ -148,7 +292,7 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
             {valorPreco(preco)}
           </span>
         </div>
-      </div>
+      </Movivel>
 
       {/* Rodapé vermelho/azul */}
       <div className="absolute bottom-0 left-0 right-0 flex" style={{ height: "1.6%" }}>
@@ -270,20 +414,20 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
 
   return (
     <>
-      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+      <Foto imagem={imagem} nome={nome} />
 
       {/* Preço no canto de cima — mesma posição, largura e caixa do modelo
           Padrão, de propósito: os dois modelos mostram o preço no mesmo lugar,
           e quem edita um espera achar o outro igual. */}
-      <div className="absolute top-[3.5%] left-[4%] w-[58%]">
+      <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
         <div className="px-[4%] py-[3%] text-center" style={estiloAzul}>
           <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
         </div>
-      </div>
+      </Movivel>
 
       {/* O rodapé é o que sobra do modelo: farmácia, arco e validade. Sem a
           caixa de preço aqui, a foto fica livre do meio para cima. */}
-      <div className="absolute inset-x-0 bottom-0">
+      <Movivel alvo="rodape" className="absolute inset-x-0 bottom-0">
         {/* Véu: o rodapé encosta na foto sem corte seco */}
         <div
           className="absolute bottom-full inset-x-0"
@@ -343,7 +487,7 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
             <TracoAmarelo altura="0.6cqw" />
           </div>
         )}
-      </div>
+      </Movivel>
     </>
   );
 }
@@ -375,10 +519,10 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }
 
   return (
     <>
-      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+      <Foto imagem={imagem} nome={nome} />
 
       {/* Farmácia — faixa do topo */}
-      <div className="absolute top-[4%] left-[13%] right-[13%]">
+      <Movivel alvo="titulo" className="absolute top-[4%] left-[13%] right-[13%]">
         <div className="px-[4%] py-[2.4%] text-center" style={estiloVermelho}>
           {linhaTopo && (
             <span
@@ -395,10 +539,10 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }
             {linhaNome}
           </span>
         </div>
-      </div>
+      </Movivel>
 
       {/* Preço — caixa de baixo. Sobe quando há tarja, para não encostar nela. */}
-      <div className="absolute left-[16%] right-[16%]" style={{ bottom: aviso ? "9%" : "4%" }}>
+      <Movivel alvo="preco" className="absolute left-[16%] right-[16%]" style={{ bottom: aviso ? "9%" : "4%" }}>
         <div className="px-[5%] py-[2%] text-center" style={estiloVermelho}>
           {precoDe && (
             <span
@@ -415,18 +559,18 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }
             POR R${valorPreco(preco)}
           </span>
         </div>
-      </div>
+      </Movivel>
 
       {/* Aviso — tarja preta no pé. Sem texto, a tarja não sai. */}
       {aviso && (
-        <div className="absolute bottom-0 inset-x-0 bg-black px-[4%] py-[1.3%]">
+        <Movivel alvo="rodape" className="absolute bottom-0 inset-x-0 bg-black px-[4%] py-[1.3%]">
           <span
             className="block text-white font-bold uppercase leading-tight text-center"
             style={{ fontSize: "2.8cqw" }}
           >
             {aviso}
           </span>
-        </div>
+        </Movivel>
       )}
     </>
   );
@@ -437,27 +581,27 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados
   const farmacia = localizacao || "Sua Farmácia";
   return (
     <>
-      <Imagem imagem={imagem} nome={nome} className="absolute inset-0 size-full object-cover" />
+      <Foto imagem={imagem} nome={nome} />
 
       {/* Caixa de preço no topo — a MESMA do modelo Destaque (BlocoPreco).
           Cresceu de 52% para 58% do card porque o valor agora é grande: na
           largura antiga, preço de quatro dígitos encolhia até ficar ilegível.
           O `utilCqw` acompanha esse 58% menos o px-[4%] de cada lado. */}
-      <div className="absolute top-[3.5%] left-[4%] w-[58%]">
+      <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
         <div className="px-[4%] py-[3%] text-center" style={estiloAzul}>
           <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
         </div>
-      </div>
+      </Movivel>
 
       {/* Barra inferior: farmácia */}
-      <div className="absolute bottom-[3%] left-[6%] right-[6%]">
+      <Movivel alvo="rodape" className="absolute bottom-[3%] left-[6%] right-[6%]">
         <div className="flex items-center justify-center px-[5%] py-[2.8%]" style={estiloAzul}>
           <span className="text-white font-black uppercase leading-tight tracking-tight break-words text-center"
                 style={{ fontSize: "5.4cqw" }}>
             {farmacia}
           </span>
         </div>
-      </div>
+      </Movivel>
     </>
   );
 }
@@ -465,21 +609,37 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados
 /**
  * Criativo de oferta. `layout` define o design (azul | banner) e
  * `enquadramento` define a proporção (4:5 | 1:1 | 9:16).
+ *
+ * `edicao` só é passada pela tela de ajuste fino; a prévia, a miniatura e o
+ * export renderizam o mesmo componente sem ela.
  */
-export function CriativoCard(props: CriativoDados) {
+export function CriativoCard(props: CriativoDados & { edicao?: EdicaoCriativo }) {
+  const raiz = useRef<HTMLDivElement>(null);
+  const ctx = useMemo(
+    () => ({
+      ajustes: props.ajustes ?? {},
+      edicao: props.edicao,
+      largura: () => raiz.current?.getBoundingClientRect().width ?? 0,
+    }),
+    [props.ajustes, props.edicao],
+  );
+
   return (
-    <div
-      className={`relative w-full ${ASPECTO[props.enquadramento]} rounded-xl overflow-hidden bg-zinc-200`}
-      style={{ containerType: "inline-size" }}
-    >
-      {props.layout === "banner"
-        ? <ModeloBanner {...props} />
-        : props.layout === "destaque"
-          ? <ModeloDestaque {...props} />
-          : props.layout === "vermelho"
-            ? <ModeloVermelho {...props} />
-            : <ModeloAzul {...props} />}
-    </div>
+    <CtxCriativo.Provider value={ctx}>
+      <div
+        ref={raiz}
+        className={`relative w-full ${ASPECTO[props.enquadramento]} rounded-xl overflow-hidden bg-zinc-200`}
+        style={{ containerType: "inline-size" }}
+      >
+        {props.layout === "banner"
+          ? <ModeloBanner {...props} />
+          : props.layout === "destaque"
+            ? <ModeloDestaque {...props} />
+            : props.layout === "vermelho"
+              ? <ModeloVermelho {...props} />
+              : <ModeloAzul {...props} />}
+      </div>
+    </CtxCriativo.Provider>
   );
 }
 
