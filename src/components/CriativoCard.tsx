@@ -36,6 +36,8 @@ export interface CriativoDados {
   enquadramento: Enquadramento;
   titulo?: string;          // título do topo (layout banner) — ex: "FECHA MÊS"
   subtitulo?: string;       // datas/subtítulo (layout banner) — ex: "DIAS 29 A 31"
+  /** Cor da marca da arte. Ausente = azul, que é como todo modelo nasceu. */
+  paleta?: Paleta;
   /** Ajuste fino feito na tela de edição. Ausente = arte no lugar padrão. */
   ajustes?: AjustesCriativo;
 }
@@ -55,21 +57,69 @@ export interface CriativoDados {
  * PNG de 1080px são a mesma arte em escalas diferentes.
  */
 
-// ── Azul da referência (modelos 1 e 2, com brilho) ────────────────────────────
-const AZUL_GRADIENTE = "linear-gradient(180deg, #3f74dd 0%, #0a2c78 100%)";
-const AZUL_BORDA = "0.6cqw solid rgba(205, 226, 255, 0.95)";
-const AZUL_BRILHO = "0 0 5cqw rgba(90, 150, 255, 0.75), inset 0 0.3cqw 0 rgba(255,255,255,0.28)";
+// ── Paleta: a cor da marca da arte ────────────────────────────────────────────
+//
+// A cor deixou de ser propriedade do MODELO e virou um interruptor à parte:
+// farmácia de marca vermelha quer o modelo Padrão em vermelho, e o layout não
+// tem nada a ver com isso. Cada modelo continua com a FORMA dele (raio, largura
+// de borda, onde cada caixa fica) e pega daqui só as cores.
+//
+// `apoio` é a cor que faz par com a principal — o Banner usa as duas ao mesmo
+// tempo (faixa numa, preço na outra), então elas trocam de papel juntas.
+export type Paleta = "azul" | "vermelho";
 
-const estiloAzul: React.CSSProperties = {
-  background: AZUL_GRADIENTE,
-  border: AZUL_BORDA,
-  boxShadow: AZUL_BRILHO,
-  borderRadius: "10cqw",
+interface Tinta {
+  /** Gradiente das caixas de preço/farmácia. */
+  gradiente: string;
+  /** Cor da borda dessas caixas. */
+  borda: string;
+  /** Halo colorido em volta delas. */
+  brilho: string;
+  /** Chapado escuro do rodapé (modelo Destaque). */
+  chapado: string;
+  /** O mesmo chapado em r,g,b — o véu do rodapé precisa dele com alfa. */
+  chapadoRgb: string;
+  /** Chapado médio das faixas do Banner. */
+  faixa: string;
+  /** Cor de contraste: o bloco de preço do Banner sai nela. */
+  apoio: string;
+}
+
+const TINTAS: Record<Paleta, Tinta> = {
+  azul: {
+    gradiente:  "linear-gradient(180deg, #3f74dd 0%, #0a2c78 100%)",
+    borda:      "rgba(205, 226, 255, 0.95)",
+    brilho:     "rgba(90, 150, 255, 0.75)",
+    chapado:    "#0a2c78",
+    chapadoRgb: "10, 44, 120",
+    faixa:      "#1f3f9e",
+    apoio:      "#d61f27",
+  },
+  vermelho: {
+    gradiente:  "linear-gradient(180deg, #f2353c 0%, #cf1a22 100%)",
+    borda:      "#ffffff",
+    brilho:     "rgba(242, 60, 68, 0.65)",
+    chapado:    "#8f1015",
+    chapadoRgb: "143, 16, 21",
+    faixa:      "#d61f27",
+    apoio:      "#1f3f9e",
+  },
 };
 
-// ── Cores do Modelo 3 (Banner Oferta) ─────────────────────────────────────────
-const NAVY = "#1f3f9e";
-const VERM = "#d61f27";
+const tintaDe = (paleta?: Paleta): Tinta => TINTAS[paleta ?? "azul"];
+
+/**
+ * Caixa de preço/farmácia na cor da paleta. `raio` e `borda` são a forma, e
+ * cada modelo passa a sua: o Padrão usa pílula bem redonda, o Tarja não.
+ */
+function caixa(tinta: Tinta, raio: string, borda: string): React.CSSProperties {
+  return {
+    background: tinta.gradiente,
+    border: `${borda} solid ${tinta.borda}`,
+    boxShadow: `0 0 5cqw ${tinta.brilho}, inset 0 0.3cqw 0 rgba(255,255,255,0.28)`,
+    borderRadius: raio,
+  };
+}
 
 // Mostra só o valor (sem "R$"); vazio vira "0,00"
 function valorPreco(preco: string): string {
@@ -239,19 +289,20 @@ function Foto({ imagem, nome }: { imagem?: string | null; nome: string }) {
 }
 
 // ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
-function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: CriativoDados) {
-  // Caixa vermelha: bloco de 38% do card, menos o px-[4%] dos dois lados.
+function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo, paleta }: CriativoDados) {
+  // Caixa do preço: bloco de 38% do card, menos o px-[4%] dos dois lados.
   // Os três números andam juntos com o w-[38%] lá embaixo: encolher a caixa sem
   // baixar `utilCqw` e `maxCqw` faz o preço transbordar de novo.
   const tamanho = tamanhoQueCabe(valorPreco(preco), 0.60, 35, 17.5);
+  const tinta = tintaDe(paleta);
   return (
     <>
       <Foto imagem={imagem} nome={nome} />
 
-      {/* Título (faixa azul no topo) */}
+      {/* Título (faixa no topo, na cor principal) */}
       <Movivel alvo="titulo" className="absolute top-[3.5%] left-[5%] right-[5%]">
         <div className="rounded-full py-[2.5%] px-[4%] text-center"
-             style={{ background: NAVY, border: "0.85cqw solid #fff", boxShadow: "0 1.1cqw 3.3cqw rgba(0,0,0,.18)" }}>
+             style={{ background: tinta.faixa, border: "0.85cqw solid #fff", boxShadow: "0 1.1cqw 3.3cqw rgba(0,0,0,.18)" }}>
           <span className="block text-white font-black uppercase leading-none tracking-tight"
                 style={{ fontSize: "13cqw" }}>
             {titulo || "FECHA MÊS"}
@@ -264,7 +315,7 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
         <div className="rounded-full py-[1.4%] px-[3%] text-center bg-white"
              style={{ boxShadow: "0 0.8cqw 2.2cqw rgba(0,0,0,.14)" }}>
           <span className="block font-black uppercase leading-none tracking-tight"
-                style={{ color: VERM, fontSize: "6cqw" }}>
+                style={{ color: tinta.apoio, fontSize: "6cqw" }}>
             {subtitulo || "DIAS 00 A 00"}
           </span>
         </div>
@@ -273,13 +324,13 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
       {/* Preço (bloco embaixo-direita) */}
       <Movivel alvo="preco" className="absolute bottom-[3.5%] right-[3.5%] w-[38%] flex flex-col items-center">
         <div className="rounded-full px-[7%] py-[1.6%] relative z-10"
-             style={{ background: NAVY, border: "0.55cqw solid #fff", marginBottom: "-4%" }}>
+             style={{ background: tinta.faixa, border: "0.55cqw solid #fff", marginBottom: "-4%" }}>
           <span className="block text-white font-black uppercase leading-none"
                 style={{ fontSize: "4.2cqw" }}>
             POR APENAS
           </span>
         </div>
-        <div className="w-full px-[4%] pt-[7%] pb-[4%] text-center" style={{ background: VERM, borderRadius: "5cqw" }}>
+        <div className="w-full px-[4%] pt-[7%] pb-[4%] text-center" style={{ background: tinta.apoio, borderRadius: "5cqw" }}>
           {precoDe && (
             <span className="block text-white font-bold uppercase leading-none line-through"
                   style={{ fontSize: "3.8cqw", opacity: 0.9, marginBottom: "1.5%" }}>
@@ -294,10 +345,10 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
         </div>
       </Movivel>
 
-      {/* Rodapé vermelho/azul */}
+      {/* Rodapé nas duas cores da paleta */}
       <div className="absolute bottom-0 left-0 right-0 flex" style={{ height: "1.6%" }}>
-        <div className="w-1/2" style={{ background: VERM }} />
-        <div className="w-1/2" style={{ background: NAVY }} />
+        <div className="w-1/2" style={{ background: tinta.apoio }} />
+        <div className="w-1/2" style={{ background: tinta.faixa }} />
       </div>
     </>
   );
@@ -312,8 +363,9 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo }: Criat
 // (proporcionais à largura). Com `bottom` fixo, trocar o enquadramento de 4:5
 // para 9:16 abriria um buraco entre o preço e a farmácia — empilhado, o
 // espaçamento acompanha a arte em qualquer proporção.
+// O amarelo não entra na paleta: ele é o acento que separa o rodapé da foto, e
+// vai bem tanto sobre o azul quanto sobre o vermelho.
 const AMARELO = "#ffd200";
-const AZUL_FUNDO = "#0a2c78";
 
 /** O "- - -" amarelo que ladeia os textos do rodapé. */
 function TracoAmarelo({ altura = "0.7cqw" }: { altura?: string }) {
@@ -405,12 +457,13 @@ function duasLinhas(localizacao?: string): { topo: string; nome: string } {
     : { topo: "", nome: farmacia };
 }
 
-function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }: CriativoDados) {
+function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo, paleta }: CriativoDados) {
   const { topo: linhaTopo, nome: linhaNome } = duasLinhas(localizacao);
   // Nome comprido tem de encolher, senão vaza a largura do card.
   const fonteNome = Math.min(6.6, 66 / Math.max(linhaNome.length, 7));
 
   const validade = (subtitulo || "").trim();
+  const tinta = tintaDe(paleta);
 
   return (
     <>
@@ -420,7 +473,7 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
           Padrão, de propósito: os dois modelos mostram o preço no mesmo lugar,
           e quem edita um espera achar o outro igual. */}
       <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
-        <div className="px-[4%] py-[3%] text-center" style={estiloAzul}>
+        <div className="px-[4%] py-[3%] text-center" style={caixa(tinta, "10cqw", "0.6cqw")}>
           <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
         </div>
       </Movivel>
@@ -431,11 +484,14 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
         {/* Véu: o rodapé encosta na foto sem corte seco */}
         <div
           className="absolute bottom-full inset-x-0"
-          style={{ height: "16cqw", background: "linear-gradient(180deg, rgba(10,44,120,0) 0%, rgba(10,44,120,.8) 100%)" }}
+          style={{
+            height: "16cqw",
+            background: `linear-gradient(180deg, rgba(${tinta.chapadoRgb},0) 0%, rgba(${tinta.chapadoRgb},.8) 100%)`,
+          }}
         />
 
         {/* Farmácia */}
-        <div className="px-[7%] pt-[3.5%] pb-[3%]" style={{ background: AZUL_FUNDO }}>
+        <div className="px-[7%] pt-[3.5%] pb-[3%]" style={{ background: tinta.chapado }}>
           {linhaTopo && (
             <div className="flex items-center gap-[3%]">
               <TracoAmarelo />
@@ -470,7 +526,7 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
         {validade && (
           <div
             className="flex items-center justify-center gap-[2.5%] px-[6%] py-[1.5%]"
-            style={{ background: AZUL_FUNDO }}
+            style={{ background: tinta.chapado }}
           >
             <TracoAmarelo altura="0.6cqw" />
             <CalendarDays
@@ -492,30 +548,26 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo }
   );
 }
 
-// ── Modelo 5: Vermelho ───────────────────────────────────────────────────────
-// Faixa vermelha com a farmácia no topo, foto ocupando o miolo, preço numa
-// caixa vermelha embaixo e uma tarja preta com o aviso da oferta no pé.
+// ── Modelo 5: Tarja ──────────────────────────────────────────────────────────
+// Faixa com a farmácia no topo, foto ocupando o miolo, preço numa caixa embaixo
+// e uma tarja preta com o aviso da oferta no pé. Nasceu como "vermelho" e é por
+// isso que o `layout` ainda se chama assim — a cor agora vem da paleta, e o id
+// é lido de campanha salva no navegador, então renomeá-lo quebraria rascunho
+// antigo por nada.
 //
 // Ao contrário do Destaque, o preço aqui é UMA linha ("POR R$14,99"): é o que a
 // arte de referência faz, e caixa larga e baixa não comporta valor gigante com
 // centavos elevados sem estourar a altura.
-const VERMELHO_GRADIENTE = "linear-gradient(180deg, #f2353c 0%, #cf1a22 100%)";
-const VERMELHO_BRILHO = "0 0 5cqw rgba(242, 60, 68, 0.65), inset 0 0.3cqw 0 rgba(255,255,255,0.25)";
-
-const estiloVermelho: React.CSSProperties = {
-  background: VERMELHO_GRADIENTE,
-  border: "0.7cqw solid #fff",
-  boxShadow: VERMELHO_BRILHO,
-  borderRadius: "4.5cqw",
-};
-
-function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }: CriativoDados) {
+function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo, paleta }: CriativoDados) {
   const { topo: linhaTopo, nome: linhaNome } = duasLinhas(localizacao);
   // Nome comprido encolhe; o teto é o tamanho da arte de referência.
   const fonteNome = Math.min(7.2, 72 / Math.max(linhaNome.length, 9));
   // Caixa de 68% do card menos o px-[5%] dela; o prefixo é o "POR R$" inteiro.
   const tamanho = tamanhoQueCabe(valorPreco(preco), 3.6, 58, 9);
   const aviso = (subtitulo || "").trim();
+  // A tarja preta e a borda branca ficam: são a assinatura do modelo, e é a
+  // caixa por baixo delas que muda de cor.
+  const estiloCaixa = caixa(tintaDe(paleta), "4.5cqw", "0.7cqw");
 
   return (
     <>
@@ -523,7 +575,7 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }
 
       {/* Farmácia — faixa do topo */}
       <Movivel alvo="titulo" className="absolute top-[4%] left-[13%] right-[13%]">
-        <div className="px-[4%] py-[2.4%] text-center" style={estiloVermelho}>
+        <div className="px-[4%] py-[2.4%] text-center" style={estiloCaixa}>
           {linhaTopo && (
             <span
               className="block text-white font-black uppercase leading-none tracking-tight"
@@ -543,7 +595,7 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }
 
       {/* Preço — caixa de baixo. Sobe quando há tarja, para não encostar nela. */}
       <Movivel alvo="preco" className="absolute left-[16%] right-[16%]" style={{ bottom: aviso ? "9%" : "4%" }}>
-        <div className="px-[5%] py-[2%] text-center" style={estiloVermelho}>
+        <div className="px-[5%] py-[2%] text-center" style={estiloCaixa}>
           {precoDe && (
             <span
               className="block text-white font-bold uppercase leading-none line-through"
@@ -576,9 +628,10 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo }
   );
 }
 
-// ── Modelos 1 e 2: foto + pílula de preço azul + barra da farmácia ────────────
-function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados) {
+// ── Modelos 1 e 2: foto + pílula de preço + barra da farmácia ─────────────────
+function ModeloAzul({ nome, preco, precoDe, imagem, localizacao, paleta }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
+  const estiloCaixa = caixa(tintaDe(paleta), "10cqw", "0.6cqw");
   return (
     <>
       <Foto imagem={imagem} nome={nome} />
@@ -588,14 +641,14 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao }: CriativoDados
           largura antiga, preço de quatro dígitos encolhia até ficar ilegível.
           O `utilCqw` acompanha esse 58% menos o px-[4%] de cada lado. */}
       <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
-        <div className="px-[4%] py-[3%] text-center" style={estiloAzul}>
+        <div className="px-[4%] py-[3%] text-center" style={estiloCaixa}>
           <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
         </div>
       </Movivel>
 
       {/* Barra inferior: farmácia */}
       <Movivel alvo="rodape" className="absolute bottom-[3%] left-[6%] right-[6%]">
-        <div className="flex items-center justify-center px-[5%] py-[2.8%]" style={estiloAzul}>
+        <div className="flex items-center justify-center px-[5%] py-[2.8%]" style={estiloCaixa}>
           <span className="text-white font-black uppercase leading-tight tracking-tight break-words text-center"
                 style={{ fontSize: "5.4cqw" }}>
             {farmacia}

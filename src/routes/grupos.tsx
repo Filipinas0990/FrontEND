@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
-import { CriativoCard, type CriativoDados, type LayoutCriativo } from "@/components/CriativoCard";
+import { CriativoCard, type CriativoDados, type LayoutCriativo, type Paleta } from "@/components/CriativoCard";
 import { EditorCriativoModal } from "@/components/EditorCriativoModal";
 import { pecasAjustadas, type AjustesCriativo } from "@/lib/ajustesCriativo";
 import { exportarCriativoPng, comprimirParaEnvio, baixarCriativos } from "@/lib/exportarCriativo";
@@ -811,13 +811,60 @@ const MODELOS: {
     dicaData: "aparece no rodapé, depois de “Oferta válida até”",
   },
   {
-    id: "vermelho", nome: "Vermelho", layout: "vermelho",
+    // "Tarja" e não "Vermelho": a cor virou um interruptor à parte, e modelo
+    // com nome de cor num seletor de cor é convite a erro. O id fica como está
+    // — é interno e não muda nada na tela.
+    id: "vermelho", nome: "Tarja", layout: "vermelho",
     subtituloPadrao: "OFERTA VÁLIDA ATÉ 00/00",
     desc: "Farmácia no topo, preço embaixo e aviso na tarja preta.",
     rotuloData: "Aviso do rodapé",
     dicaData: "texto livre — cabe restrição de unidade e validade",
   },
 ];
+
+/**
+ * Interruptor da cor da arte.
+ *
+ * Duas opções lado a lado em vez de um switch: com switch, qual cor está
+ * ligada depende de lembrar para que lado é o "sim". Aqui a cor escolhida está
+ * escrita, e a bolinha mostra o tom que vai sair na arte.
+ */
+const CORES_PALETA: { valor: Paleta; nome: string; amostra: string }[] = [
+  { valor: "azul",     nome: "Azul",     amostra: "linear-gradient(180deg,#3f74dd,#0a2c78)" },
+  { valor: "vermelho", nome: "Vermelho", amostra: "linear-gradient(180deg,#f2353c,#cf1a22)" },
+];
+
+function SeletorPaleta({ paleta, onEscolher }: { paleta: Paleta; onEscolher: (p: Paleta) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+        Cor da arte
+      </span>
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-100" role="group" aria-label="Cor da arte">
+        {CORES_PALETA.map((c) => {
+          const ativa = paleta === c.valor;
+          return (
+            <button
+              key={c.valor}
+              type="button"
+              onClick={() => onEscolher(c.valor)}
+              aria-pressed={ativa}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                ativa ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+              }`}
+            >
+              <span
+                className="size-3.5 rounded-full ring-1 ring-black/10"
+                style={{ background: c.amostra }}
+              />
+              {c.nome}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /** Uma arte que o gestor subiu pronta — vai para o grupo exatamente assim. */
 type ArquivoSubido = { id: string; nome: string; dataUrl: string };
@@ -855,6 +902,9 @@ function PassoCriativo({
   const [dePor, setDePor] = useState<Set<number>>(new Set());
   const [precosDe, setPrecosDe] = useState<Record<number, string>>({});
   const [subtitulo, setSubtitulo] = useState("");
+  // Cor da marca da arte. Vale para TODOS os modelos ao mesmo tempo: é a cor da
+  // farmácia, não do template — e é por isso que ela mora aqui e não no MODELOS.
+  const [paleta, setPaleta] = useState<Paleta>("azul");
   // Ajuste fino da arte, por produto — o que a tela de edição ampliada devolve.
   const [ajustes, setAjustes] = useState<Record<number, AjustesCriativo>>({});
   // Produto com a tela de edição aberta; null = fechada.
@@ -1059,6 +1109,7 @@ function PassoCriativo({
       localizacao:   nomeVisivel(farmacia),
       titulo:        modeloAtual?.titulo,
       subtitulo,
+      paleta,
       // Vai junto para o PNG e para o disparo: quem exporta renderiza este
       // mesmo componente, então o ajuste não precisa ser aplicado duas vezes.
       ajustes:       ajustes[produto.id],
@@ -1117,10 +1168,19 @@ function PassoCriativo({
     <div className="space-y-4">
       {/* Modelo */}
       <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-5">
-        <p className="text-sm font-semibold text-zinc-900">Modelo do criativo</p>
-        <p className="text-[11px] text-zinc-500 mt-0.5">
-          Vai para {grupos.length} grupo(s) de {nomeVisivel(farmacia)}.
-        </p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900">Modelo do criativo</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              Vai para {grupos.length} grupo(s) de {nomeVisivel(farmacia)}.
+            </p>
+          </div>
+
+          {/* Cor da arte. Fica aqui em cima, e não dentro de cada card, porque
+              é uma escolha só: ela vale para o modelo que o gestor acabar
+              escolhendo, e as miniaturas já mostram o resultado. */}
+          <SeletorPaleta paleta={paleta} onEscolher={setPaleta} />
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-5">
           {/* Arte pronta vem primeiro: quem já editou a peça fora não tem o que
@@ -1174,6 +1234,7 @@ function PassoCriativo({
                     localizacao={nomeVisivel(farmacia)}
                     titulo={m.titulo}
                     subtitulo={m.subtituloPadrao}
+                    paleta={paleta}
                   />
                 </div>
                 <div className="flex items-center justify-center gap-1.5 mt-4">
