@@ -1,17 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, Search, Check, Rocket, Loader2, ChevronLeft, ChevronRight,
   Megaphone, MousePointerClick, MessageCircle, Users, ShoppingCart,
   User, Instagram, Facebook, Layers, Globe, Newspaper, Square, Film, Calendar, LayoutGrid,
-  UploadCloud, CheckCircle2, ImageIcon, Wallet, Download, Plus, X,
+  UploadCloud, CheckCircle2, ImageIcon, Wallet, Download, Plus, X, RefreshCw, AlertCircle,
 } from "lucide-react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { CriativoCard, type LayoutCriativo, type Enquadramento } from "@/components/CriativoCard";
 import { exportarCriativoPng, baixarPng } from "@/lib/exportarCriativo";
+import { desde } from "@/lib/tempo";
+import { CHAVE_CONTAS, opcoesContas } from "@/lib/contasAnuncio";
 import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -131,12 +133,36 @@ function EtapaCliente({
 }) {
   const [busca, setBusca] = useState("");
   const [pagina, setPagina] = useState(1);
+  const [atualizando, setAtualizando] = useState(false);
+  const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["campanha-contas"],
-    queryFn: getContasAnuncio,
-  });
+  const { data, isLoading } = useQuery(opcoesContas());
   const contas = data?.contas ?? [];
+
+  // O servidor devolveu cache velho e foi atualizar por trás: daqui a pouco
+  // buscamos de novo para a tela pegar a lista nova sem o gestor fazer nada.
+  useEffect(() => {
+    if (!data?.sincronizando) return;
+    const t = setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: CHAVE_CONTAS });
+    }, 15_000);
+    return () => clearTimeout(t);
+  }, [data?.sincronizando, queryClient]);
+
+  /** Botão "Atualizar": ignora o cache do servidor e espera a Meta responder. */
+  async function atualizarContas() {
+    if (atualizando) return;
+    setAtualizando(true);
+    try {
+      const nova = await getContasAnuncio(true);
+      queryClient.setQueryData(CHAVE_CONTAS, nova);
+      toast.success(`${nova.contas.length} conta(s) sincronizada(s).`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível atualizar as contas.");
+    } finally {
+      setAtualizando(false);
+    }
+  }
 
   const b = busca.toLowerCase();
   const filtrados = contas.filter(
@@ -150,12 +176,48 @@ function EtapaCliente({
   const paginaAtual = Math.min(pagina, totalPaginas);
   const visiveis = filtrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
 
+  const idade = desde(data?.atualizadoEm ?? null);
+
   return (
     <div>
-      <h2 className="text-xl font-bold text-zinc-900">Em qual conta será subida a campanha?</h2>
-      <p className="text-sm text-zinc-500 mt-1 mb-5">
-        Selecione a conta de anúncios do cliente que receberá esta campanha de tráfego.
-      </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-zinc-900">Em qual conta será subida a campanha?</h2>
+          <p className="text-sm text-zinc-500 mt-1 mb-5">
+            Selecione a conta de anúncios do cliente que receberá esta campanha de tráfego.
+          </p>
+        </div>
+
+        {/* De quando é a lista + como buscar a de agora. A tela sai do cache do
+            servidor; sem este par, o gestor não teria como saber disso nem como
+            forçar a leitura depois de cadastrar uma conta no BM. */}
+        <div className="flex items-center gap-2 shrink-0">
+          {(idade || atualizando) && (
+            <span className="text-[11px] text-zinc-400">
+              {data?.sincronizando || atualizando ? "sincronizando..." : `lista de ${idade}`}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={atualizarContas}
+            disabled={isLoading || atualizando}
+            title="Buscar a lista atualizada na Meta (pode demorar alguns segundos)"
+            className="size-8 rounded-lg border border-zinc-200 grid place-items-center text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 transition"
+          >
+            <RefreshCw className={`size-4 ${isLoading || atualizando ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Cache antigo na tela porque o último sync com a Meta falhou */}
+      {data?.aviso && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex gap-2.5 items-start">
+          <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800">
+            Mostrando a última lista salva — a sincronização com a Meta falhou: {data.aviso}
+          </p>
+        </div>
+      )}
 
       {/* Busca */}
       <div className="relative mb-4">

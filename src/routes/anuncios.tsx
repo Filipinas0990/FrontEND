@@ -1,15 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus, FileSpreadsheet, Pencil, UploadCloud, Info, CheckCircle2,
   LayoutTemplate, Tags, ImageIcon, PlusCircle, Loader2, Download, ZoomIn, X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CriativosModal, type CriativosConfig } from "@/components/CriativosModal";
-import { OfertasClientesButton } from "@/components/OfertasClientesButton";
 import { CriativoCard } from "@/components/CriativoCard";
 import { exportarCriativoPng, baixarPng } from "@/lib/exportarCriativo";
 import { identificarCatalogo, type ProdutoIdentificado } from "@/lib/api";
+import { opcoesContas } from "@/lib/contasAnuncio";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 
@@ -82,6 +83,7 @@ function carregarEstado(): Partial<EstadoSalvo> {
 
 function CriativosCampanhasPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estado inicial vindo do localStorage (não perde no F5)
@@ -143,6 +145,9 @@ function CriativosCampanhasPage() {
   async function subirNaCampanha() {
     if (!criativosConfig) return;
     setExportando(true);
+    // As contas do wizard já vão sendo buscadas enquanto os PNGs são gerados —
+    // rasterizar tudo leva segundos, e é tempo em que a rede está parada.
+    void qc.prefetchQuery(opcoesContas());
     try {
       const criativos = await Promise.all(
         produtosEncontrados.map(async (p) => {
@@ -269,7 +274,6 @@ function CriativosCampanhasPage() {
           <p className="text-zinc-500 mt-1">Fluxo guiado para montar peças e publicar ações</p>
         </div>
         <div className="flex items-center gap-3">
-          <OfertasClientesButton />
           <button
             onClick={novoFluxo}
             className="bg-brand hover:bg-brand/90 text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"

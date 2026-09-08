@@ -12,6 +12,7 @@ import {
   type AcaoMarketing, type AcaoStatus,
 } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
+import { opcoesContas } from "@/lib/contasAnuncio";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -442,6 +443,7 @@ function ModalAcao({
 
 function AcoesPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const admin = isAdmin();
   const [mes, setMes] = useState(mesAtual);
   const [filtroStatus, setFiltroStatus] = useState<"" | AcaoStatus>("");
@@ -523,6 +525,9 @@ function AcoesPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate({ to: "/campanhas/nova" })}
+              // Começa a buscar as contas no hover: quando o wizard abre, a
+              // etapa 1 já tem lista em vez de um spinner.
+              onMouseEnter={() => { void qc.prefetchQuery(opcoesContas()); }}
               className="flex items-center gap-2 py-2 px-3 text-sm font-medium border border-brand text-brand rounded-md hover:bg-brand/5"
             >
               <Rocket className="size-3.5" /> Nova Campanha

@@ -987,9 +987,25 @@ export interface ContaAnuncio {
   formaPagamento: string   // ex: "Saldo disponível (R$816,04 BRL)"
 }
 
-/** Lista TODAS as contas de anúncios acessíveis pelo token Meta do servidor. */
-export function getContasAnuncio(): Promise<{ contas: ContaAnuncio[] }> {
-  return req("/api/ads/contas")
+export interface ListagemContas {
+  contas: ContaAnuncio[]
+  /** ISO — quando o servidor sincronizou com a Meta (null = respondeu ao vivo). */
+  atualizadoEm: string | null
+  /** true = tem refresh rodando no servidor; a lista pode mudar em instantes. */
+  sincronizando: boolean
+  /** Erro do último sync, com o cache antigo ainda sendo exibido. */
+  aviso: string | null
+}
+
+/**
+ * Lista TODAS as contas de anúncios acessíveis pelo token Meta do servidor.
+ *
+ * O servidor responde do cache dele: a consulta na Meta leva segundos e não
+ * pode ficar no caminho da tela. `refresh` é o botão "Atualizar" — ignora o
+ * cache e espera a Meta.
+ */
+export function getContasAnuncio(refresh = false): Promise<ListagemContas> {
+  return req(`/api/ads/contas${refresh ? "?refresh=1" : ""}`)
 }
 
 // ── Publicação de campanha ─────────────────────────────────────────────────────
