@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus, FileSpreadsheet, Pencil, UploadCloud, Info, CheckCircle2,
-  LayoutTemplate, Tags, ImageIcon, PlusCircle, Loader2, Download, ZoomIn, X,
+  LayoutTemplate, Tags, ImageIcon, PlusCircle, Loader2, Download, ZoomIn, X, Trash2,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CriativosModal, type CriativosConfig } from "@/components/CriativosModal";
@@ -220,6 +220,22 @@ function CriativosCampanhasPage() {
     }
   }
 
+  // Tira um item identificado do fluxo (não mexe no catálogo do banco —
+  // identificar de novo traz o produto de volta).
+  function removerProduto(item: ItemProduto) {
+    setProdutos((prev) => {
+      const restante = prev.filter((p) => p.id !== item.id);
+      // Sem itens não há o que confirmar nem criativos a manter
+      if (restante.length === 0) {
+        setConfirmado(false);
+        setCriativosConfig(null);
+      }
+      return restante;
+    });
+    setProdutoZoom((z) => (z?.id === item.id ? null : z));
+    toast.success(`"${item.nome}" removido do fluxo.`);
+  }
+
   // ── Upload de planilha ───────────────────────────────────────────────────────
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -407,6 +423,7 @@ function CriativosCampanhasPage() {
                       <th className="py-1.5 font-semibold">Produto</th>
                       <th className="py-1.5 font-semibold">Preço</th>
                       <th className="py-1.5 font-semibold text-right">Status</th>
+                      <th className="py-1.5 w-8"><span className="sr-only">Remover</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -443,6 +460,16 @@ function CriativosCampanhasPage() {
                               Não encontrado
                             </span>
                           )}
+                        </td>
+                        <td className="py-1.5 pl-2 text-right">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removerProduto(p); }}
+                            title="Remover do fluxo"
+                            aria-label={`Remover ${p.nome} do fluxo`}
+                            className="size-7 rounded-md grid place-items-center text-zinc-400 hover:bg-red-50 hover:text-red-600 transition"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
                         </td>
                       </tr>
                     ))}
