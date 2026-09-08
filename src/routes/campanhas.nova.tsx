@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, Search, Check, Rocket, Loader2, ChevronLeft, ChevronRight,
   Megaphone, MousePointerClick, MessageCircle, Users, ShoppingCart,
   User, Instagram, Facebook, Layers, Globe, Newspaper, Square, Film, Calendar, LayoutGrid,
-  UploadCloud, CheckCircle2, ImageIcon, Wallet, Download, Plus, X,
+  UploadCloud, CheckCircle2, ImageIcon, Wallet, Download, Plus, X, MapPin,
 } from "lucide-react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import { toast } from "sonner";
@@ -16,8 +16,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios,
-  type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado,
+  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, buscarLocalizacoes,
+  type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado, type LocalizacaoMeta,
 } from "@/lib/api";
 
 export const Route = createFileRoute("/campanhas/nova")({
@@ -135,6 +135,7 @@ function EtapaCliente({
   const { data, isLoading } = useQuery({
     queryKey: ["campanha-contas"],
     queryFn: getContasAnuncio,
+    staleTime: 5 * 60_000,
   });
   const contas = data?.contas ?? [];
 
@@ -332,6 +333,7 @@ function EtapaConjunto({ contaId, selecionado, onSelect }: {
   const { data, isLoading, error } = useQuery({
     queryKey: ["conjuntos-conta", contaId],
     queryFn: () => getConjuntosDaConta(contaId),
+    staleTime: 60_000,
   });
 
   const b = busca.toLowerCase();
@@ -469,6 +471,8 @@ interface Publico {
   orcamentoDiario: number;   // em reais
   dataInicio: string;        // YYYY-MM-DD
   dataFim: string;           // YYYY-MM-DD ou "" (sem data de término)
+  localizacao: LocalizacaoMeta | null;  // null = Brasil inteiro
+  raioKm: number;                       // só vale com localizacao definida
 }
 
 const hojeISO = () => new Date().toISOString().split("T")[0];
@@ -476,7 +480,11 @@ const hojeISO = () => new Date().toISOString().split("T")[0];
 const PUBLICO_PADRAO: Publico = {
   genero: "todos", idadeMin: 25, idadeMax: 55, plataforma: "todas", posicionamento: "feed_story",
   orcamentoDiario: 20, dataInicio: hojeISO(), dataFim: "",
+  localizacao: null, raioKm: 10,
 };
+
+const RAIO_MIN_KM = 1;
+const RAIO_MAX_KM = 80;
 
 const IDADES = [18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65];
 const labelIdade = (n: number) => (n >= 65 ? "65+" : String(n));
@@ -522,6 +530,124 @@ function BlocoNumerado({ n, titulo, desc, children }: {
   );
 }
 
+/**
+ * Busca de cidade (autocomplete real na Meta) + raio em km. Sem cidade
+ * escolhida, a campanha sai segmentada pro Brasil inteiro.
+ */
+function CampoLocalizacao({
+  valor, raioKm, onSelecionar, onLimpar, onRaioChange,
+}: {
+  valor: LocalizacaoMeta | null;
+  raioKm: number;
+  onSelecionar: (l: LocalizacaoMeta) => void;
+  onLimpar: () => void;
+  onRaioChange: (km: number) => void;
+}) {
+  const [busca, setBusca] = useState("");
+  const [resultados, setResultados] = useState<LocalizacaoMeta[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [aberto, setAberto] = useState(false);
+
+  useEffect(() => {
+    const termo = busca.trim();
+    if (termo.length < 2) { setResultados([]); setBuscando(false); return; }
+    setBuscando(true);
+    const t = setTimeout(() => {
+      buscarLocalizacoes(termo)
+        .then((r) => setResultados(r.resultados))
+        .catch(() => setResultados([]))
+        .finally(() => setBuscando(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  if (valor) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 p-3 rounded-xl border border-brand/20 bg-brand/5">
+          <MapPin className="size-5 text-brand shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-zinc-900 truncate">{valor.nome}</p>
+            {valor.regiao && <p className="text-xs text-zinc-500 truncate">{valor.regiao}</p>}
+          </div>
+          <button
+            onClick={onLimpar}
+            className="text-xs font-medium text-zinc-500 hover:text-red-500 transition shrink-0"
+          >
+            Trocar
+          </button>
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium text-zinc-700">Raio ao redor da cidade</p>
+            <span className="shrink-0 text-sm font-bold text-brand bg-brand/5 border border-brand/10 rounded-lg px-3 py-1.5">
+              {raioKm} km
+            </span>
+          </div>
+          <SliderPrimitive.Root
+            className="relative flex items-center select-none touch-none w-full h-5 mt-4"
+            min={RAIO_MIN_KM}
+            max={RAIO_MAX_KM}
+            step={1}
+            value={[raioKm]}
+            onValueChange={([km]) => onRaioChange(km)}
+          >
+            <SliderPrimitive.Track className="relative h-1.5 grow rounded-full bg-zinc-200">
+              <SliderPrimitive.Range className="absolute h-full rounded-full bg-brand" />
+            </SliderPrimitive.Track>
+            <SliderPrimitive.Thumb className="block size-5 rounded-full bg-white border-2 border-brand shadow focus:outline-none focus:ring-2 focus:ring-brand/30" />
+          </SliderPrimitive.Root>
+          <div className="flex justify-between mt-1.5">
+            <span className="text-[10px] text-zinc-400">{RAIO_MIN_KM} km</span>
+            <span className="text-[10px] text-zinc-400">{RAIO_MAX_KM} km</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
+        <input
+          value={busca}
+          onChange={(e) => { setBusca(e.target.value); setAberto(true); }}
+          onFocus={() => setAberto(true)}
+          onBlur={() => setTimeout(() => setAberto(false), 150)}
+          placeholder="Buscar cidade... (ex: Fortaleza)"
+          className="w-full pl-11 pr-4 py-3 text-sm bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+        />
+        {buscando && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400 animate-spin" />}
+      </div>
+      <p className="text-[11px] text-zinc-400 mt-1.5">
+        Deixe em branco para segmentar o Brasil inteiro.
+      </p>
+
+      {aberto && busca.trim().length >= 2 && (
+        <div className="absolute z-10 mt-1 w-full bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+          {resultados.length === 0 && !buscando ? (
+            <p className="text-xs text-zinc-400 text-center py-4">Nenhuma cidade encontrada.</p>
+          ) : (
+            resultados.map((r) => (
+              <button
+                key={r.key}
+                onClick={() => { onSelecionar(r); setBusca(""); setAberto(false); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-zinc-50 transition"
+              >
+                <MapPin className="size-4 text-zinc-400 shrink-0" />
+                <span className="text-sm text-zinc-800">{r.nome}</span>
+                {r.regiao && <span className="text-xs text-zinc-400">— {r.regiao}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publico) => void }) {
   const set = (patch: Partial<Publico>) => onChange({ ...valor, ...patch });
   const minIdx = IDADES.indexOf(valor.idadeMin);
@@ -529,8 +655,21 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
 
   return (
     <div className="space-y-8">
-      {/* ── 1) Perfil do público ─────────────────────────────────────────── */}
-      <BlocoNumerado n={1} titulo="Quais pessoas devem ver o seu anúncio?" desc="Escolha o perfil principal do público.">
+      {/* ── 1) Localização ───────────────────────────────────────────────── */}
+      <BlocoNumerado n={1} titulo="Onde estão seus clientes?" desc="Segmente por cidade e raio, ou deixe em branco para o Brasil inteiro.">
+        <CampoLocalizacao
+          valor={valor.localizacao}
+          raioKm={valor.raioKm}
+          onSelecionar={(l) => set({ localizacao: l })}
+          onLimpar={() => set({ localizacao: null })}
+          onRaioChange={(km) => set({ raioKm: km })}
+        />
+      </BlocoNumerado>
+
+      <div className="border-t border-zinc-100" />
+
+      {/* ── 2) Perfil do público ─────────────────────────────────────────── */}
+      <BlocoNumerado n={2} titulo="Quais pessoas devem ver o seu anúncio?" desc="Escolha o perfil principal do público.">
         {/* Gênero */}
         <div className="grid grid-cols-3 gap-3">
           {GENEROS.map((g) => {
@@ -590,8 +729,8 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
 
       <div className="border-t border-zinc-100" />
 
-      {/* ── 2) Posicionamentos ───────────────────────────────────────────── */}
-      <BlocoNumerado n={2} titulo="Posicionamentos" desc="Defina em quais plataformas e locais o anúncio será exibido.">
+      {/* ── 3) Posicionamentos ───────────────────────────────────────────── */}
+      <BlocoNumerado n={3} titulo="Posicionamentos" desc="Defina em quais plataformas e locais o anúncio será exibido.">
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_240px] gap-6">
           <div className="space-y-5">
             {/* Aplicativo */}
@@ -650,6 +789,7 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
           {/* Resumo do público */}
           <div className="bg-brand/5 border border-brand/10 rounded-xl p-4 h-fit">
             <p className="text-sm font-bold text-brand mb-4">Resumo do público</p>
+            <ResumoItem icon={MapPin}   rotulo="Localização"     valor={valor.localizacao ? `${valor.localizacao.nome} — raio ${valor.raioKm}km` : "Brasil inteiro"} />
             <ResumoItem icon={Users}     rotulo="Gênero"          valor={nomeGenero(valor.genero)} />
             <ResumoItem icon={Calendar}  rotulo="Idade"           valor={`${labelIdade(valor.idadeMin)} a ${labelIdade(valor.idadeMax)}`} />
             <ResumoItem icon={LayoutGrid} rotulo="Aplicativos"    valor={nomePlataforma(valor.plataforma)} />
@@ -661,8 +801,8 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
 
       <div className="border-t border-zinc-100" />
 
-      {/* ── 3) Orçamento e período ───────────────────────────────────────── */}
-      <BlocoNumerado n={3} titulo="Orçamento e período" desc="Defina quanto investir por dia e quando a campanha vai rodar.">
+      {/* ── 4) Orçamento e período ───────────────────────────────────────── */}
+      <BlocoNumerado n={4} titulo="Orçamento e período" desc="Defina quanto investir por dia e quando a campanha vai rodar.">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Orçamento diário */}
           <CampoOrcamento valor={valor.orcamentoDiario} onChange={(v) => set({ orcamentoDiario: v })} />
@@ -783,7 +923,7 @@ interface CriativoWizard {
 export interface CriativosResultado {
   selecionados: {
     id: string; nome: string; preco: string | null; tipo: string; pngBase64: string | null;
-    // copy padrão já expandida ({produto}/{preco}/{cidade}) para ESTE criativo
+    // copy padrão já expandida ({produto}/{preco}) para ESTE criativo
     textoPrincipal: string; titulo: string; descricao: string;
   }[];
   // representativo (1º criativo) — usado na revisão / copyUsada
@@ -809,18 +949,17 @@ function lerCriativosPuxados(): CriativoWizard[] {
 }
 
 // ── Copy padrão (template) ────────────────────────────────────────────────────
-// A mesma copy vale para todos os criativos. Marcadores aceitos (case-insensitive):
-//   por criativo:  {produto}  {preco} / {preço}
-//   por campanha:  {cidade}  {bairro}  {instagram}
-const TOKENS_COPY = ["{produto}", "{preco}", "{cidade}", "{bairro}", "{instagram}"] as const;
+// A mesma copy vale para todos os criativos, 100% automática: só depende do
+// produto e do preço de CADA criativo — nada de preencher cidade/bairro/
+// Instagram a cada campanha.
+// Marcadores aceitos (case-insensitive): {produto}  {preco} / {preço}
+const TOKENS_COPY = ["{produto}", "{preco}"] as const;
 
 const COPY_PADRAO = {
   textoPrincipal:
-    "🌟 Descubra a Nova Linha de Produtos da Farmácia em {cidade}, {bairro}! Opções exclusivas para todos os gostos! 🌟\n\n" +
-    "✨ Qualidade Premium\n✨ Variedade de Opções\n✨ Resultados Incríveis\n\n" +
-    "📱 Siga-nos: {instagram}\n\n" +
-    "Venha conhecer e se surpreender!",
-  descricao: "",
+    "🌟 PROMOÇÃO IMPERDÍVEL 🌟\n\n" +
+    "🛒 {produto}: R$ {preco}\n\n" +
+    "Corra aproveitar, é por tempo limitado! Estoque sujeito à disponibilidade.",
 };
 
 // Lista de títulos padrão — cada anúncio recebe um (rotaciona pela lista).
@@ -832,52 +971,54 @@ const TITULOS_PADRAO = [
   "Entrega Rápida 🏍️",
 ];
 
+// Lista de descrições padrão — mesmo estilo do título: curtas e diretas.
+const DESCRICOES_PADRAO = [
+  "Peça já pelo WhatsApp 📲",
+  "Corra, é por tempo limitado ⏳",
+  "Aproveite antes que acabe 🔥",
+  "Fale com a gente agora 💬",
+  "Garanta o seu hoje ✅",
+];
+
 /** Dados que preenchem os marcadores de uma copy. */
 interface CopyCtx {
   produto: string;
   preco: string;
-  cidade: string;
-  bairro: string;
-  instagram: string;
 }
 
-/** Substitui os marcadores da copy pelos dados de um criativo/campanha. */
+/** Substitui os marcadores da copy pelos dados de um criativo. */
 function expandirCopy(tpl: string, ctx: CopyCtx): string {
   return tpl
     .replace(/\{\s*produto\s*\}/gi, ctx.produto)
-    .replace(/\{\s*pre(?:c|ç)o\s*\}/gi, ctx.preco)
-    .replace(/\{\s*cidade\s*\}/gi, ctx.cidade)
-    .replace(/\{\s*bairro\s*\}/gi, ctx.bairro)
-    .replace(/\{\s*instagram\s*\}/gi, ctx.instagram);
+    .replace(/\{\s*pre(?:c|ç)o\s*\}/gi, ctx.preco);
 }
 
 function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => void }) {
   const [criativos, setCriativos] = useState<CriativoWizard[]>(() => lerCriativosPuxados());
   const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set(lerCriativosPuxados().map((c) => c.id)));
 
-  // Copy padrão (modelo). {produto}/{preco} trocam por criativo; {cidade}/{bairro}/{instagram} valem p/ a campanha.
-  const [cidade, setCidade] = useState("");
-  const [bairro, setBairro] = useState("");
-  const [instagram, setInstagram] = useState("");
+  // Copy padrão (modelo). {produto}/{preco} trocam por criativo — automático, sem inputs extras.
   const [tplTexto, setTplTexto] = useState(COPY_PADRAO.textoPrincipal);
   const [titulos, setTitulos] = useState<string[]>(TITULOS_PADRAO);
-  const [tplDescricao, setTplDescricao] = useState(COPY_PADRAO.descricao);
+  const [descricoes, setDescricoes] = useState<string[]>(DESCRICOES_PADRAO);
 
   // Reporta o resultado ao parent sempre que algo muda — expande a copy por criativo.
-  // O título rotaciona pela lista: anúncio 1 → título 1, anúncio 2 → título 2, ...
+  // Título e descrição rotacionam pela lista: anúncio 1 → item 1, anúncio 2 → item 2, ...
   useEffect(() => {
     const titulosValidos = titulos.map((t) => t.trim()).filter(Boolean);
+    const descricoesValidas = descricoes.map((d) => d.trim()).filter(Boolean);
     const selArr = criativos
       .filter((c) => selecionados.has(c.id))
       .map((c, i) => {
-        const ctx: CopyCtx = { produto: c.nome, preco: c.preco ?? "", cidade, bairro, instagram };
+        const ctx: CopyCtx = { produto: c.nome, preco: c.preco ?? "" };
         const tituloBruto = titulosValidos.length ? titulosValidos[i % titulosValidos.length] : "";
+        const descricaoBruta = descricoesValidas.length ? descricoesValidas[i % descricoesValidas.length] : "";
         return {
           id: c.id, nome: c.nome, preco: c.preco ?? null, tipo: c.tipo,
           pngBase64: c.png ?? c.arquivoUrl ?? null,
           textoPrincipal: expandirCopy(tplTexto, ctx),
           titulo: expandirCopy(tituloBruto, ctx),
-          descricao: expandirCopy(tplDescricao, ctx),
+          descricao: expandirCopy(descricaoBruta, ctx),
         };
       });
     const primeiro = selArr[0];
@@ -888,7 +1029,7 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
       descricao: primeiro?.descricao ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [criativos, selecionados, cidade, bairro, instagram, tplTexto, titulos, tplDescricao]);
+  }, [criativos, selecionados, tplTexto, titulos, descricoes]);
 
   // Helpers da lista de títulos
   function setTituloAt(idx: number, valor: string) {
@@ -899,6 +1040,17 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
   }
   function adicionarTitulo() {
     setTitulos((prev) => [...prev, ""]);
+  }
+
+  // Helpers da lista de descrições
+  function setDescricaoAt(idx: number, valor: string) {
+    setDescricoes((prev) => prev.map((d, i) => (i === idx ? valor : d)));
+  }
+  function removerDescricao(idx: number) {
+    setDescricoes((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function adicionarDescricao() {
+    setDescricoes((prev) => [...prev, ""]);
   }
 
   function toggle(id: string) {
@@ -1035,41 +1187,9 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
             <code key={t} className="bg-white ring-1 ring-zinc-200 rounded px-1.5 py-0.5 text-brand font-semibold">{t}</code>
           ))}
           <span className="text-zinc-400">
-            — {"{produto}"} e {"{preco}"} trocam por criativo; {"{cidade}"}, {"{bairro}"} e {"{instagram}"} valem para a campanha toda.
+            — trocam por criativo, automaticamente, a partir do nome e do preço de cada um.
           </span>
         </div>
-
-        {/* Dados da campanha (valem para todos os criativos) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-          <div>
-            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Cidade</label>
-            <input
-              value={cidade}
-              onChange={(e) => setCidade(e.target.value)}
-              placeholder="Ex: Fortaleza"
-              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Bairro</label>
-            <input
-              value={bairro}
-              onChange={(e) => setBairro(e.target.value)}
-              placeholder="Ex: Aldeota"
-              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Instagram</label>
-            <input
-              value={instagram}
-              onChange={(e) => setInstagram(e.target.value)}
-              placeholder="Ex: @suafarmacia"
-              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-            />
-          </div>
-        </div>
-        <p className="text-[11px] text-zinc-400 mt-1.5">Preenchem {"{cidade}"}, {"{bairro}"} e {"{instagram}"} em todos os criativos.</p>
 
         {/* Títulos — lista de headlines (rotaciona pelos anúncios) */}
         <div className="mt-5">
@@ -1112,33 +1232,59 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
           </div>
         </div>
 
-        {/* Texto Principal + Descrição */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
-          <div>
-            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Texto Principal</label>
-            <textarea
-              value={tplTexto}
-              onChange={(e) => setTplTexto(e.target.value)}
-              maxLength={600}
-              rows={8}
-              placeholder="Ex: Farmácia em {cidade}, {bairro}..."
-              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-            />
-            <p className="text-right text-[11px] text-zinc-400 mt-1">{tplTexto.length} / 600</p>
+        {/* Descrições — mesmo estilo do título: curtas, rotacionam pelos anúncios */}
+        <div className="mt-5">
+          <div className="flex items-center justify-between gap-2">
+            <label className="block text-sm font-semibold text-zinc-700">Descrições</label>
+            <button
+              type="button"
+              onClick={adicionarDescricao}
+              className="text-xs font-medium text-brand hover:underline flex items-center gap-1"
+            >
+              <Plus className="size-3.5" /> Adicionar descrição
+            </button>
           </div>
+          <p className="text-[11px] text-zinc-400 mt-0.5 mb-2">
+            Cada anúncio recebe uma descrição; a lista rotaciona pelos criativos.
+          </p>
+          <div className="space-y-2">
+            {descricoes.map((d, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={d}
+                  onChange={(e) => setDescricaoAt(i, e.target.value)}
+                  maxLength={200}
+                  placeholder={`Descrição ${i + 1}`}
+                  className="flex-1 text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                />
+                <button
+                  type="button"
+                  onClick={() => removerDescricao(i)}
+                  className="size-8 rounded-lg grid place-items-center text-zinc-400 hover:bg-red-50 hover:text-red-500 transition shrink-0"
+                  title="Remover descrição"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
+            {descricoes.length === 0 && (
+              <p className="text-xs text-zinc-400 italic">Nenhuma descrição — os anúncios ficarão sem ela.</p>
+            )}
+          </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Descrição</label>
-            <textarea
-              value={tplDescricao}
-              onChange={(e) => setTplDescricao(e.target.value)}
-              maxLength={200}
-              rows={8}
-              placeholder="Ex: Solicite seu orçamento pelo WhatsApp."
-              className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-            />
-            <p className="text-right text-[11px] text-zinc-400 mt-1">{tplDescricao.length} / 200</p>
-          </div>
+        {/* Texto Principal */}
+        <div className="mt-5">
+          <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Texto Principal</label>
+          <textarea
+            value={tplTexto}
+            onChange={(e) => setTplTexto(e.target.value)}
+            maxLength={600}
+            rows={6}
+            placeholder="Ex: {produto} por apenas R$ {preco}!"
+            className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+          />
+          <p className="text-right text-[11px] text-zinc-400 mt-1">{tplTexto.length} / 600</p>
         </div>
 
       </div>
@@ -1247,16 +1393,6 @@ function EtapaRevisao({ payload, resultado, modo }: {
           ))}
         </div>
       )}
-
-      {/* JSON técnico (colapsado) — para conferência de quem quiser */}
-      <details className="mt-5">
-        <summary className="text-xs text-zinc-400 cursor-pointer">Ver payload técnico (JSON)</summary>
-        <div className="rounded-xl border border-zinc-200 bg-zinc-900 overflow-hidden mt-2">
-          <pre className="p-4 text-xs text-emerald-300 overflow-x-auto leading-relaxed">
-            {JSON.stringify(payload, null, 2)}
-          </pre>
-        </div>
-      </details>
     </div>
   );
 }
@@ -1391,6 +1527,9 @@ function NovaCampanhaPage() {
         idadeMax:       publico.idadeMax,
         plataforma:     publico.plataforma,       // todas | instagram | facebook
         posicionamento: publico.posicionamento,   // feed | story | feed_story | ...
+        // null = Brasil inteiro; com cidade, manda a "key" que o Meta exige.
+        localizacao:    publico.localizacao && { key: publico.localizacao.key, nome: publico.localizacao.nome },
+        raioKm:         publico.raioKm,
       },
       orcamento: {
         diarioReais:    publico.orcamentoDiario,

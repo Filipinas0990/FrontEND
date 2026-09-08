@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { X, MapPin, Check, LayoutTemplate, Crop, ArrowRight, ArrowLeft } from "lucide-react";
+import { X, MapPin, Check, LayoutTemplate, ArrowRight, ArrowLeft } from "lucide-react";
 import { CriativoCard, ModeloThumb, type LayoutCriativo, type Enquadramento } from "@/components/CriativoCard";
+import { formatarMoeda } from "@/lib/moeda";
 
 export interface ProdutoCriativo {
   id: string;
@@ -32,18 +33,14 @@ const LAYOUTS: { id: LayoutCriativo; nome: string; desc: string }[] = [
   { id: "vermelho", nome: "Vermelho",     desc: "Farmácia no topo, preço embaixo e aviso na tarja preta." },
 ];
 
-const ENQUADRAMENTOS: { id: Enquadramento; nome: string; desc: string }[] = [
-  { id: "4:5",  nome: "Feed Retrato",  desc: "1080×1350 — ocupa mais o feed." },
-  { id: "1:1",  nome: "Quadrado",      desc: "1080×1080 — padrão do feed." },
-  { id: "9:16", nome: "Story / Reels", desc: "1080×1920 — tela cheia." },
-];
-
-type Etapa = "layout" | "enquadramento" | "editar";
+type Etapa = "layout" | "editar";
 
 export function CriativosModal({ produtos, configInicial, onConcluir, onClose }: CriativosModalProps) {
   const [etapa, setEtapa] = useState<Etapa>(configInicial?.layout ? "editar" : "layout");
   const [layout, setLayout] = useState<LayoutCriativo>(configInicial?.layout ?? "azul");
-  const [enquadramento, setEnquadramento] = useState<Enquadramento>(configInicial?.enquadramento ?? "4:5");
+  // Enquadramento não é mais escolhido — sai automático no formato de feed (4:5),
+  // o que ocupa mais espaço e funciona bem nos posicionamentos automáticos do Meta.
+  const enquadramento: Enquadramento = configInicial?.enquadramento ?? "4:5";
   const [localizacao, setLocalizacao] = useState(configInicial?.localizacao ?? "");
   const [titulo, setTitulo] = useState(configInicial?.titulo ?? "");
   const [subtitulo, setSubtitulo] = useState(configInicial?.subtitulo ?? "");
@@ -62,12 +59,10 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
   }
 
   const nomeLayout = LAYOUTS.find((l) => l.id === layout)?.nome ?? "";
-  const nomeEnq = ENQUADRAMENTOS.find((e) => e.id === enquadramento)?.nome ?? "";
 
   const cabecalho: Record<Etapa, { titulo: string; sub: string }> = {
-    layout:        { titulo: "Escolha o layout do criativo", sub: "Passo 1 de 3 — o design aplicado a todos." },
-    enquadramento: { titulo: "Escolha o enquadramento",      sub: "Passo 2 de 3 — o formato/proporção do criativo." },
-    editar:        { titulo: "Editar criativos",             sub: "Passo 3 de 3 — ajuste preço e textos." },
+    layout: { titulo: "Escolha o layout do criativo", sub: "Passo 1 de 2 — o design aplicado a todos." },
+    editar: { titulo: "Editar criativos",             sub: "Passo 2 de 2 — ajuste preço e textos." },
   };
 
   return (
@@ -106,59 +101,24 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
               </div>
             </div>
             <RodapeModal onClose={onClose} direita={
-              <button onClick={() => setEtapa("enquadramento")} className="bg-brand hover:bg-brand/90 text-white font-semibold px-6 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm">
+              <button onClick={() => setEtapa("editar")} className="bg-brand hover:bg-brand/90 text-white font-semibold px-6 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm">
                 Continuar <ArrowRight className="size-4" />
               </button>
             } />
           </>
         )}
 
-        {/* ── PASSO 2: enquadramento ───────────────────────────────────────── */}
-        {etapa === "enquadramento" && (
-          <>
-            <div className="flex-1 overflow-y-auto p-8">
-              <div className="max-w-3xl mx-auto grid grid-cols-3 gap-5 items-end">
-                {ENQUADRAMENTOS.map((e) => (
-                  <button
-                    key={e.id}
-                    onClick={() => setEnquadramento(e.id)}
-                    className={`rounded-2xl p-3 border-2 transition text-center ${enquadramento === e.id ? "border-brand ring-2 ring-brand/20 bg-brand/5" : "border-zinc-200 hover:border-zinc-300"}`}
-                  >
-                    {/* mostra o layout escolhido em cada formato */}
-                    <div className="mx-auto" style={{ maxWidth: e.id === "9:16" ? 110 : 170 }}>
-                      <ModeloThumb layout={layout} enquadramento={e.id} />
-                    </div>
-                    <div className="flex items-center justify-center gap-1.5 mt-3">
-                      {enquadramento === e.id && <Check className="size-4 text-brand" />}
-                      <span className={`text-sm font-semibold ${enquadramento === e.id ? "text-brand" : "text-zinc-700"}`}>{e.nome}</span>
-                    </div>
-                    <p className="text-[11px] text-zinc-500 mt-0.5">{e.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <RodapeModal
-              esquerda={<button onClick={() => setEtapa("layout")} className="px-4 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 transition flex items-center gap-1.5"><ArrowLeft className="size-4" /> Voltar</button>}
-              direita={<button onClick={() => setEtapa("editar")} className="bg-brand hover:bg-brand/90 text-white font-semibold px-6 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm">Continuar <ArrowRight className="size-4" /></button>}
-            />
-          </>
-        )}
-
-        {/* ── PASSO 3: editar ──────────────────────────────────────────────── */}
+        {/* ── PASSO 2: editar ──────────────────────────────────────────────── */}
         {etapa === "editar" && (
           <>
             <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[280px_1fr]">
               {/* Config */}
               <div className="border-r border-zinc-100 p-5 space-y-6 overflow-y-auto">
-                {/* Layout + enquadramento escolhidos */}
+                {/* Layout escolhido — enquadramento é automático, não aparece aqui */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
                     <span className="flex items-center gap-1.5 text-sm text-zinc-800"><LayoutTemplate className="size-3.5 text-zinc-400" /> {nomeLayout}</span>
                     <button onClick={() => setEtapa("layout")} className="text-xs font-semibold text-brand hover:underline">Trocar</button>
-                  </div>
-                  <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
-                    <span className="flex items-center gap-1.5 text-sm text-zinc-800"><Crop className="size-3.5 text-zinc-400" /> {nomeEnq}</span>
-                    <button onClick={() => setEtapa("enquadramento")} className="text-xs font-semibold text-brand hover:underline">Trocar</button>
                   </div>
                 </div>
 
@@ -217,7 +177,7 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
                       <CriativoCard layout={layout} enquadramento={enquadramento} nome={p.nome} preco={precos[p.id] ?? p.preco} imagem={p.imagem} localizacao={localizacao} titulo={titulo} subtitulo={subtitulo} />
                       <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-md px-2 py-1">
                         <span className="text-[11px] font-semibold text-zinc-400">R$</span>
-                        <input value={precos[p.id] ?? p.preco} onChange={(e) => setPreco(p.id, e.target.value)} placeholder="0,00"
+                        <input value={precos[p.id] ?? p.preco} onChange={(e) => setPreco(p.id, formatarMoeda(e.target.value))} inputMode="numeric" placeholder="0,00"
                           className="w-full text-sm text-zinc-800 focus:outline-none bg-transparent" />
                       </div>
                     </div>
@@ -226,7 +186,7 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
               </div>
             </div>
             <RodapeModal
-              esquerda={<button onClick={() => setEtapa("enquadramento")} className="px-4 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 transition flex items-center gap-1.5"><ArrowLeft className="size-4" /> Voltar</button>}
+              esquerda={<button onClick={() => setEtapa("layout")} className="px-4 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 transition flex items-center gap-1.5"><ArrowLeft className="size-4" /> Voltar</button>}
               direita={<button onClick={concluir} className="bg-brand hover:bg-brand/90 text-white font-semibold px-6 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"><Check className="size-4" /> Concluir criativos</button>}
             />
           </>

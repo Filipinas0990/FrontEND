@@ -992,6 +992,19 @@ export function getContasAnuncio(): Promise<{ contas: ContaAnuncio[] }> {
   return req("/api/ads/contas")
 }
 
+// ── Localização (segmentação geográfica) ────────────────────────────────────────
+
+export interface LocalizacaoMeta {
+  key: string     // chave interna do Meta — exigida pelo geo_locations
+  nome: string    // ex: "São Paulo"
+  regiao: string  // ex: "São Paulo" (estado)
+}
+
+/** Autocomplete de cidades (Brasil) para a Etapa Público do wizard. */
+export function buscarLocalizacoes(q: string): Promise<{ resultados: LocalizacaoMeta[] }> {
+  return req(`/api/ads/geo-busca?q=${encodeURIComponent(q)}`)
+}
+
 // ── Publicação de campanha ─────────────────────────────────────────────────────
 
 export interface PublicarCampanhaResultado {
