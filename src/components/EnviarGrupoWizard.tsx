@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   X, ArrowRight, ArrowLeft, Check, Loader2, Search, Users, Store,
-  QrCode, RefreshCw, Send, CalendarClock, ImageIcon, AlertCircle, CheckCircle2,
+  QrCode, RefreshCw, CalendarClock, ImageIcon, AlertCircle, CheckCircle2,
   Smartphone, Link2, Copy, Inbox, PencilLine, MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -58,23 +58,36 @@ const TITULOS: Record<Etapa, { titulo: string; descricao: string }> = {
   2: { titulo: "Cliente",      descricao: "De qual farmácia é esta oferta." },
   3: { titulo: "Preços",       descricao: "O cliente não informa preço — você define." },
   4: { titulo: "Grupos",       descricao: "Escolha os grupos que vão receber." },
-  5: { titulo: "Quando",       descricao: "Enviar agora ou agendar." },
+  5: { titulo: "Quando",       descricao: "Data, horários e repetição." },
   6: { titulo: "Revisão",      descricao: "Confira antes de disparar." },
 };
 
-/** "YYYY-MM-DD" daqui a um mês — padrão do fim da repetição. */
+const soData = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Hoje em yyyy-mm-dd. */
+const hojeISO = (): string => soData(new Date());
+
+/** Daqui a um mês, em yyyy-mm-dd — sugestão de término da repetição. */
 function emUmMes(): string {
   const d = new Date();
   d.setMonth(d.getMonth() + 1);
-  return d.toISOString().slice(0, 10);
+  return soData(d);
 }
 
-const REPETICOES: { id: RepetirDisparo; nome: string }[] = [
-  { id: "nunca",   nome: "Não repetir" },
-  { id: "diario",  nome: "Todo dia" },
-  { id: "semanal", nome: "Toda semana" },
-  { id: "mensal",  nome: "Todo mês" },
-];
+/** Próxima hora cheia, no formato do input datetime-local (yyyy-mm-ddThh:mm). */
+function proximaHoraISO(): string {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + 1);
+  return `${soData(d)}T${String(d.getHours()).padStart(2, "0")}:00`;
+}
+
+/**
+ * Repetição é sempre SEMANAL — mesma decisão do disparo normal: a operação é
+ * semanal na prática, e o seletor diário/semanal/mensal só dava chance de errar.
+ */
+const FREQUENCIA: RepetirDisparo = "semanal";
 
 export function EnviarGrupoWizard({
   produtos, criativosConfig: configProp, clienteInicialId, onClose,
@@ -116,18 +129,23 @@ export function EnviarGrupoWizard({
   // oferta postada no grupo do cliente errado).
   const [soDoCliente, setSoDoCliente] = useState(true);
 
-  // Etapa 5 — agendamento (mesmas opções do disparo normal)
-  const [quando, setQuando] = useState<"agora" | "agendado">("agora");
-  const [agendadoPara, setAgendadoPara] = useState("");
-  const [repetir, setRepetir] = useState<RepetirDisparo>("nunca");
+  // Etapa 5 — agendamento. É o MESMO conjunto de opções do modal do disparo
+  // normal (ModalAgendamento em routes/grupos.tsx): sem "enviar agora" x
+  // "agendar", porque lá tudo é agendado — enviar na hora é deixar o horário
+  // no atual, e o agendador pega no próximo ciclo (até 1 minuto).
+  const [repete, setRepete] = useState(false);
+  // Envio único: um campo só (data + hora). Repetido: janela com início e fim.
+  const [envioEm, setEnvioEm] = useState(proximaHoraISO());
+  const [dataInicio, setDataInicio] = useState(hojeISO());
+  // Toda repetição tem fim: sem isso a campanha dispara esquecida para sempre.
+  const [dataFim, setDataFim] = useState(emUmMes());
+  const [horaInicio, setHoraInicio] = useState("08:00");
   // Lista de horários fixos do gestor (Configurações → Horários de Disparo).
   const [horarios, setHorarios] = useState<HorarioDisparo[]>([]);
   // Marcado = a hora sai dos chips, e o campo de hora some.
   const [usarPreset, setUsarPreset] = useState(false);
   // Pode marcar mais de um: o disparo sai em todos, em cada ocorrência.
   const [horariosSel, setHorariosSel] = useState<Set<string>>(new Set());
-  // Toda repetição tem fim: sem isso a campanha dispara esquecida para sempre.
-  const [repetirAte, setRepetirAte] = useState(emUmMes());
 
   // Etapa 6 — criativos gerados
   const [midias, setMidias] = useState<MidiaDisparo[]>([]);
@@ -399,13 +417,13 @@ export function EnviarGrupoWizard({
       return;
     }
     if (etapa === 5) {
-      if (quando === "agendado" && !agendadoPara) {
-        toast.error("Informe a data e a hora do agendamento."); return;
+      if (!quandoISO) {
+        toast.error("Informe a data e a hora do envio."); return;
       }
-      if (quando === "agendado" && preset && horariosSel.size === 0) {
+      if (preset && horariosSel.size === 0) {
         toast.error("Marque ao menos um horário pré-definido."); return;
       }
-      if (quando === "agendado" && repetir !== "nunca" && !repetirAte) {
+      if (repete && !dataFim) {
         toast.error("Informe até quando a campanha se repete."); return;
       }
       setEtapa(6);
@@ -427,26 +445,26 @@ export function EnviarGrupoWizard({
         mensagem,
         midias,
         grupos: gruposSel,
-        quando,
-        agendado_para: quando === "agendado" ? new Date(quandoISO).toISOString() : null,
-        repetir,
+        // Tudo é agendado, como no disparo normal: enviar na hora é deixar o
+        // horário no atual, e o agendador pega no próximo ciclo (até 1 minuto).
+        quando: "agendado",
+        agendado_para: new Date(quandoISO).toISOString(),
+        repetir: repete ? FREQUENCIA : "nunca",
         // Com 2 ou mais, o backend passa por todos antes de avançar a repetição
-        horarios: quando === "agendado" && preset ? horariosOrdenados : undefined,
+        horarios: preset ? horariosOrdenados : undefined,
         // Fim do dia escolhido: o disparo daquele último dia ainda acontece
-        repetir_ate: quando === "agendado" && repetir !== "nunca"
-          ? new Date(`${repetirAte}T23:59:59`).toISOString()
-          : null,
+        repetir_ate: repete ? new Date(`${dataFim}T23:59:59`).toISOString() : null,
         timezone: "America/Sao_Paulo",
         farmacia_id: clienteSel?.farmacia_id ?? null,
         solicitacao_id: clienteSel?.solicitacao?.id ?? null,
         instance: conexaoSel,
       });
 
-      if (quando === "agora") {
-        toast.success(`Disparo concluído: ${resultado.enviados ?? 0} grupo(s), ${resultado.falhas ?? 0} falha(s).`);
-      } else {
-        toast.success("Disparo agendado!");
-      }
+      toast.success(
+        jaPassou
+          ? "Disparo agendado — sai no próximo ciclo do agendador (até 1 minuto)."
+          : "Disparo agendado!",
+      );
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao disparar.");
@@ -487,9 +505,13 @@ export function EnviarGrupoWizard({
     return futura ?? horariosOrdenados[0] ?? "";
   }
 
-  // Data do envio quando os chips mandam na hora (o input vira só de data)
-  const dataEnvio = agendadoPara.slice(0, 10);
-  const quandoISO = preset && dataEnvio ? `${dataEnvio}T${primeiraHoraDe(dataEnvio)}` : agendadoPara;
+  // Quando o primeiro disparo sai, nos dois modos. Com chip marcado a hora vem
+  // dele; senão, do campo de hora.
+  const dataEnvio = envioEm.slice(0, 10);
+  const quandoISO = repete
+    ? `${dataInicio}T${preset ? primeiraHoraDe(dataInicio) : horaInicio}`
+    : (preset ? `${dataEnvio}T${primeiraHoraDe(dataEnvio)}` : envioEm);
+  const jaPassou = Boolean(quandoISO) && new Date(quandoISO).getTime() < Date.now();
 
   function alternarGrupo(jid: string) {
     setSelecionados((atual) => {
@@ -1000,31 +1022,31 @@ export function EnviarGrupoWizard({
           {/* ── 5: Quando ── */}
           {etapa === 5 && (
             <div className="flex flex-col gap-4">
-              <div className="grid sm:grid-cols-2 gap-3">
-                <button
-                  onClick={() => setQuando("agora")}
-                  className={`p-4 rounded-xl border text-left transition ${
-                    quando === "agora" ? "border-brand bg-brand/5" : "border-zinc-200 hover:border-zinc-300"
-                  }`}
-                >
-                  <Send className="size-5 text-brand mb-2" />
-                  <p className="font-semibold text-zinc-900">Enviar agora</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Dispara assim que você confirmar.</p>
-                </button>
-                <button
-                  onClick={() => setQuando("agendado")}
-                  className={`p-4 rounded-xl border text-left transition ${
-                    quando === "agendado" ? "border-brand bg-brand/5" : "border-zinc-200 hover:border-zinc-300"
-                  }`}
-                >
-                  <CalendarClock className="size-5 text-brand mb-2" />
-                  <p className="font-semibold text-zinc-900">Agendar</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Escolhe data, hora e repetição.</p>
-                </button>
+              <div>
+                <p className="text-sm font-medium text-zinc-700">Essa campanha vai se repetir?</p>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    onClick={() => setRepete(false)}
+                    className={`p-3 rounded-xl border text-left transition ${
+                      !repete ? "border-brand bg-brand/5" : "border-zinc-200 hover:border-zinc-300"
+                    }`}
+                  >
+                    <p className="font-semibold text-zinc-900 text-sm">Não, envio único</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Dispara uma vez na data marcada.</p>
+                  </button>
+                  <button
+                    onClick={() => setRepete(true)}
+                    className={`p-3 rounded-xl border text-left transition ${
+                      repete ? "border-brand bg-brand/5" : "border-zinc-200 hover:border-zinc-300"
+                    }`}
+                  >
+                    <p className="font-semibold text-zinc-900 text-sm">Sim, repetir</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Toda semana, até a data de término.</p>
+                  </button>
+                </div>
               </div>
 
-              {quando === "agendado" && (
-                <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4">
                   {/* Pergunta antes de mostrar a lista — marcando, o campo de hora some */}
                   {horarios.length > 0 && (
                     <div>
@@ -1087,63 +1109,97 @@ export function EnviarGrupoWizard({
                     </div>
                   )}
 
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {/* Com horário pré-definido quem manda é o chip: só o dia aqui. */}
+                  {/* Com horário pré-definido, o campo de hora sai — quem manda é o chip. */}
+                  {!repete ? (
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-zinc-700">
-                        {preset ? "Data do envio" : "Data e hora"}
+                        {preset ? "Data do envio" : "Horário do envio"}
                       </label>
                       {preset ? (
                         <input
                           type="date"
                           value={dataEnvio}
-                          onChange={(e) => setAgendadoPara(`${e.target.value}T${agendadoPara.slice(11, 16) || "08:00"}`)}
+                          // A hora vem dos chips; aqui só troca o dia.
+                          onChange={(e) => setEnvioEm(`${e.target.value}T${envioEm.slice(11, 16) || "08:00"}`)}
                           className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                         />
                       ) : (
                         <input
                           type="datetime-local"
-                          value={agendadoPara}
-                          onChange={(e) => setAgendadoPara(e.target.value)}
+                          value={envioEm}
+                          onChange={(e) => setEnvioEm(e.target.value)}
                           className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                         />
                       )}
                     </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium text-zinc-700">Começa em</label>
+                          <input
+                            type="date"
+                            value={dataInicio}
+                            onChange={(e) => setDataInicio(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                          />
+                        </div>
+                        {!preset && (
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-sm font-medium text-zinc-700">Horário</label>
+                            <input
+                              type="time"
+                              value={horaInicio}
+                              onChange={(e) => setHoraInicio(e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                            />
+                          </div>
+                        )}
+                      </div>
 
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-zinc-700">Repetir</label>
-                      <select
-                        value={repetir}
-                        onChange={(e) => setRepetir(e.target.value as RepetirDisparo)}
-                        className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
-                      >
-                        {REPETICOES.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Fim da repetição: obrigatório — não existe campanha sem fim. */}
-                    {repetir !== "nunca" && (
-                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      {/* Fim da repetição: obrigatório — não existe campanha sem fim. */}
+                      <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-zinc-700">Termina em</label>
                         <input
                           type="date"
-                          value={repetirAte}
-                          min={dataEnvio || undefined}
-                          onChange={(e) => setRepetirAte(e.target.value)}
+                          value={dataFim}
+                          min={dataInicio}
+                          onChange={(e) => setDataFim(e.target.value)}
                           className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                         />
                         <p className="text-[11px] text-zinc-400">
                           No último dia a campanha ainda sai, e depois é finalizada sozinha.
                         </p>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    <p className="sm:col-span-2 text-xs text-zinc-400">
-                      Horário de Brasília (America/Sao_Paulo).
+                  {jaPassou && (
+                    <p className="text-[11px] text-amber-600">
+                      Esse horário já passou — o disparo sai no próximo ciclo do agendador (até 1 minuto).
                     </p>
+                  )}
+
+                  {/* Conexões */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-zinc-700">Conexões</label>
+                    <select
+                      value={conexaoSel ?? ""}
+                      onChange={(e) => setConexaoSel(e.target.value || null)}
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    >
+                      <option value="">Selecione a conexão</option>
+                      {conexoes.map((c) => (
+                        <option key={c.instanceName} value={c.instanceName} disabled={c.status !== "open"}>
+                          {c.nome} {c.tipo === "gestor" ? "(sua)" : "(agência)"}
+                          {c.status === "open" ? "" : " — desconectado"}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+
+                  <p className="text-[11px] text-zinc-400">Horário de Brasília.</p>
                 </div>
-              )}
             </div>
           )}
 
@@ -1157,21 +1213,15 @@ export function EnviarGrupoWizard({
                 <Linha rotulo="Criativos" valor={`${itensEscolhidos.length} produto(s)`} />
                 <Linha
                   rotulo="Quando"
-                  valor={
-                    quando === "agora"
-                      ? "Agora"
-                      : [
-                          new Date(quandoISO).toLocaleString("pt-BR"),
-                          preset && horariosOrdenados.length > 1
-                            ? `horários: ${horariosOrdenados.join(", ")}`
-                            : "",
-                          repetir !== "nunca"
-                            ? `${REPETICOES.find((r) => r.id === repetir)?.nome.toLowerCase()} até ${
-                                new Date(`${repetirAte}T12:00`).toLocaleDateString("pt-BR")
-                              }`
-                            : "",
-                        ].filter(Boolean).join(" — ")
-                  }
+                  valor={[
+                    new Date(quandoISO).toLocaleString("pt-BR"),
+                    preset && horariosOrdenados.length > 1
+                      ? `horários: ${horariosOrdenados.join(", ")}`
+                      : "",
+                    repete
+                      ? `toda semana até ${new Date(`${dataFim}T12:00`).toLocaleDateString("pt-BR")}`
+                      : "",
+                  ].filter(Boolean).join(" — ")}
                 />
                 <div>
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">Grupos escolhidos</p>
@@ -1240,7 +1290,7 @@ export function EnviarGrupoWizard({
             {enviando ? (
               <><Loader2 className="size-4 animate-spin" /> Disparando...</>
             ) : etapa === 6 ? (
-              <><Send className="size-4" /> {quando === "agora" ? "Disparar agora" : "Agendar disparo"}</>
+              <><CalendarClock className="size-4" /> Agendar campanha</>
             ) : (
               <>Continuar <ArrowRight className="size-4" /></>
             )}
