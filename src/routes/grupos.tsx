@@ -6,11 +6,10 @@ import {
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
   ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine, Download,
   MessageSquareText, RotateCcw, Upload, ImagePlus, TriangleAlert, Maximize2,
-  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { getUser } from "@/lib/auth";
+import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
 import { CriativoCard, type CriativoDados, type LayoutCriativo, type Paleta } from "@/components/CriativoCard";
 import { EditorCriativoModal } from "@/components/EditorCriativoModal";
 import { pecasAjustadas, type AjustesCriativo } from "@/lib/ajustesCriativo";
@@ -112,6 +111,9 @@ function GruposPage() {
    * Quem marca é o gestor, sempre.
    */
 
+  // Disparo por cliente (aba de ofertas) — continua no wizard antigo
+  const [clienteDisparo, setClienteDisparo] = useState<number | null>(null);
+
   const { data: carteira = [] } = useQuery({
     queryKey: ["ofertas-carteira"],
     queryFn: getCarteiraOfertas,
@@ -119,37 +121,10 @@ function GruposPage() {
   });
   const pendentes = carteira.filter((c) => c.respondeu).length;
 
-  // As farmácias do passo 1. Ficam aqui no topo porque o "Montar" da aba de
-  // clientes precisa resolver o cliente da carteira (que só tem farmacia_id)
-  // para o objeto Farmacia que o fluxo inteiro usa.
-  // Mesma chave do passo 1: o react-query serve o cache, sem buscar de novo.
-  const { data: farmacias = [] } = useQuery({
-    queryKey: ["farmacias", "grupos"],
-    queryFn: () => getFarmacias(),
-    staleTime: 5 * 60_000,
-  });
-
   function escolherFarmacia(f: Farmacia) {
     setFarmacia(f);
     setGruposSel(new Set());   // troca de cliente começa sem nada marcado
     setPasso(2);
-  }
-
-  /**
-   * "Montar" na oferta do cliente: entra no MESMO fluxo do disparo normal, já
-   * com a farmácia escolhida. Antes abria um wizard próprio de 6 passos, que
-   * não tinha horários pré-definidos, repetição com data de término nem a
-   * trava de grupo de outro cliente — justamente no fluxo onde os dois
-   * incidentes de oferta trocada aconteceram.
-   */
-  function montarParaCliente(c: ClienteCarteira) {
-    const f = farmacias.find((x) => x.id === c.farmacia_id);
-    if (!f) {
-      toast.error("Não encontrei essa farmácia no cadastro. Abra pelo Novo disparo.");
-      return;
-    }
-    setAba("disparo");
-    escolherFarmacia(f);
   }
 
   function recomecar() {
@@ -224,10 +199,6 @@ function GruposPage() {
                   recomecar();
                   setAba("historico");
                   queryClient.invalidateQueries({ queryKey: ["disparos"] });
-                  // O disparo marca o pedido do cliente como atendido — a
-                  // carteira e o badge de pendentes precisam saber.
-                  queryClient.invalidateQueries({ queryKey: ["ofertas-carteira"] });
-                  queryClient.invalidateQueries({ queryKey: ["ofertas-pendentes"] });
                 }}
               />
             )}
@@ -235,11 +206,24 @@ function GruposPage() {
         )}
 
         {aba === "clientes" && (
-          <AbaClientes carteira={carteira} onMontar={montarParaCliente} />
+          <AbaClientes carteira={carteira} onMontar={(c) => setClienteDisparo(c.farmacia_id)} />
         )}
 
         {aba === "historico" && <AbaHistorico onNovo={() => { setAba("disparo"); recomecar(); }} />}
       </div>
+
+      {clienteDisparo !== null && (
+        <EnviarGrupoWizard
+          produtos={[]}
+          clienteInicialId={clienteDisparo}
+          onClose={() => {
+            setClienteDisparo(null);
+            queryClient.invalidateQueries({ queryKey: ["ofertas-carteira"] });
+            queryClient.invalidateQueries({ queryKey: ["ofertas-pendentes"] });
+            queryClient.invalidateQueries({ queryKey: ["disparos"] });
+          }}
+        />
+      )}
     </AppShell>
   );
 }
@@ -1579,9 +1563,6 @@ function PassoCriativo({
           // Arte pronta não sai do catálogo: sem id de produto para registrar,
           // e por isso ela não alimenta o chip "Recentes" da próxima campanha.
           produtos={ehNovo ? [] : selecionados.map((p) => ({ id: p.id, nome: p.nome }))}
-          // Fecha o pedido que o cliente mandou pelo link dele: sem isto a
-          // oferta continuaria "pendente" na carteira depois de disparada.
-          solicitacaoId={ultima?.id ?? null}
           onFechar={onFecharAgendamento}
           onPronto={onAgendado}
         />
@@ -1866,8 +1847,7 @@ const TEXTO_FECHA_MES = (nome: string, datas: string): string =>
 const MAX_LEGENDA = 1024;
 
 function ModalAgendamento({
-  farmacia, grupos, conexaoInicial, modelo, datas, pecas, produtos, solicitacaoId,
-  onFechar, onPronto,
+  farmacia, grupos, conexaoInicial, modelo, datas, pecas, produtos, onFechar, onPronto,
 }: {
   farmacia: Farmacia;
   grupos: GrupoWhatsApp[];
@@ -1880,8 +1860,6 @@ function ModalAgendamento({
   pecas: PecaEnvio[];
   /** Os produtos que geraram os criativos, com id — o PNG rasterizado o perde. */
   produtos: { id: number; nome: string }[];
-  /** Pedido do cliente que este disparo atende. null = campanha sem pedido. */
-  solicitacaoId: number | null;
   onFechar: () => void;
   onPronto: () => void;
 }) {
@@ -2083,9 +2061,6 @@ function ModalAgendamento({
           : null,
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
-        // Marca o pedido do cliente como atendido (a API confere se ele é
-        // mesmo deste gestor antes de gravar).
-        solicitacao_id: solicitacaoId,
         instance:      conexao,
         // A API repete a checagem do lado dela e recusa com 409 sem isto.
         confirmar_grupo_de_outro_cliente: cienteEstranhos,
@@ -2642,40 +2617,8 @@ function AbaClientes({
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
   const [copiado, setCopiado] = useState<number | null>(null);
-  // Cliente sem telefone salvo: não dá para abrir a conversa, então o modal
-  // entrega o texto pronto para copiar.
-  const [cobrando, setCobrando] = useState<ClienteCarteira | null>(null);
 
   const responderam = carteira.filter((c) => c.respondeu);
-
-  /** Texto que o gestor manda para cobrar a lista do dono. */
-  function mensagemCobranca(c: ClienteCarteira): string {
-    const nome = getUser()?.nome ?? "seu gestor";
-    const tratamento = c.responsavel ? `Olá, ${c.responsavel}!` : "Olá!";
-    return `${tratamento} Aqui é ${nome}.\n\n`
-      + `Preciso da lista de produtos para as ofertas da ${c.farmacia_visivel ?? c.farmacia}. `
-      // Link exclusivo deste cliente: abre direto na farmácia dele.
-      + `É só abrir o link, marcar o que você quer anunciar e enviar:\n\n${c.link ?? ""}\n\n`
-      + `Assim que você mandar, eu monto as artes e posto no grupo. 👍`;
-  }
-
-  /** Só dígitos, com DDI do Brasil — formato que o wa.me espera. */
-  function telefoneWa(tel: string): string {
-    const d = tel.replace(/\D/g, "");
-    return d.startsWith("55") ? d : `55${d}`;
-  }
-
-  function cobrar(c: ClienteCarteira) {
-    if (c.telefone?.trim()) {
-      window.open(
-        `https://wa.me/${telefoneWa(c.telefone)}?text=${encodeURIComponent(mensagemCobranca(c))}`,
-        "_blank",
-        "noopener",
-      );
-    } else {
-      setCobrando(c);
-    }
-  }
 
   /** Copia o link daquele cliente. Cada farmácia tem o seu. */
   function copiarLink(c: ClienteCarteira) {
@@ -2821,20 +2764,12 @@ function AbaClientes({
                       ? <><Check className="size-3.5 text-emerald-600" /> Copiado</>
                       : <><Copy className="size-3.5" /> Copiar link</>}
                   </button>
-                  {c.respondeu ? (
+                  {c.respondeu && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onMontar(c); }}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand text-white rounded-lg hover:bg-brand/90 shrink-0"
                     >
                       Montar <ArrowRight className="size-3.5" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); cobrar(c); }}
-                      title="Cobrar a lista deste cliente pelo WhatsApp"
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-50 shrink-0 transition"
-                    >
-                      <MessageCircle className="size-3.5" /> Cobrar
                     </button>
                   )}
                 </div>
@@ -2843,69 +2778,6 @@ function AbaClientes({
           )}
         </div>
       </div>
-
-      {/* Sem telefone salvo não dá para abrir a conversa — entrega o texto pronto */}
-      {cobrando && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setCobrando(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between px-5 py-4 border-b border-zinc-100">
-              <div className="min-w-0">
-                <h3 className="font-bold text-zinc-900 truncate">
-                  Cobrar {cobrando.farmacia_visivel ?? cobrando.farmacia}
-                </h3>
-                <p className="text-sm text-zinc-500">
-                  Esta farmácia não tem telefone salvo, então não dá para abrir a conversa direto.
-                </p>
-              </div>
-              <button
-                onClick={() => setCobrando(null)}
-                className="size-8 rounded-lg grid place-items-center text-zinc-400 hover:bg-zinc-100 transition shrink-0"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-
-            <div className="px-5 py-4 flex flex-col gap-3">
-              <textarea
-                readOnly
-                value={mensagemCobranca(cobrando)}
-                rows={8}
-                onFocus={(e) => e.currentTarget.select()}
-                className="w-full p-3 rounded-lg border border-zinc-200 bg-zinc-50 text-sm resize-none"
-              />
-              <p className="text-xs text-zinc-500">
-                Dica: salve o telefone em Farmácias → {cobrando.farmacia_visivel ?? cobrando.farmacia}.
-                Da próxima vez o botão abre a conversa do dono já com o texto pronto.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-zinc-100 bg-zinc-50/50">
-              <button
-                onClick={() => setCobrando(null)}
-                className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900 transition"
-              >
-                Fechar
-              </button>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(mensagemCobranca(cobrando))
-                    .then(() => { toast.success("Mensagem copiada!"); setCobrando(null); })
-                    .catch(() => toast.error("Não consegui copiar."));
-                }}
-                className="bg-brand hover:bg-brand/90 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition"
-              >
-                <Copy className="size-4" /> Copiar mensagem
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
