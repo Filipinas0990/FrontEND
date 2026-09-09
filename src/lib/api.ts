@@ -1061,6 +1061,8 @@ export interface ConjuntoMeta {
 
 export interface NovosAnunciosResultado {
   conjuntoId: string
+  /** true = o Meta recusou duplicar e o conjunto foi criado do zero, com a mesma config. */
+  conjuntoRecriado?: boolean
   anuncioIds: string[]
   linkGerenciador: string
   copyUsada: { textoPrincipal: string; titulo: string; descricao: string }

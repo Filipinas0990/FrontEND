@@ -1375,8 +1375,9 @@ function EtapaRevisao({ payload, resultado, modo }: {
                 <>ID: <span className="font-mono">{resultado.campanhaId}</span> — está <b>ativa</b>.</>
               ) : (
                 <>
-                  Cópia do conjunto: <span className="font-mono">{resultado.conjuntoId}</span> —
-                  criada <b>pausada</b>. O conjunto original segue rodando intacto.
+                  {resultado.conjuntoRecriado ? "Conjunto novo: " : "Cópia do conjunto: "}
+                  <span className="font-mono">{resultado.conjuntoId}</span> —
+                  criado <b>pausado</b>. O conjunto original segue rodando intacto.
                 </>
               )}
             </p>
