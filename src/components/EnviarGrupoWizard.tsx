@@ -14,6 +14,8 @@ import {
 } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
+import { descreverRodizio } from "@/lib/rodizio";
+import { CriativoCard } from "@/components/CriativoCard";
 import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import type { CriativosConfig } from "@/components/CriativosModal";
@@ -348,13 +350,18 @@ export function EnviarGrupoWizard({
     [itens, escolhidos],
   );
 
+  /**
+   * Barra de baixo do criativo. Sem localização vinda do fluxo de criativos,
+   * usa o nome do cliente — evita a peça sair com o rodapé em branco.
+   * Uma variável só para a prévia do passo 3 e o PNG do passo 6 não divergirem.
+   */
+  const localizacaoCriativo =
+    criativosConfig.localizacao || (clienteSel?.farmacia_visivel ?? clienteSel?.farmacia) || "";
+
   /** Rasteriza um criativo por produto escolhido. Roda ao entrar na revisão. */
   async function gerarMidias() {
     setGerando(true);
     try {
-      // Sem localização vinda do fluxo de criativos, usa o nome do cliente na
-      // barra do criativo — evita a peça sair com o rodapé em branco.
-      const localizacao = criativosConfig.localizacao || (clienteSel?.farmacia_visivel ?? clienteSel?.farmacia) || "";
       const geradas: MidiaDisparo[] = [];
       for (const item of itensEscolhidos) {
         const preco = precos[item.chave] ?? item.preco;
@@ -364,7 +371,7 @@ export function EnviarGrupoWizard({
           nome:          item.nome,
           preco,
           imagem:        item.imagem,
-          localizacao,
+          localizacao:   localizacaoCriativo,
           titulo:        criativosConfig.titulo,
           subtitulo:     criativosConfig.subtitulo,
         });
@@ -899,6 +906,36 @@ export function EnviarGrupoWizard({
                   Vai embaixo de cada imagem, com o produto logo abaixo. No WhatsApp, *texto* fica em negrito.
                 </p>
               </div>
+
+              {/* Prévia ao vivo: os mesmos CriativoCard que o passo 6 rasteriza
+                  em PNG. Aqui é só render — muda junto com o preço digitado, e
+                  o gestor vê a peça antes de escolher os grupos. */}
+              {itensEscolhidos.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-medium text-zinc-700">
+                    Prévia{" "}
+                    <span className="font-normal text-zinc-400">
+                      — {itensEscolhidos.length} anúncio(s), como vão sair no grupo
+                    </span>
+                  </p>
+                  <div className="flex gap-3 overflow-x-auto pb-1">
+                    {itensEscolhidos.map((item) => (
+                      <div key={item.chave} className="w-32 shrink-0">
+                        <CriativoCard
+                          layout={criativosConfig.layout}
+                          enquadramento={criativosConfig.enquadramento}
+                          nome={item.nome}
+                          preco={precos[item.chave] ?? item.preco}
+                          imagem={item.imagem}
+                          localizacao={localizacaoCriativo}
+                          titulo={criativosConfig.titulo}
+                          subtitulo={criativosConfig.subtitulo}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1210,7 +1247,7 @@ export function EnviarGrupoWizard({
                 <Linha rotulo="Cliente" valor={clienteSel?.farmacia ?? "Envio avulso"} />
                 <Linha rotulo="Enviando de" valor={numero ? `Seu WhatsApp (${numero})` : "Seu WhatsApp"} />
                 <Linha rotulo="Grupos" valor={`${selecionados.size} grupo(s)`} />
-                <Linha rotulo="Criativos" valor={`${itensEscolhidos.length} produto(s)`} />
+                <Linha rotulo="Criativos" valor={descreverRodizio(itensEscolhidos.length, repete)} />
                 <Linha
                   rotulo="Quando"
                   valor={[

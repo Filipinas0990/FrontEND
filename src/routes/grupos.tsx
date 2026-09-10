@@ -17,6 +17,7 @@ import { exportarCriativoPng, comprimirParaEnvio, baixarCriativos } from "@/lib/
 import { formatarMoeda } from "@/lib/moeda";
 import { desde } from "@/lib/tempo";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
+import { descreverRodizio, PRODUTOS_POR_ENVIO } from "@/lib/rodizio";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 import { CampoCategoria } from "@/components/CampoCategoria";
 import {
@@ -2236,6 +2237,14 @@ function ModalAgendamento({
                 <p className="text-xs text-zinc-500 mt-0.5">Toda semana, até a data de término.</p>
               </button>
             </div>
+
+            {/* Repetindo, o disparo não manda a lista toda de uma vez — o gestor
+                precisa saber disso aqui, senão estranha "só saíram 3". */}
+            {repete && pecas.length > PRODUTOS_POR_ENVIO && (
+              <p className="text-xs text-zinc-500 mt-2">
+                {descreverRodizio(pecas.length, true)}.
+              </p>
+            )}
           </div>
 
           {/* Pergunta antes de mostrar a lista — marcando, os campos de hora somem */}

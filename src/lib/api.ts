@@ -891,6 +891,24 @@ export interface WhatsAppStatus {
   instancia: string | null
   numero: string | null
   configurado: boolean
+  /** Quantas conexões existem ao todo (a tela Conexões lista todas). */
+  total?: number
+}
+
+/** Uma das várias conexões de WhatsApp do sistema. */
+export interface ConexaoWhatsApp {
+  id: number
+  instancia: string
+  nome: string
+  status: "open" | "connecting" | "close"
+  numero: string | null
+  conectado: boolean
+}
+
+export interface ListagemConexoes {
+  conexoes: ConexaoWhatsApp[]
+  /** false = servidor sem Evolution API configurada. */
+  configurado: boolean
 }
 
 export interface WhatsAppConnectResponse {
@@ -909,23 +927,40 @@ export function getWhatsAppStatus(): Promise<WhatsAppStatus> {
   return req("/api/whatsapp/status")
 }
 
-export function connectWhatsApp(instance_name: string): Promise<WhatsAppConnectResponse> {
+/** Todas as conexões, com o status conferido ao vivo na Evolution. */
+export function getWhatsAppConexoes(): Promise<ListagemConexoes> {
+  return req("/api/whatsapp/conexoes")
+}
+
+/**
+ * Cria uma conexão nova ou reconecta uma existente — o que manda é o
+ * `instance_name`: repetir um já cadastrado reconecta aquele, um nome inédito
+ * abre mais uma conexão em paralelo.
+ */
+export function connectWhatsApp(
+  instance_name: string,
+  nome?: string,
+): Promise<WhatsAppConnectResponse> {
   return req("/api/whatsapp/connect", {
     method: "POST",
-    body: JSON.stringify({ instance_name }),
+    body: JSON.stringify({ instance_name, nome }),
   })
 }
 
-export function getWhatsAppQrCode(): Promise<WhatsAppQrResponse> {
-  return req("/api/whatsapp/qrcode")
+/** Sem `instance` responde pela conexão default (comportamento antigo). */
+export function getWhatsAppQrCode(instance?: string): Promise<WhatsAppQrResponse> {
+  const q = instance ? `?instance=${encodeURIComponent(instance)}` : ""
+  return req(`/api/whatsapp/qrcode${q}`)
 }
 
-export function disconnectWhatsApp(): Promise<{ mensagem: string }> {
-  return req("/api/whatsapp/disconnect", { method: "DELETE" })
+export function disconnectWhatsApp(instance?: string): Promise<{ mensagem: string }> {
+  const q = instance ? `?instance=${encodeURIComponent(instance)}` : ""
+  return req(`/api/whatsapp/disconnect${q}`, { method: "DELETE" })
 }
 
-export function deleteWhatsAppInstance(): Promise<{ mensagem: string }> {
-  return req("/api/whatsapp/instance", { method: "DELETE" })
+export function deleteWhatsAppInstance(instance?: string): Promise<{ mensagem: string }> {
+  const q = instance ? `?instance=${encodeURIComponent(instance)}` : ""
+  return req(`/api/whatsapp/instance${q}`, { method: "DELETE" })
 }
 
 // ── Automação de Anúncios (Meta Ads) ──────────────────────────────────────────

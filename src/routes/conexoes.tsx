@@ -12,16 +12,19 @@ import {
   XCircle,
   AlertTriangle,
   Trash2,
+  Power,
+  QrCode,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { getUser } from "@/lib/auth";
 import {
-  getWhatsAppStatus,
+  getWhatsAppConexoes,
   connectWhatsApp,
   getWhatsAppQrCode,
   disconnectWhatsApp,
-  type WhatsAppStatus,
+  deleteWhatsAppInstance,
+  type ConexaoWhatsApp,
 } from "@/lib/api";
 import {
   Dialog,
@@ -63,13 +66,27 @@ function formatTime(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-const STATUS_MAP: Record<WhatsAppStatus["status"], { color: string; label: string }> = {
+/**
+ * Nome amigável → identificador da instância na Evolution. O usuário digita
+ * "WhatsApp Ofertas SP" e não precisa saber que vira "whatsapp-ofertas-sp".
+ */
+function paraInstancia(nome: string) {
+  return nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100);
+}
+
+const STATUS_MAP: Record<ConexaoWhatsApp["status"], { color: string; label: string }> = {
   open: { color: "#10B981", label: "Conectado" },
   connecting: { color: "#F59E0B", label: "Conectando..." },
   close: { color: "#6B7280", label: "Desconectado" },
 };
 
-function StatusBadge({ status }: { status: WhatsAppStatus["status"] }) {
+function StatusBadge({ status }: { status: ConexaoWhatsApp["status"] }) {
   const { color, label } = STATUS_MAP[status];
   return (
     <span className="flex items-center gap-1.5 font-medium text-sm">
@@ -83,19 +100,28 @@ function ConexoesPage() {
   const qc = useQueryClient();
   const isAdmin = getUser()?.is_admin === true;
 
-  const { data: statusData, isLoading } = useQuery({
-    queryKey: ["whatsapp-status"],
-    queryFn: getWhatsAppStatus,
+  const { data, isLoading } = useQuery({
+    queryKey: ["whatsapp-conexoes"],
+    queryFn: getWhatsAppConexoes,
     staleTime: 30_000,
     retry: false,
   });
 
+  const conexoes = data?.conexoes ?? [];
+
   const [busca, setBusca] = useState("");
   const [modalState, setModalState] = useState<ModalState>("none");
-  const [instanceName, setInstanceName] = useState("pharmaflow");
+  const [nomeConexao, setNomeConexao] = useState("");
+  const [instanceName, setInstanceName] = useState("");
+  /** Instância que o modal de QR está acompanhando. */
+  const [instanciaAtiva, setInstanciaAtiva] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(120);
-  const [disconnectConfirm, setDisconnectConfirm] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<
+    { tipo: "desconectar" | "excluir"; conexao: ConexaoWhatsApp } | null
+  >(null);
+  /** Instância cuja ação está em voo — para o spinner ficar no card certo. */
+  const [emAcao, setEmAcao] = useState<string | null>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -108,7 +134,13 @@ function ConexoesPage() {
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
-  const startPolling = useCallback(() => {
+  const invalidarConexoes = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["whatsapp-conexoes"] });
+    // O pontinho verde da sidebar vem do /status — segue a mesma verdade.
+    qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+  }, [qc]);
+
+  const startPolling = useCallback((instancia: string) => {
     stopPolling();
     tentativasRef.current = 0;
     setCountdown(120);
@@ -125,11 +157,11 @@ function ConexoesPage() {
         return;
       }
       try {
-        const data = await getWhatsAppQrCode();
+        const data = await getWhatsAppQrCode(instancia);
         if (data.status === "open") {
           stopPolling();
           setModalState("success");
-          qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+          invalidarConexoes();
           return;
         }
         if (data.qr_code) setQrCode(data.qr_code);
@@ -137,35 +169,69 @@ function ConexoesPage() {
         // ignora erros de rede durante polling
       }
     }, 3000);
-  }, [stopPolling, qc]);
+  }, [stopPolling, invalidarConexoes]);
 
   const connectMut = useMutation({
-    mutationFn: (name: string) => connectWhatsApp(name),
+    mutationFn: ({ instancia, nome }: { instancia: string; nome?: string }) =>
+      connectWhatsApp(instancia, nome),
     onSuccess: (data) => {
+      setInstanciaAtiva(data.instancia);
       setQrCode(data.qr_code);
       setModalState("qr");
-      startPolling();
+      startPolling(data.instancia);
+      invalidarConexoes();
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const disconnectMut = useMutation({
-    mutationFn: disconnectWhatsApp,
+    mutationFn: (instancia: string) => disconnectWhatsApp(instancia),
     onSuccess: () => {
       toast.success("WhatsApp desconectado.");
-      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      invalidarConexoes();
     },
     onError: (err: Error) => toast.error(err.message),
+    onSettled: () => setEmAcao(null),
   });
 
-  const handleConnect = () => {
-    if (!instanceName.trim()) return;
-    connectMut.mutate(instanceName.trim());
+  const deleteMut = useMutation({
+    mutationFn: (instancia: string) => deleteWhatsAppInstance(instancia),
+    onSuccess: () => {
+      toast.success("Conexão removida.");
+      invalidarConexoes();
+    },
+    onError: (err: Error) => toast.error(err.message),
+    onSettled: () => setEmAcao(null),
+  });
+
+  const handleCriar = () => {
+    const instancia = instanceName.trim() || paraInstancia(nomeConexao);
+    if (!instancia) return;
+
+    if (conexoes.some((c) => c.instancia === instancia)) {
+      toast.error("Já existe uma conexão com esse identificador. Escolha outro nome.");
+      return;
+    }
+    connectMut.mutate({ instancia, nome: nomeConexao.trim() || instancia });
+  };
+
+  /** Reabre o QR de uma conexão que já existe (caiu ou nunca foi escaneada). */
+  const handleReconectar = (conexao: ConexaoWhatsApp) => {
+    if (!isAdmin) {
+      toast.info("Apenas administradores podem configurar conexões.");
+      return;
+    }
+    setEmAcao(conexao.instancia);
+    connectMut.mutate(
+      { instancia: conexao.instancia, nome: conexao.nome },
+      { onSettled: () => setEmAcao(null) },
+    );
   };
 
   const handleRegenerate = () => {
+    if (!instanciaAtiva) return;
     stopPolling();
-    connectMut.mutate(instanceName.trim());
+    connectMut.mutate({ instancia: instanciaAtiva });
   };
 
   const handleCloseQrModal = () => {
@@ -178,25 +244,21 @@ function ConexoesPage() {
       toast.info("Apenas administradores podem configurar conexões.");
       return;
     }
+    setNomeConexao("");
+    setInstanceName("");
     setModalState("connect_form");
   };
 
-  // Conexão existente (a API é de instância única).
-  const conexao =
-    statusData && (statusData.conectado || statusData.instancia)
-      ? {
-          nome: statusData.instancia ?? "pharmaflow",
-          numero: statusData.numero,
-          status: statusData.status,
-        }
-      : null;
-
   const termo = busca.trim().toLowerCase();
-  const conexaoVisivel =
-    conexao &&
-    (termo === "" ||
-      conexao.nome.toLowerCase().includes(termo) ||
-      (conexao.numero ?? "").includes(termo));
+  const visiveis = conexoes.filter(
+    (c) =>
+      termo === "" ||
+      c.nome.toLowerCase().includes(termo) ||
+      c.instancia.toLowerCase().includes(termo) ||
+      (c.numero ?? "").includes(termo),
+  );
+
+  const conectadas = conexoes.filter((c) => c.conectado).length;
 
   return (
     <AppShell title="Conexões">
@@ -212,13 +274,14 @@ function ConexoesPage() {
         <div className="text-center max-w-3xl mx-auto px-12">
           <h2 className="text-2xl font-bold text-zinc-900">Conexões</h2>
           <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-            Gerencie os números de WhatsApp conectados ao sistema. Conecte um
-            aparelho para enviar as confirmações e disparos automáticos.
+            Gerencie os números de WhatsApp conectados ao sistema. Conecte
+            quantos aparelhos precisar — todos ficam disponíveis para as
+            confirmações e os disparos automáticos.
           </p>
         </div>
       </div>
 
-      {/* Toolbar: busca + filtros */}
+      {/* Toolbar: busca + contagem + filtros */}
       <div className="flex items-center gap-3 max-w-5xl mx-auto w-full">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
@@ -229,6 +292,11 @@ function ConexoesPage() {
             className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
+        {conexoes.length > 0 && (
+          <span className="text-sm text-zinc-500 tabular-nums">
+            {conectadas} de {conexoes.length} conectada{conexoes.length > 1 ? "s" : ""}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => toast.info("Filtros estarão disponíveis em breve. 🔒")}
@@ -244,7 +312,7 @@ function ConexoesPage() {
           <div className="flex items-center justify-center gap-2 text-sm text-zinc-500 py-16">
             <RefreshCw className="size-4 animate-spin" /> Verificando conexões...
           </div>
-        ) : statusData && !statusData.configurado ? (
+        ) : data && !data.configurado ? (
           <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg max-w-md mx-auto">
             <AlertTriangle className="size-4 text-red-500 mt-0.5 shrink-0" />
             <div className="text-sm">
@@ -256,39 +324,93 @@ function ConexoesPage() {
           </div>
         ) : (
           <div className="flex flex-wrap justify-center gap-6">
-            {/* Card da conexão existente */}
-            {conexaoVisivel && conexao && (
-              <div className="w-[380px] bg-white rounded-2xl ring-1 ring-black/5 shadow-sm p-6 flex flex-col gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="size-11 rounded-xl bg-emerald-50 text-emerald-500 grid place-items-center shrink-0">
-                    <MessageCircle className="size-5" />
+            {visiveis.map((conexao) => {
+              const ocupado = emAcao === conexao.instancia;
+              return (
+                <div
+                  key={conexao.instancia}
+                  className="w-[380px] bg-white rounded-2xl ring-1 ring-black/5 shadow-sm p-6 flex flex-col gap-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`size-11 rounded-xl grid place-items-center shrink-0 ${
+                        conexao.conectado
+                          ? "bg-emerald-50 text-emerald-500"
+                          : "bg-zinc-100 text-zinc-400"
+                      }`}
+                    >
+                      <MessageCircle className="size-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-zinc-900 truncate" title={conexao.nome}>
+                        {conexao.nome}
+                      </p>
+                      <StatusBadge status={conexao.status} />
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-zinc-900 truncate">{conexao.nome}</p>
-                    <StatusBadge status={conexao.status} />
-                  </div>
-                </div>
-                {conexao.numero && (
-                  <p className="text-sm text-zinc-600">
-                    <span className="text-zinc-500">Número: </span>
-                    {formatPhone(conexao.numero)}
-                  </p>
-                )}
-                {isAdmin && (
-                  <button
-                    onClick={() => setDisconnectConfirm(true)}
-                    disabled={disconnectMut.isPending}
-                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition disabled:opacity-60"
-                  >
-                    {disconnectMut.isPending ? (
-                      <RefreshCw className="size-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-3.5" />
+
+                  <div className="text-sm text-zinc-600 space-y-0.5">
+                    {conexao.numero && (
+                      <p>
+                        <span className="text-zinc-500">Número: </span>
+                        {formatPhone(conexao.numero)}
+                      </p>
                     )}
-                    Desconectar
-                  </button>
-                )}
-              </div>
+                    {conexao.nome !== conexao.instancia && (
+                      <p className="text-xs text-zinc-400 truncate" title={conexao.instancia}>
+                        {conexao.instancia}
+                      </p>
+                    )}
+                  </div>
+
+                  {isAdmin && (
+                    <div className="mt-auto flex gap-2">
+                      {conexao.conectado ? (
+                        <button
+                          onClick={() => setConfirmacao({ tipo: "desconectar", conexao })}
+                          disabled={ocupado}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition disabled:opacity-60"
+                        >
+                          {ocupado ? (
+                            <RefreshCw className="size-3.5 animate-spin" />
+                          ) : (
+                            <Power className="size-3.5" />
+                          )}
+                          Desconectar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleReconectar(conexao)}
+                          disabled={ocupado}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand rounded-lg hover:opacity-90 transition disabled:opacity-60"
+                        >
+                          {ocupado ? (
+                            <RefreshCw className="size-3.5 animate-spin" />
+                          ) : (
+                            <QrCode className="size-3.5" />
+                          )}
+                          Conectar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setConfirmacao({ tipo: "excluir", conexao })}
+                        disabled={ocupado}
+                        title="Excluir conexão"
+                        className="px-3 py-2 text-zinc-500 bg-zinc-50 rounded-lg hover:bg-zinc-100 hover:text-red-600 transition disabled:opacity-60"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Nenhum resultado para a busca (mas existem conexões) */}
+            {visiveis.length === 0 && conexoes.length > 0 && (
+              <p className="w-full text-center text-sm text-zinc-500 py-8">
+                Nenhuma conexão encontrada para "{busca.trim()}".
+              </p>
             )}
 
             {/* Card grande: Adicionar Conexão */}
@@ -313,16 +435,31 @@ function ConexoesPage() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-700">Nome da instância</label>
+              <label className="text-sm font-medium text-zinc-700">Nome da conexão</label>
+              <input
+                type="text"
+                value={nomeConexao}
+                onChange={(e) => setNomeConexao(e.target.value)}
+                placeholder="Ex.: WhatsApp Ofertas SP"
+                autoFocus
+                className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+              />
+              <p className="text-xs text-zinc-500">
+                Como esta conexão aparece nas telas do sistema.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-zinc-700">Identificador na Evolution</label>
               <input
                 type="text"
                 value={instanceName}
                 onChange={(e) => setInstanceName(e.target.value)}
-                placeholder="pharmaflow"
+                placeholder={paraInstancia(nomeConexao) || "whatsapp-ofertas-sp"}
                 className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
               />
               <p className="text-xs text-zinc-500">
-                Identificador único na Evolution API. Use letras, números e hífens.
+                Deixe em branco para gerar a partir do nome. Precisa ser único —
+                letras, números e hífens.
               </p>
             </div>
           </div>
@@ -331,8 +468,10 @@ function ConexoesPage() {
               Cancelar
             </button>
             <button
-              onClick={handleConnect}
-              disabled={!instanceName.trim() || connectMut.isPending}
+              onClick={handleCriar}
+              disabled={
+                !(instanceName.trim() || paraInstancia(nomeConexao)) || connectMut.isPending
+              }
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {connectMut.isPending && <RefreshCw className="size-3.5 animate-spin" />}
@@ -418,25 +557,35 @@ function ConexoesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── AlertDialog: Confirmar desconexão ── */}
-      <AlertDialog open={disconnectConfirm} onOpenChange={setDisconnectConfirm}>
+      {/* ── AlertDialog: Confirmar desconexão / exclusão ── */}
+      <AlertDialog open={confirmacao !== null} onOpenChange={(open) => !open && setConfirmacao(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desconectar WhatsApp?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirmacao?.tipo === "excluir"
+                ? `Excluir "${confirmacao.conexao.nome}"?`
+                : `Desconectar "${confirmacao?.conexao.nome}"?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              As farmácias deixarão de receber confirmações automáticas de reunião via WhatsApp.
+              {confirmacao?.tipo === "excluir"
+                ? "A conexão sai da Evolution API e do sistema. Para usar este número de novo será preciso cadastrar e escanear o QR outra vez."
+                : "Este número deixa de enviar confirmações e disparos. As outras conexões continuam funcionando."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                setDisconnectConfirm(false);
-                disconnectMut.mutate();
+                if (!confirmacao) return;
+                const { tipo, conexao } = confirmacao;
+                setConfirmacao(null);
+                setEmAcao(conexao.instancia);
+                if (tipo === "excluir") deleteMut.mutate(conexao.instancia);
+                else disconnectMut.mutate(conexao.instancia);
               }}
               className="bg-red-500 text-white hover:bg-red-600"
             >
-              Desconectar
+              {confirmacao?.tipo === "excluir" ? "Excluir" : "Desconectar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
