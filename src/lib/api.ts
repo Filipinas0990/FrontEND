@@ -1379,6 +1379,12 @@ export interface CriarDisparoPayload {
   horarios?: string[]
   /** ISO — fim da repetição. Null = repete até o gestor cancelar. */
   repetir_ate?: string | null
+  /**
+   * true = quando a lista de produtos acaba, ela recomeça do início, e a data
+   * de término passa a ser a ÚNICA coisa que encerra a campanha (por isso ela
+   * vira obrigatória — a API recusa com 400 sem ela).
+   */
+  repetir_produtos?: boolean
   timezone?: string
   farmacia_id?: number | null
   solicitacao_id?: number | null

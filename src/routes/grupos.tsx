@@ -1884,6 +1884,9 @@ function ModalAgendamento({
   // Toda repetição tem fim: a data de término é obrigatória, para nenhuma
   // campanha ficar disparando esquecida.
   const [dataFim, setDataFim] = useState(emUmMes());
+  // Toggle "Repetir os produtos": a lista dá a volta ao acabar, e a data de
+  // término vira a ÚNICA condição de parada da campanha.
+  const [repetirProdutos, setRepetirProdutos] = useState(false);
   const [horaInicio, setHoraInicio] = useState("08:00");
   // Marcado = a hora sai da lista pré-definida, e os campos de hora somem
   const [usarPreset, setUsarPreset] = useState(false);
@@ -2071,6 +2074,8 @@ function ModalAgendamento({
         repetir_ate:   repete
           ? new Date(`${dataFim}T23:59:59`).toISOString()
           : null,
+        // Com isto ligado a lista dá a volta e só a data acima encerra
+        repetir_produtos: repete && repetirProdutos,
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
         instance:      conexao,
@@ -2253,7 +2258,9 @@ function ModalAgendamento({
                 precisa saber disso aqui, senão estranha "só saíram 3". */}
             {repete && pecas.length > PRODUTOS_POR_ENVIO && (
               <p className="text-xs text-zinc-500 mt-2">
-                {descreverRodizio(pecas.length, true, preset ? horariosOrdenados.length : 1)}.
+                {descreverRodizio(
+                  pecas.length, true, preset ? horariosOrdenados.length : 1, repetirProdutos,
+                )}.
               </p>
             )}
           </div>
@@ -2377,9 +2384,31 @@ function ModalAgendamento({
                   />
                 </Campo>
                 <p className="text-[11px] text-zinc-400 mt-1.5">
-                  No último dia a campanha ainda sai, e depois é finalizada sozinha.
+                  {repetirProdutos
+                    ? "É o único fim desta campanha: a lista recomeça quantas vezes precisar até esta data."
+                    : "No último dia a campanha ainda sai, e depois é finalizada sozinha."}
                 </p>
               </div>
+
+              {/* Troca a condição de parada da campanha */}
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={repetirProdutos}
+                  onChange={(e) => setRepetirProdutos(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[var(--brand)] cursor-pointer"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-zinc-700">
+                    Repetir os produtos?
+                  </span>
+                  <span className="block text-xs text-zinc-500 mt-0.5">
+                    {repetirProdutos
+                      ? "Ligado: quando os produtos acabarem, a lista recomeça do início. Só a data de término encerra a campanha."
+                      : "Desligado: a campanha termina quando os produtos acabarem, ou na data de término — o que vier primeiro."}
+                  </span>
+                </span>
+              </label>
             </div>
           )}
 

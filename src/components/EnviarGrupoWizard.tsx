@@ -146,6 +146,9 @@ export function EnviarGrupoWizard({
   const [dataInicio, setDataInicio] = useState(hojeISO());
   // Toda repetição tem fim: sem isso a campanha dispara esquecida para sempre.
   const [dataFim, setDataFim] = useState(emUmMes());
+  // Toggle "Repetir os produtos": a lista dá a volta ao acabar, e a data de
+  // término vira a ÚNICA condição de parada da campanha.
+  const [repetirProdutos, setRepetirProdutos] = useState(false);
   const [horaInicio, setHoraInicio] = useState("08:00");
   // Lista de horários fixos do gestor (Configurações → Horários de Disparo).
   const [horarios, setHorarios] = useState<HorarioDisparo[]>([]);
@@ -467,6 +470,8 @@ export function EnviarGrupoWizard({
         horarios: preset ? horariosOrdenados : undefined,
         // Fim do dia escolhido: o disparo daquele último dia ainda acontece
         repetir_ate: repete ? new Date(`${dataFim}T23:59:59`).toISOString() : null,
+        // Com isto ligado a lista dá a volta e só a data acima encerra
+        repetir_produtos: repete && repetirProdutos,
         timezone: "America/Sao_Paulo",
         farmacia_id: clienteSel?.farmacia_id ?? null,
         solicitacao_id: clienteSel?.solicitacao?.id ?? null,
@@ -1211,9 +1216,31 @@ export function EnviarGrupoWizard({
                           className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                         />
                         <p className="text-[11px] text-zinc-400">
-                          No último dia a campanha ainda sai, e depois é finalizada sozinha.
+                          {repetirProdutos
+                            ? "É o único fim desta campanha: a lista recomeça quantas vezes precisar até esta data."
+                            : "No último dia a campanha ainda sai, e depois é finalizada sozinha."}
                         </p>
                       </div>
+
+                      {/* Troca a condição de parada da campanha */}
+                      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={repetirProdutos}
+                          onChange={(e) => setRepetirProdutos(e.target.checked)}
+                          className="mt-0.5 size-4 accent-[var(--brand)] cursor-pointer"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-zinc-700">
+                            Repetir os produtos?
+                          </span>
+                          <span className="block text-xs text-zinc-500 mt-0.5">
+                            {repetirProdutos
+                              ? "Ligado: quando os produtos acabarem, a lista recomeça do início. Só a data de término encerra a campanha."
+                              : "Desligado: a campanha termina quando os produtos acabarem, ou na data de término — o que vier primeiro."}
+                          </span>
+                        </span>
+                      </label>
                     </div>
                   )}
 
@@ -1256,7 +1283,8 @@ export function EnviarGrupoWizard({
                 <Linha
                   rotulo="Criativos"
                   valor={descreverRodizio(
-                    itensEscolhidos.length, repete, preset ? horariosOrdenados.length : 1,
+                    itensEscolhidos.length, repete,
+                    preset ? horariosOrdenados.length : 1, repetirProdutos,
                   )}
                 />
                 <Linha
