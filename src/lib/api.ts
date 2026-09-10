@@ -38,6 +38,12 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
+    // 413 não vem do backend: é o proxy edge da Vercel recusando um corpo acima
+    // de ~4,2 MB, em texto puro. Sem este caso o gestor via "Erro no servidor"
+    // e não tinha como saber que o problema era o tamanho do envio.
+    if (res.status === 413) {
+      throw new ApiError(413, "Envio grande demais para a plataforma. Reduza a quantidade de imagens deste disparo.")
+    }
     throw new ApiError(res.status, body.detail ?? "Erro no servidor")
   }
 

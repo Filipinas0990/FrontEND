@@ -127,6 +127,32 @@ function carregarImagem(src: string): Promise<HTMLImageElement> {
 }
 
 /**
+ * Quanto cada criativo pode pesar (em caracteres de base64) para o disparo
+ * INTEIRO caber num POST.
+ *
+ * O front fala com a API por um proxy edge na Vercel, e a plataforma recusa
+ * qualquer requisição acima de ~4,2 MB com `FUNCTION_PAYLOAD_TOO_LARGE` — medido
+ * no deploy em 10/09/2026: 4,0 MB passa, 4,4 MB volta 413. O 413 não vem em
+ * JSON, então o front nem acha a mensagem e mostra "Erro no servidor".
+ * O `bodyLimit: 80MB` do Fastify não adianta: o pedido morre antes de chegar lá.
+ *
+ * Enquanto o disparo levava 3 a 6 imagens, o teto fixo de 800 KB cabia. Com o
+ * rodízio, um disparo carrega a lista inteira do cliente (43 produtos num caso
+ * real) e estourava sempre. Então o teto passa a ser por ENVIO, dividido entre
+ * os criativos: com poucos produtos nada muda, e com muitos a arte encolhe o
+ * necessário para o disparo existir.
+ */
+const ORCAMENTO_ENVIO = 3.4 * 1024 * 1024;   // sobra para mensagem, grupos e rótulos
+const TETO_POR_CRIATIVO = 800 * 1024;
+const PISO_POR_CRIATIVO = 40 * 1024;         // abaixo disso a peça fica ilegível
+
+export function orcamentoPorCriativo(quantidade: number): number {
+  if (quantidade <= 0) return TETO_POR_CRIATIVO;
+  const fatia = Math.floor(ORCAMENTO_ENVIO / quantidade);
+  return Math.min(TETO_POR_CRIATIVO, Math.max(PISO_POR_CRIATIVO, fatia));
+}
+
+/**
  * Comprime um criativo (data URL) para caber abaixo de `maxBytes`, re-encodando
  * em JPEG com qualidade — e, se preciso, resolução — decrescentes.
  *
@@ -137,7 +163,7 @@ function carregarImagem(src: string): Promise<HTMLImageElement> {
  */
 export async function comprimirParaEnvio(
   dataUrl: string,
-  maxBytes = 800 * 1024,
+  maxBytes = TETO_POR_CRIATIVO,
 ): Promise<{ b64: string; mime: string }> {
   const img = await carregarImagem(dataUrl);
   const qualidades = [0.82, 0.7, 0.6, 0.5, 0.4];

@@ -13,7 +13,9 @@ import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
 import { CriativoCard, type CriativoDados, type LayoutCriativo, type Paleta } from "@/components/CriativoCard";
 import { EditorCriativoModal } from "@/components/EditorCriativoModal";
 import { pecasAjustadas, type AjustesCriativo } from "@/lib/ajustesCriativo";
-import { exportarCriativoPng, comprimirParaEnvio, baixarCriativos } from "@/lib/exportarCriativo";
+import {
+  exportarCriativoPng, comprimirParaEnvio, baixarCriativos, orcamentoPorCriativo,
+} from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import { desde } from "@/lib/tempo";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
@@ -2035,10 +2037,13 @@ function ModalAgendamento({
       // criativo de template é rasterizado agora; a arte pronta já é imagem e
       // só passa pela compressão — o nginx da Evolution corta em 1 MB, e foto
       // tirada no celular passa fácil disso.
+      // O teto é por ENVIO, não por imagem: o proxy da Vercel recusa o POST
+      // inteiro acima de ~4,2 MB, e com o rodízio um disparo leva a lista toda.
+      const teto = orcamentoPorCriativo(pecas.length);
       const midias: MidiaDisparo[] = [];
       for (const peca of pecas) {
         const imagem = await imagemDaPeca(peca);
-        const comprimido = await comprimirParaEnvio(imagem);
+        const comprimido = await comprimirParaEnvio(imagem, teto);
         midias.push({
           b64:    comprimido.b64,
           mime:   comprimido.mime,

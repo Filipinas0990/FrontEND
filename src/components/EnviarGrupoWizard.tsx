@@ -16,7 +16,7 @@ import { getUser } from "@/lib/auth";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import { descreverRodizio } from "@/lib/rodizio";
 import { CriativoCard } from "@/components/CriativoCard";
-import { exportarCriativoPng, comprimirParaEnvio } from "@/lib/exportarCriativo";
+import { exportarCriativoPng, comprimirParaEnvio, orcamentoPorCriativo } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import type { CriativosConfig } from "@/components/CriativosModal";
 
@@ -367,6 +367,9 @@ export function EnviarGrupoWizard({
   async function gerarMidias() {
     setGerando(true);
     try {
+      // O teto é por ENVIO, não por imagem: o proxy da Vercel recusa o POST
+      // inteiro acima de ~4,2 MB, e com o rodízio um disparo leva a lista toda.
+      const teto = orcamentoPorCriativo(itensEscolhidos.length);
       const geradas: MidiaDisparo[] = [];
       for (const item of itensEscolhidos) {
         const preco = precos[item.chave] ?? item.preco;
@@ -381,7 +384,7 @@ export function EnviarGrupoWizard({
           subtitulo:     criativosConfig.subtitulo,
         });
         // Comprime para caber sob o limite de 1 MB do nginx da Evolution.
-        const comprimido = await comprimirParaEnvio(png);
+        const comprimido = await comprimirParaEnvio(png, teto);
         geradas.push({
           b64:    comprimido.b64,
           mime:   comprimido.mime,
