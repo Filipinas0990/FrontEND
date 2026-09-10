@@ -86,10 +86,15 @@ function proximaHoraISO(): string {
 }
 
 /**
- * Repetição é sempre SEMANAL — mesma decisão do disparo normal: a operação é
- * semanal na prática, e o seletor diário/semanal/mensal só dava chance de errar.
+ * Repetição é sempre DIÁRIA (regra do dono, 10/09/2026): os horários que o
+ * gestor marcar são os horários de postagem, e saem todos os dias até a lista
+ * de produtos acabar ou chegar a data de término — o que vier primeiro.
+ *
+ * Era "semanal" até 10/09; virou diário quando o rodízio passou a distribuir a
+ * lista aos poucos. O seletor diário/semanal/mensal continua fora da tela, pelo
+ * mesmo motivo de antes: só dava chance de errar.
  */
-const FREQUENCIA: RepetirDisparo = "semanal";
+const FREQUENCIA: RepetirDisparo = "diario";
 
 export function EnviarGrupoWizard({
   produtos, criativosConfig: configProp, clienteInicialId, onClose,
@@ -410,10 +415,8 @@ export function EnviarGrupoWizard({
       return;
     }
     if (etapa === 3) {
-      const semPreco = itensEscolhidos.filter((i) => !(precos[i.chave] ?? i.preco).trim());
-      if (semPreco.length > 0) {
-        toast.error(`Falta o preço de ${semPreco.length} produto(s).`); return;
-      }
+      // Preço é OPCIONAL: oferta sem valor ("consulte", brinde, leve-3-pague-2)
+      // é caso normal, e a arte simplesmente sai sem a caixa de preço.
       setEtapa(4);
       if (grupos.length === 0) void carregarGrupos();
       return;
@@ -1078,7 +1081,7 @@ export function EnviarGrupoWizard({
                     }`}
                   >
                     <p className="font-semibold text-zinc-900 text-sm">Sim, repetir</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">Toda semana, até a data de término.</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Todo dia, nos horários marcados.</p>
                   </button>
                 </div>
               </div>
@@ -1247,7 +1250,12 @@ export function EnviarGrupoWizard({
                 <Linha rotulo="Cliente" valor={clienteSel?.farmacia ?? "Envio avulso"} />
                 <Linha rotulo="Enviando de" valor={numero ? `Seu WhatsApp (${numero})` : "Seu WhatsApp"} />
                 <Linha rotulo="Grupos" valor={`${selecionados.size} grupo(s)`} />
-                <Linha rotulo="Criativos" valor={descreverRodizio(itensEscolhidos.length, repete)} />
+                <Linha
+                  rotulo="Criativos"
+                  valor={descreverRodizio(
+                    itensEscolhidos.length, repete, preset ? horariosOrdenados.length : 1,
+                  )}
+                />
                 <Linha
                   rotulo="Quando"
                   valor={[
@@ -1256,7 +1264,7 @@ export function EnviarGrupoWizard({
                       ? `horários: ${horariosOrdenados.join(", ")}`
                       : "",
                     repete
-                      ? `toda semana até ${new Date(`${dataFim}T12:00`).toLocaleDateString("pt-BR")}`
+                      ? `todo dia, no máximo até ${new Date(`${dataFim}T12:00`).toLocaleDateString("pt-BR")}`
                       : "",
                   ].filter(Boolean).join(" — ")}
                 />

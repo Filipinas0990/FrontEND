@@ -1148,8 +1148,9 @@ function PassoCriativo({
       return;
     }
     if (selecionados.length === 0) { toast.error("Escolha ao menos uma imagem."); return; }
-    const semPreco = selecionados.filter((p) => !(precos[p.id] ?? "").trim());
-    if (semPreco.length > 0)     { toast.error(`Falta o preço de ${semPreco.length} produto(s).`); return; }
+    // Preço é OPCIONAL: oferta sem valor ("consulte", brinde, leve-3-pague-2)
+    // é caso normal, e o CriativoCard sai sem a caixa de preço.
+    // O preço "DE" continua exigido: quem liga o DE/POR está prometendo os dois.
     const semPrecoDe = selecionados.filter((p) => dePor.has(p.id) && !(precosDe[p.id] ?? "").trim());
     if (semPrecoDe.length > 0)   { toast.error(`Falta o preço "de" de ${semPrecoDe.length} produto(s).`); return; }
     onAgendar();
@@ -1759,12 +1760,17 @@ function proximaHoraISO(): string {
 }
 
 /**
- * Repetição é sempre SEMANAL. Havia um seletor com diário/semanal/mensal e ele
- * saiu: a operação é semanal na prática, e a pergunta a mais só dava chance de
- * agendar diário sem querer — o que enche o grupo do cliente e queima o número.
- * Voltando a existir mais de uma cadência, o seletor volta com ela.
+ * Repetição é sempre DIÁRIA (regra do dono, 10/09/2026): os horários que o
+ * gestor marcar são os horários de postagem, e saem todos os dias até a lista
+ * de produtos acabar ou chegar a data de término — o que vier primeiro.
+ *
+ * Era "semanal" até 10/09, e o medo de então ("diário enche o grupo e queima o
+ * número") deixou de valer com o rodízio: a campanha diária não repete a lista,
+ * ela a distribui — cada dia leva produtos que ainda não saíram, e quando eles
+ * terminam a campanha se encerra sozinha.
+ * O seletor diário/semanal/mensal continua fora da tela: uma cadência só.
  */
-const FREQUENCIA: RepetirDisparo = "semanal";
+const FREQUENCIA: RepetirDisparo = "diario";
 
 /**
  * Legenda de UM criativo: o nome do produto com o preço. É o que o WhatsApp
@@ -2234,7 +2240,7 @@ function ModalAgendamento({
                 }`}
               >
                 <p className="font-semibold text-zinc-900 text-sm">Sim, repetir</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Toda semana, até a data de término.</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Todo dia, nos horários marcados.</p>
               </button>
             </div>
 
@@ -2242,7 +2248,7 @@ function ModalAgendamento({
                 precisa saber disso aqui, senão estranha "só saíram 3". */}
             {repete && pecas.length > PRODUTOS_POR_ENVIO && (
               <p className="text-xs text-zinc-500 mt-2">
-                {descreverRodizio(pecas.length, true)}.
+                {descreverRodizio(pecas.length, true, preset ? horariosOrdenados.length : 1)}.
               </p>
             )}
           </div>

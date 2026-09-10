@@ -128,6 +128,18 @@ function valorPreco(preco: string): string {
 }
 
 /**
+ * O produto tem preço para anunciar?
+ *
+ * Preço é OPCIONAL: parte das ofertas vai para o grupo sem valor ("consulte",
+ * leve-3-pague-2, brinde). Sem preço a caixa inteira sai da arte — mostrar o
+ * balão com "R$ 0,00" anuncia um preço que não existe, e é pior que não
+ * mostrar nada.
+ */
+function temPreco(preco?: string): boolean {
+  return Boolean(preco?.replace(/r\$\s*/i, "").replace(/—/g, "").trim());
+}
+
+/**
  * Tamanho da fonte do preço, em cqw, para o valor caber na caixa dele.
  *
  * O tamanho era fixo (21cqw no banner) e não olhava o texto: "R$0,00" já
@@ -321,7 +333,8 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo, paleta 
         </div>
       </Movivel>
 
-      {/* Preço (bloco embaixo-direita) */}
+      {/* Preço (bloco embaixo-direita). Sem preço, o bloco não sai. */}
+      {temPreco(preco) && (
       <Movivel alvo="preco" className="absolute bottom-[3.5%] right-[3.5%] w-[38%] flex flex-col items-center">
         <div className="rounded-full px-[7%] py-[1.6%] relative z-10"
              style={{ background: tinta.faixa, border: "0.55cqw solid #fff", marginBottom: "-4%" }}>
@@ -344,6 +357,7 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo, paleta 
           </span>
         </div>
       </Movivel>
+      )}
 
       {/* Rodapé nas duas cores da paleta */}
       <div className="absolute bottom-0 left-0 right-0 flex" style={{ height: "1.6%" }}>
@@ -472,11 +486,13 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo, 
       {/* Preço no canto de cima — mesma posição, largura e caixa do modelo
           Padrão, de propósito: os dois modelos mostram o preço no mesmo lugar,
           e quem edita um espera achar o outro igual. */}
-      <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
-        <div className="px-[4%] py-[3%] text-center" style={caixa(tinta, "10cqw", "0.6cqw")}>
-          <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
-        </div>
-      </Movivel>
+      {temPreco(preco) && (
+        <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
+          <div className="px-[4%] py-[3%] text-center" style={caixa(tinta, "10cqw", "0.6cqw")}>
+            <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
+          </div>
+        </Movivel>
+      )}
 
       {/* O rodapé é o que sobra do modelo: farmácia, arco e validade. Sem a
           caixa de preço aqui, a foto fica livre do meio para cima. */}
@@ -593,25 +609,28 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo, 
         </div>
       </Movivel>
 
-      {/* Preço — caixa de baixo. Sobe quando há tarja, para não encostar nela. */}
-      <Movivel alvo="preco" className="absolute left-[16%] right-[16%]" style={{ bottom: aviso ? "9%" : "4%" }}>
-        <div className="px-[5%] py-[2%] text-center" style={estiloCaixa}>
-          {precoDe && (
+      {/* Preço — caixa de baixo. Sobe quando há tarja, para não encostar nela.
+          Sem preço, a caixa inteira não sai. */}
+      {temPreco(preco) && (
+        <Movivel alvo="preco" className="absolute left-[16%] right-[16%]" style={{ bottom: aviso ? "9%" : "4%" }}>
+          <div className="px-[5%] py-[2%] text-center" style={estiloCaixa}>
+            {precoDe && (
+              <span
+                className="block text-white font-bold uppercase leading-none line-through"
+                style={{ fontSize: "4cqw", opacity: 0.9, marginBottom: "1.5%" }}
+              >
+                De R${valorPreco(precoDe)}
+              </span>
+            )}
             <span
-              className="block text-white font-bold uppercase leading-none line-through"
-              style={{ fontSize: "4cqw", opacity: 0.9, marginBottom: "1.5%" }}
+              className="block text-white font-black uppercase leading-none tracking-tight whitespace-nowrap"
+              style={{ fontSize: `${tamanho.toFixed(2)}cqw` }}
             >
-              De R${valorPreco(precoDe)}
+              POR R${valorPreco(preco)}
             </span>
-          )}
-          <span
-            className="block text-white font-black uppercase leading-none tracking-tight whitespace-nowrap"
-            style={{ fontSize: `${tamanho.toFixed(2)}cqw` }}
-          >
-            POR R${valorPreco(preco)}
-          </span>
-        </div>
-      </Movivel>
+          </div>
+        </Movivel>
+      )}
 
       {/* Aviso — tarja preta no pé. Sem texto, a tarja não sai. */}
       {aviso && (
@@ -640,11 +659,13 @@ function ModeloAzul({ nome, preco, precoDe, imagem, localizacao, paleta }: Criat
           Cresceu de 52% para 58% do card porque o valor agora é grande: na
           largura antiga, preço de quatro dígitos encolhia até ficar ilegível.
           O `utilCqw` acompanha esse 58% menos o px-[4%] de cada lado. */}
-      <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
-        <div className="px-[4%] py-[3%] text-center" style={estiloCaixa}>
-          <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
-        </div>
-      </Movivel>
+      {temPreco(preco) && (
+        <Movivel alvo="preco" className="absolute top-[3.5%] left-[4%] w-[58%]">
+          <div className="px-[4%] py-[3%] text-center" style={estiloCaixa}>
+            <BlocoPreco preco={preco} precoDe={precoDe} utilCqw={52} maxCqw={13} rotuloCqw={4.4} deCqw={3} />
+          </div>
+        </Movivel>
+      )}
 
       {/* Barra inferior: farmácia */}
       <Movivel alvo="rodape" className="absolute bottom-[3%] left-[6%] right-[6%]">
