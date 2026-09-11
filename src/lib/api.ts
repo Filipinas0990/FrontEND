@@ -1062,6 +1062,19 @@ export function buscarLocalizacoes(q: string): Promise<{ resultados: Localizacao
   return req(`/api/ads/geo-busca?q=${encodeURIComponent(q)}`)
 }
 
+export interface Coordenada {
+  lat: number
+  lon: number
+}
+
+/**
+ * Centro da cidade, só para desenhar o mapa do raio no wizard.
+ * `coordenada: null` = não encontrada (o mapa some, a etapa continua válida).
+ */
+export function buscarCoordenadas(nome: string, regiao = ''): Promise<{ coordenada: Coordenada | null }> {
+  return req(`/api/ads/geo-coordenadas?nome=${encodeURIComponent(nome)}&regiao=${encodeURIComponent(regiao)}`)
+}
+
 // ── Publicação de campanha ─────────────────────────────────────────────────────
 
 export interface PublicarCampanhaResultado {

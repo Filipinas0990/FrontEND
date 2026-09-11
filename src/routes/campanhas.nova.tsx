@@ -19,8 +19,11 @@ import {
 } from "@/components/ui/dialog";
 import {
   getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, buscarLocalizacoes,
+  buscarCoordenadas,
   type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado, type LocalizacaoMeta,
+  type Coordenada,
 } from "@/lib/api";
+import MapaRaio from "@/components/MapaRaio";
 
 export const Route = createFileRoute("/campanhas/nova")({
   component: NovaCampanhaPage,
@@ -591,9 +594,12 @@ function BlocoNumerado({ n, titulo, desc, children }: {
   );
 }
 
+/** Coordenada por cidade (key do Meta). Cidade não muda de lugar — cache vale a sessão inteira. */
+const CACHE_COORDENADAS = new Map<string, Coordenada | null>();
+
 /**
- * Busca de cidade (autocomplete real na Meta) + raio em km. Sem cidade
- * escolhida, a campanha sai segmentada pro Brasil inteiro.
+ * Busca de cidade (autocomplete real na Meta) + raio em km + mapa do raio.
+ * Sem cidade escolhida, a campanha sai segmentada pro Brasil inteiro.
  */
 function CampoLocalizacao({
   valor, raioKm, onSelecionar, onLimpar, onRaioChange,
@@ -608,6 +614,30 @@ function CampoLocalizacao({
   const [resultados, setResultados] = useState<LocalizacaoMeta[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [aberto, setAberto] = useState(false);
+  const [coord, setCoord] = useState<Coordenada | null>(null);
+  const [carregandoMapa, setCarregandoMapa] = useState(false);
+
+  // Centro da cidade escolhida, só para o mapa. Cidade sem coordenada (ou API
+  // fora do ar) simplesmente não mostra mapa — a segmentação continua válida.
+  useEffect(() => {
+    if (!valor) { setCoord(null); setCarregandoMapa(false); return; }
+
+    const emCache = CACHE_COORDENADAS.get(valor.key);
+    if (emCache !== undefined) { setCoord(emCache); setCarregandoMapa(false); return; }
+
+    let cancelado = false;
+    setCoord(null);
+    setCarregandoMapa(true);
+    buscarCoordenadas(valor.nome, valor.regiao)
+      .then((r) => {
+        CACHE_COORDENADAS.set(valor.key, r.coordenada);
+        if (!cancelado) setCoord(r.coordenada);
+      })
+      .catch(() => { if (!cancelado) setCoord(null); })
+      .finally(() => { if (!cancelado) setCarregandoMapa(false); });
+
+    return () => { cancelado = true; };
+  }, [valor]);
 
   useEffect(() => {
     const termo = busca.trim();
@@ -638,6 +668,15 @@ function CampoLocalizacao({
             Trocar
           </button>
         </div>
+
+        {carregandoMapa ? (
+          <div className="h-56 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-center gap-2">
+            <Loader2 className="size-4 text-zinc-400 animate-spin" />
+            <span className="text-xs text-zinc-400">Carregando o mapa...</span>
+          </div>
+        ) : coord ? (
+          <MapaRaio lat={coord.lat} lon={coord.lon} raioKm={raioKm} rotulo={valor.nome} />
+        ) : null}
 
         <div>
           <div className="flex items-baseline justify-between gap-3">
@@ -909,6 +948,14 @@ function brl(v: number): string {
 }
 
 const ORCAMENTO_MINIMO = 5;
+// Teto de gasto por dia definido pela agência. Acima disso o wizard não deixa
+// publicar (e o backend recusa a requisição, em /api/campanhas/*).
+const ORCAMENTO_MAXIMO = 50;
+
+/** Orçamento válido para publicar: dentro da faixa mínima/máxima. */
+function orcamentoValido(reais: number): boolean {
+  return reais >= ORCAMENTO_MINIMO && reais <= ORCAMENTO_MAXIMO;
+}
 
 /**
  * Campo de orçamento com máscara automática de moeda.
@@ -918,6 +965,8 @@ const ORCAMENTO_MINIMO = 5;
 function CampoOrcamento({ valor, onChange }: { valor: number; onChange: (reais: number) => void }) {
   const [texto, setTexto] = useState(() => FMT_NUM.format(valor));
   const abaixoDoMinimo = valor < ORCAMENTO_MINIMO;
+  const acimaDoMaximo  = valor > ORCAMENTO_MAXIMO;
+  const invalido       = abaixoDoMinimo || acimaDoMaximo;
 
   function digitar(bruto: string) {
     // Só os dígitos importam; os 2 últimos são os centavos. Teto evita overflow visual.
@@ -931,7 +980,7 @@ function CampoOrcamento({ valor, onChange }: { valor: number; onChange: (reais: 
     <label className="block">
       <span className="text-xs font-medium text-zinc-500">Orçamento diário</span>
       <div className={`mt-1 flex items-center gap-1 border rounded-lg px-3 transition focus-within:ring-2 ${
-        abaixoDoMinimo
+        invalido
           ? "border-red-300 focus-within:ring-red-100 focus-within:border-red-400"
           : "border-zinc-200 focus-within:ring-brand/20 focus-within:border-brand"
       }`}>
@@ -945,8 +994,12 @@ function CampoOrcamento({ valor, onChange }: { valor: number; onChange: (reais: 
           className="w-full py-2.5 text-sm text-zinc-800 text-right tabular-nums focus:outline-none bg-transparent"
         />
       </div>
-      <span className={`text-[11px] mt-1 block ${abaixoDoMinimo ? "text-red-500" : "text-zinc-400"}`}>
-        {abaixoDoMinimo ? `O Meta exige no mínimo ${brl(ORCAMENTO_MINIMO)}/dia.` : `Serão investidos ${brl(valor)} por dia.`}
+      <span className={`text-[11px] mt-1 block ${invalido ? "text-red-500" : "text-zinc-400"}`}>
+        {abaixoDoMinimo
+          ? `O Meta exige no mínimo ${brl(ORCAMENTO_MINIMO)}/dia.`
+          : acimaDoMaximo
+            ? `O orçamento diário não pode passar de ${brl(ORCAMENTO_MAXIMO)}.`
+            : `Serão investidos ${brl(valor)} por dia.`}
       </span>
     </label>
   );
@@ -1512,6 +1565,13 @@ function NovaCampanhaPage() {
 
   async function publicar() {
     if (publicando) return;
+    // Guarda final: o passo 3 já barra, mas o gestor pode voltar e alterar o
+    // orçamento antes de confirmar. Acima do teto, nem chega a sair requisição.
+    if (!orcamentoValido(publico.orcamentoDiario)) {
+      setConfirmarAberto(false);
+      toast.error(`Orçamento diário acima do limite de ${brl(ORCAMENTO_MAXIMO)}.`);
+      return;
+    }
     setConfirmarAberto(false);
     setPublicando(true);
     try {
@@ -1621,7 +1681,7 @@ function NovaCampanhaPage() {
       return modo === "conjunto" || nomeCampanha.trim().length > 0;
     }
     if (passo === 2) return modo === "conjunto" ? conjunto !== null : objetivo !== null;
-    if (passo === 3) return publico.orcamentoDiario >= ORCAMENTO_MINIMO && publico.dataInicio !== "";
+    if (passo === 3) return orcamentoValido(publico.orcamentoDiario) && publico.dataInicio !== "";
     if (passo === 4) return criativosData.selecionados.length > 0;
     return true;
   }
@@ -1730,7 +1790,10 @@ function NovaCampanhaPage() {
           ) : (
             <button
               onClick={() => setConfirmarAberto(true)}
-              disabled={publicando || resultado !== null}
+              disabled={publicando || resultado !== null || !orcamentoValido(publico.orcamentoDiario)}
+              title={orcamentoValido(publico.orcamentoDiario)
+                ? undefined
+                : `Orçamento diário acima do limite de ${brl(ORCAMENTO_MAXIMO)}.`}
               className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
             >
               {publicando

@@ -168,6 +168,13 @@
   }
 }
 
+/* Círculo do raio no mapa da segmentação (MapaRaio). O Leaflet escreve stroke/fill
+   como atributo SVG, então a cor da marca entra por classe e não por opção do JS. */
+.mapa-raio-circulo {
+  stroke: var(--brand);
+  fill:   var(--brand);
+}
+
 @keyframes indeterminate {
   0%   { transform: translateX(-100%) scaleX(0.4); }
   40%  { transform: translateX(0%)    scaleX(0.6); }
