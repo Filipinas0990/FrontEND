@@ -1416,6 +1416,29 @@ export interface DisparoResumo {
   proximo_envio: string | null
   ultimo_envio: string | null
   criado_em: string
+  /** true = a lista de produtos dá a volta; só a data de término encerra. */
+  repetir_produtos?: boolean
+}
+
+/**
+ * Uma postagem registrada: um grupo, num envio. O backend grava uma linha
+ * destas por grupo A CADA envio, então um disparo que repete acumula várias —
+ * é o que permite montar a linha do tempo do que realmente saiu.
+ */
+export interface DisparoLog {
+  id: number
+  disparoId: number
+  grupoJid: string
+  grupoNome: string | null
+  /** ok | erro */
+  status: string
+  erro: string | null
+  enviadoEm: string | null
+}
+
+/** O que de fato foi postado neste disparo, do mais recente para o mais antigo. */
+export function getDisparoLogs(id: number): Promise<DisparoLog[]> {
+  return req(`/api/disparos/${id}/logs`)
 }
 
 /** Cria/reconecta a instância Evolution do gestor logado e retorna o QR code. */

@@ -19,6 +19,7 @@ import {
 import { formatarMoeda } from "@/lib/moeda";
 import { desde } from "@/lib/tempo";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
+import { agruparPostagens } from "@/lib/timelineDisparo";
 import { descreverRodizio, PRODUTOS_POR_ENVIO } from "@/lib/rodizio";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 import { CampoCategoria } from "@/components/CampoCategoria";
@@ -26,9 +27,9 @@ import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
   listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo, nomeVisivel,
-  getDonosDeGrupos,
+  getDonosDeGrupos, getDisparoLogs,
   getUltimosProdutosDisparados,
-  type Farmacia, type DisparoResumo, type ClienteCarteira, type GrupoWhatsApp,
+  type Farmacia, type DisparoResumo, type DisparoLog, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
 } from "@/lib/api";
 
@@ -2516,6 +2517,8 @@ function fmtData(iso: string | null): string {
 
 function AbaHistorico({ onNovo }: { onNovo: () => void }) {
   const queryClient = useQueryClient();
+  // Um aberto por vez: a timeline é longa e duas abertas viram rolagem infinita.
+  const [abertoId, setAbertoId] = useState<number | null>(null);
   const { data: disparos = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ["disparos"],
     queryFn: getDisparos,
@@ -2584,6 +2587,8 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
               disparo={d}
               onCancelar={() => cancelar.mutate(d.id)}
               cancelando={cancelar.isPending && cancelar.variables === d.id}
+              aberto={abertoId === d.id}
+              onAlternar={() => setAbertoId((atual) => (atual === d.id ? null : d.id))}
             />
           ))}
         </Secao>
@@ -2591,7 +2596,14 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
 
       {historico.length > 0 && (
         <Secao titulo="Histórico" contagem={historico.length}>
-          {historico.map((d) => <LinhaDisparo key={d.id} disparo={d} />)}
+          {historico.map((d) => (
+            <LinhaDisparo
+              key={d.id}
+              disparo={d}
+              aberto={abertoId === d.id}
+              onAlternar={() => setAbertoId((atual) => (atual === d.id ? null : d.id))}
+            />
+          ))}
         </Secao>
       )}
     </div>
@@ -2610,12 +2622,109 @@ function Secao({ titulo, contagem, children }: { titulo: string; contagem: numbe
   );
 }
 
+/**
+ * Linha do tempo do que REALMENTE saiu: cada postagem, com hora e o resultado
+ * por grupo. É a resposta para "será que foi postado no grupo do meu cliente?"
+ * sem o gestor ter que abrir o WhatsApp.
+ */
+function TimelineDisparo({ disparo }: { disparo: DisparoResumo }) {
+  const { data: logs = [], isPending, error } = useQuery({
+    queryKey: ["disparo-logs", disparo.id],
+    queryFn: () => getDisparoLogs(disparo.id),
+    staleTime: 15_000,
+  });
+
+  const postagens = useMemo(() => agruparPostagens(logs), [logs]);
+
+  if (isPending) {
+    return (
+      <div className="px-5 pb-4 flex items-center gap-2 text-xs text-zinc-400">
+        <Loader2 className="size-3.5 animate-spin" /> Carregando o que já foi postado...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-5 pb-4 text-xs text-amber-700">
+        Não consegui carregar o histórico deste disparo: {error instanceof Error ? error.message : "erro"}
+      </div>
+    );
+  }
+
+  if (postagens.length === 0) {
+    return (
+      <div className="px-5 pb-4 text-xs text-zinc-500">
+        {disparo.status === "agendado"
+          ? `Ainda não saiu nenhuma postagem. A primeira está marcada para ${fmtData(disparo.proximo_envio ?? disparo.agendado_para)}.`
+          : "Nenhuma postagem registrada para este disparo."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pb-5">
+      <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+        {postagens.length} postagem(ns) registrada(s)
+      </p>
+
+      <ol className="relative pl-5 border-l border-zinc-200 space-y-4">
+        {postagens.map((postagem, i) => {
+          const ok = postagem.filter((l) => l.status === "ok").length;
+          const falhas = postagem.length - ok;
+          const quando = postagem[0]?.enviadoEm ?? null;
+
+          return (
+            <li key={`${quando}-${i}`} className="relative">
+              {/* Bolinha na linha do tempo: verde só quando tudo chegou */}
+              <span
+                className={`absolute -left-[1.4rem] top-1 size-2.5 rounded-full ring-2 ring-white ${
+                  falhas === 0 ? "bg-emerald-500" : ok > 0 ? "bg-amber-500" : "bg-red-500"
+                }`}
+              />
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-zinc-900">{fmtData(quando)}</p>
+                <span className="text-[11px] text-zinc-500">
+                  {ok} de {postagem.length} grupo(s)
+                  {falhas > 0 && <span className="text-red-600 font-medium"> · {falhas} falha(s)</span>}
+                </span>
+              </div>
+
+              <ul className="mt-1.5 space-y-1">
+                {postagem.map((l) => (
+                  <li key={l.id} className="flex items-start gap-2 text-xs">
+                    {l.status === "ok" ? (
+                      <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="size-3.5 text-red-500 shrink-0 mt-0.5" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="text-zinc-700">{l.grupoNome || l.grupoJid}</span>
+                      {l.erro && (
+                        // O erro cru da Evolution: é o que diz se foi número
+                        // fora do ar, imagem recusada ou grupo inexistente.
+                        <span className="block text-[11px] text-red-600 break-words">{l.erro}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 function LinhaDisparo({
-  disparo, onCancelar, cancelando,
+  disparo, onCancelar, cancelando, aberto, onAlternar,
 }: {
   disparo: DisparoResumo;
   onCancelar?: () => void;
   cancelando?: boolean;
+  aberto: boolean;
+  onAlternar: () => void;
 }) {
   const chip = STATUS_CHIP[disparo.status] ?? {
     rotulo: disparo.status, classe: "bg-zinc-100 text-zinc-600 ring-zinc-200", icone: Send,
@@ -2624,33 +2733,54 @@ function LinhaDisparo({
   const repeticao = REPETICAO_ROTULO[disparo.repetir] ?? "";
 
   return (
-    <div className="px-5 py-4 flex items-center gap-4">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-zinc-900 truncate">{disparo.titulo}</p>
-        <p className="text-[11px] text-zinc-500 mt-0.5">
-          {disparo.total_grupos} grupo(s) · {disparo.total_midias} criativo(s)
-          {disparo.status === "agendado"
-            ? ` · próximo envio ${fmtData(disparo.proximo_envio ?? disparo.agendado_para)}`
-            : ` · ${fmtData(disparo.ultimo_envio ?? disparo.criado_em)}`}
-          {repeticao && ` · repete ${repeticao}`}
-        </p>
+    <div>
+      <div className="px-5 py-4 flex items-center gap-4">
+        {/* A linha inteira abre a timeline — o gestor clica no nome do cliente,
+            que é onde a mão vai naturalmente. */}
+        <button
+          onClick={onAlternar}
+          aria-expanded={aberto}
+          className="min-w-0 flex-1 flex items-center gap-2 text-left group"
+        >
+          <ChevronRight
+            className={`size-4 text-zinc-400 shrink-0 transition-transform group-hover:text-zinc-600 ${
+              aberto ? "rotate-90" : ""
+            }`}
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-zinc-900 truncate group-hover:text-brand transition-colors">
+              {disparo.titulo}
+            </span>
+            <span className="block text-[11px] text-zinc-500 mt-0.5">
+              {disparo.total_grupos} grupo(s) · {disparo.total_midias} criativo(s)
+              {disparo.status === "agendado"
+                ? ` · próximo envio ${fmtData(disparo.proximo_envio ?? disparo.agendado_para)}`
+                : ` · ${fmtData(disparo.ultimo_envio ?? disparo.criado_em)}`}
+              {repeticao && ` · repete ${repeticao}`}
+            </span>
+          </span>
+        </button>
+
+        <span className={`shrink-0 flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ring-1 ${chip.classe}`}>
+          <Icone className={`size-3.5 ${disparo.status === "enviando" ? "animate-spin" : ""}`} />
+          {chip.rotulo}
+        </span>
+
+        {onCancelar && (
+          <button
+            onClick={onCancelar}
+            disabled={cancelando}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:border-red-300 hover:text-red-600 disabled:opacity-50 transition"
+          >
+            {cancelando ? <Loader2 className="size-3.5 animate-spin" /> : <Ban className="size-3.5" />}
+            Cancelar
+          </button>
+        )}
       </div>
 
-      <span className={`shrink-0 flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ring-1 ${chip.classe}`}>
-        <Icone className={`size-3.5 ${disparo.status === "enviando" ? "animate-spin" : ""}`} />
-        {chip.rotulo}
-      </span>
-
-      {onCancelar && (
-        <button
-          onClick={onCancelar}
-          disabled={cancelando}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:border-red-300 hover:text-red-600 disabled:opacity-50 transition"
-        >
-          {cancelando ? <Loader2 className="size-3.5 animate-spin" /> : <Ban className="size-3.5" />}
-          Cancelar
-        </button>
-      )}
+      {/* Só busca o log quando o gestor abre: são N linhas por envio, e a lista
+          do Histórico tem dezenas de disparos. */}
+      {aberto && <TimelineDisparo disparo={disparo} />}
     </div>
   );
 }
