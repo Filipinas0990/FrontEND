@@ -27,9 +27,9 @@ import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
   listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo, nomeVisivel,
-  getDonosDeGrupos, getDisparoLogs,
+  getDonosDeGrupos, getDisparoLogs, getDisparo,
   getUltimosProdutosDisparados,
-  type Farmacia, type DisparoResumo, type DisparoLog, type ClienteCarteira, type GrupoWhatsApp,
+  type Farmacia, type DisparoResumo, type DisparoDetalhe, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
 } from "@/lib/api";
 
@@ -2517,8 +2517,8 @@ function fmtData(iso: string | null): string {
 
 function AbaHistorico({ onNovo }: { onNovo: () => void }) {
   const queryClient = useQueryClient();
-  // Um aberto por vez: a timeline é longa e duas abertas viram rolagem infinita.
-  const [abertoId, setAbertoId] = useState<number | null>(null);
+  // Disparo aberto no modal de acompanhamento (null = nenhum).
+  const [detalheId, setDetalheId] = useState<number | null>(null);
   const { data: disparos = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ["disparos"],
     queryFn: getDisparos,
@@ -2587,8 +2587,7 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
               disparo={d}
               onCancelar={() => cancelar.mutate(d.id)}
               cancelando={cancelar.isPending && cancelar.variables === d.id}
-              aberto={abertoId === d.id}
-              onAlternar={() => setAbertoId((atual) => (atual === d.id ? null : d.id))}
+              onAbrir={() => setDetalheId(d.id)}
             />
           ))}
         </Secao>
@@ -2597,14 +2596,13 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
       {historico.length > 0 && (
         <Secao titulo="Histórico" contagem={historico.length}>
           {historico.map((d) => (
-            <LinhaDisparo
-              key={d.id}
-              disparo={d}
-              aberto={abertoId === d.id}
-              onAlternar={() => setAbertoId((atual) => (atual === d.id ? null : d.id))}
-            />
+            <LinhaDisparo key={d.id} disparo={d} onAbrir={() => setDetalheId(d.id)} />
           ))}
         </Secao>
+      )}
+
+      {detalheId !== null && (
+        <ModalDisparo disparoId={detalheId} onFechar={() => setDetalheId(null)} />
       )}
     </div>
   );
@@ -2627,7 +2625,7 @@ function Secao({ titulo, contagem, children }: { titulo: string; contagem: numbe
  * por grupo. É a resposta para "será que foi postado no grupo do meu cliente?"
  * sem o gestor ter que abrir o WhatsApp.
  */
-function TimelineDisparo({ disparo }: { disparo: DisparoResumo }) {
+function TimelineDisparo({ disparo }: { disparo: DisparoDetalhe }) {
   const { data: logs = [], isPending, error } = useQuery({
     queryKey: ["disparo-logs", disparo.id],
     queryFn: () => getDisparoLogs(disparo.id),
@@ -2638,7 +2636,7 @@ function TimelineDisparo({ disparo }: { disparo: DisparoResumo }) {
 
   if (isPending) {
     return (
-      <div className="px-5 pb-4 flex items-center gap-2 text-xs text-zinc-400">
+      <div className="flex items-center gap-2 text-xs text-zinc-400">
         <Loader2 className="size-3.5 animate-spin" /> Carregando o que já foi postado...
       </div>
     );
@@ -2646,7 +2644,7 @@ function TimelineDisparo({ disparo }: { disparo: DisparoResumo }) {
 
   if (error) {
     return (
-      <div className="px-5 pb-4 text-xs text-amber-700">
+      <div className="text-xs text-amber-700">
         Não consegui carregar o histórico deste disparo: {error instanceof Error ? error.message : "erro"}
       </div>
     );
@@ -2654,7 +2652,7 @@ function TimelineDisparo({ disparo }: { disparo: DisparoResumo }) {
 
   if (postagens.length === 0) {
     return (
-      <div className="px-5 pb-4 text-xs text-zinc-500">
+      <div className="text-xs text-zinc-500">
         {disparo.status === "agendado"
           ? `Ainda não saiu nenhuma postagem. A primeira está marcada para ${fmtData(disparo.proximo_envio ?? disparo.agendado_para)}.`
           : "Nenhuma postagem registrada para este disparo."}
@@ -2663,7 +2661,7 @@ function TimelineDisparo({ disparo }: { disparo: DisparoResumo }) {
   }
 
   return (
-    <div className="px-5 pb-5">
+    <div>
       <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
         {postagens.length} postagem(ns) registrada(s)
       </p>
@@ -2717,14 +2715,197 @@ function TimelineDisparo({ disparo }: { disparo: DisparoResumo }) {
   );
 }
 
+/** Um dado do resumo do disparo. */
+function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{rotulo}</p>
+      <div className="text-sm text-zinc-800 mt-0.5">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Acompanhamento de um disparo: quando termina, quanto falta da lista, quais
+ * produtos vão sair e o que já foi postado em cada grupo.
+ *
+ * Existe para o gestor não precisar abrir o WhatsApp para responder "será que
+ * caiu no grupo do meu cliente?".
+ */
+function ModalDisparo({ disparoId, onFechar }: { disparoId: number; onFechar: () => void }) {
+  const { data: d, isPending, error } = useQuery({
+    queryKey: ["disparo", disparoId],
+    queryFn: () => getDisparo(disparoId),
+    staleTime: 15_000,
+  });
+
+  const chip = d ? (STATUS_CHIP[d.status] ?? {
+    rotulo: d.status, classe: "bg-zinc-100 text-zinc-600 ring-zinc-200", icone: Send,
+  }) : null;
+  const Icone = chip?.icone ?? Send;
+
+  const total = d?.produtos.length ?? 0;
+  // Envio único manda a lista inteira de uma vez: não há fila a acompanhar.
+  const temRodizio = !!d && d.repetir !== "nunca" && total > 0;
+  const jaSairam = d ? Math.min(Math.max(0, d.cursor_midia), total) : 0;
+  const faltam = total - jaSairam;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+      onClick={onFechar}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-zinc-100">
+          <div className="min-w-0">
+            <h3 className="font-bold text-zinc-900 truncate">{d?.titulo ?? "Disparo"}</h3>
+            <p className="text-sm text-zinc-500">Acompanhamento da campanha</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {chip && (
+              <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ring-1 ${chip.classe}`}>
+                <Icone className={`size-3.5 ${d?.status === "enviando" ? "animate-spin" : ""}`} />
+                {chip.rotulo}
+              </span>
+            )}
+            <button
+              onClick={onFechar}
+              className="size-8 rounded-lg grid place-items-center text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 overflow-y-auto space-y-6">
+          {isPending ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-zinc-400 text-sm">
+              <Loader2 className="size-4 animate-spin" /> Carregando o disparo...
+            </div>
+          ) : error || !d ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+              Não consegui carregar este disparo: {error instanceof Error ? error.message : "erro"}
+            </div>
+          ) : (
+            <>
+              {/* ── Resumo ── */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Dado rotulo={d.status === "agendado" ? "Próximo envio" : "Último envio"}>
+                  {fmtData(d.status === "agendado" ? (d.proximo_envio ?? d.agendado_para) : d.ultimo_envio)}
+                </Dado>
+
+                <Dado rotulo="Termina em">
+                  {d.repetir === "nunca" ? (
+                    <span className="text-zinc-500">Envio único — não se repete.</span>
+                  ) : d.repetir_ate ? (
+                    <>
+                      {new Date(d.repetir_ate).toLocaleDateString("pt-BR")}
+                      {d.repetir_produtos && (
+                        <span className="block text-[11px] text-zinc-500">
+                          É o único fim: a lista recomeça até lá.
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-zinc-500">
+                      Sem data — termina quando os produtos acabarem.
+                    </span>
+                  )}
+                </Dado>
+
+                <Dado rotulo="Repetição">
+                  {REPETICAO_ROTULO[d.repetir] ?? "Não repete"}
+                  {d.horarios.length > 1 && (
+                    <span className="block text-[11px] text-zinc-500">
+                      nos horários {d.horarios.join(", ")}
+                    </span>
+                  )}
+                </Dado>
+
+                <Dado rotulo="Grupos">
+                  {d.grupos.length} grupo(s)
+                  <span className="block text-[11px] text-zinc-500 truncate">
+                    {d.grupos.map((g) => g.nome || g.jid).join(", ")}
+                  </span>
+                </Dado>
+              </div>
+
+              {/* ── Quanto falta da lista ── */}
+              {temRodizio && (
+                <div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                      Produtos da lista
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      <strong className="text-zinc-800">{jaSairam}</strong> de {total} já postado(s)
+                      {faltam > 0 && ` · faltam ${faltam}`}
+                    </p>
+                  </div>
+                  <div className="mt-1.5 h-2 rounded-full bg-zinc-100 overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 transition-all"
+                      style={{ width: `${total ? (jaSairam / total) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-1.5">
+                    {d.repetir_produtos
+                      ? `Ao chegar no fim a lista recomeça — quem encerra a campanha é a data de término.`
+                      : faltam > 0
+                        ? `Quando os ${faltam} que faltam saírem, a campanha se encerra sozinha.`
+                        : `A lista acabou — a campanha está encerrada.`}
+                  </p>
+                </div>
+              )}
+
+              {/* ── Quais produtos ── */}
+              {total > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                    {temRodizio ? "O que já saiu e o que falta" : "O que vai no disparo"}
+                  </p>
+                  <ul className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                    {d.produtos.map((rotulo, i) => {
+                      // Com rodízio, tudo antes do cursor já foi para o grupo.
+                      const saiu = !temRodizio ? d.status === "enviado" : i < jaSairam;
+                      return (
+                        <li key={i} className="flex items-start gap-2 text-xs">
+                          {saiu ? (
+                            <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          ) : (
+                            <Clock className="size-3.5 text-zinc-300 shrink-0 mt-0.5" />
+                          )}
+                          <span className={saiu ? "text-zinc-700" : "text-zinc-400"}>
+                            {/* Arte pronta sobe sem rótulo: não é produto do catálogo */}
+                            {rotulo ?? `Arte pronta ${i + 1}`}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {/* ── O que realmente foi postado ── */}
+              <TimelineDisparo disparo={d} />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LinhaDisparo({
-  disparo, onCancelar, cancelando, aberto, onAlternar,
+  disparo, onCancelar, cancelando, onAbrir,
 }: {
   disparo: DisparoResumo;
   onCancelar?: () => void;
   cancelando?: boolean;
-  aberto: boolean;
-  onAlternar: () => void;
+  onAbrir: () => void;
 }) {
   const chip = STATUS_CHIP[disparo.status] ?? {
     rotulo: disparo.status, classe: "bg-zinc-100 text-zinc-600 ring-zinc-200", icone: Send,
@@ -2735,18 +2916,13 @@ function LinhaDisparo({
   return (
     <div>
       <div className="px-5 py-4 flex items-center gap-4">
-        {/* A linha inteira abre a timeline — o gestor clica no nome do cliente,
-            que é onde a mão vai naturalmente. */}
+        {/* A linha inteira abre o acompanhamento — o gestor clica no nome do
+            cliente, que é onde a mão vai naturalmente. */}
         <button
-          onClick={onAlternar}
-          aria-expanded={aberto}
+          onClick={onAbrir}
           className="min-w-0 flex-1 flex items-center gap-2 text-left group"
         >
-          <ChevronRight
-            className={`size-4 text-zinc-400 shrink-0 transition-transform group-hover:text-zinc-600 ${
-              aberto ? "rotate-90" : ""
-            }`}
-          />
+          <ChevronRight className="size-4 text-zinc-400 shrink-0 group-hover:text-zinc-600 transition-colors" />
           <span className="min-w-0">
             <span className="block text-sm font-semibold text-zinc-900 truncate group-hover:text-brand transition-colors">
               {disparo.titulo}
@@ -2777,10 +2953,6 @@ function LinhaDisparo({
           </button>
         )}
       </div>
-
-      {/* Só busca o log quando o gestor abre: são N linhas por envio, e a lista
-          do Histórico tem dezenas de disparos. */}
-      {aberto && <TimelineDisparo disparo={disparo} />}
     </div>
   );
 }

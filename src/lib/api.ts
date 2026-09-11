@@ -1441,6 +1441,37 @@ export function getDisparoLogs(id: number): Promise<DisparoLog[]> {
   return req(`/api/disparos/${id}/logs`)
 }
 
+/**
+ * Detalhe de um disparo para acompanhamento. NÃO traz as imagens (o base64 de
+ * um disparo com dezenas de produtos pesa MB) — só o rótulo de cada criativo.
+ */
+export interface DisparoDetalhe {
+  id: number
+  titulo: string
+  mensagem: string
+  farmacia_id: number | null
+  quando: string
+  status: string
+  repetir: RepetirDisparo
+  repetir_ate: string | null
+  repetir_produtos: boolean
+  agendado_para: string | null
+  proximo_envio: string | null
+  ultimo_envio: string | null
+  criado_em: string
+  /** ["08:00","18:00"] quando o disparo sai em vários horários do dia. */
+  horarios: string[]
+  grupos: { jid: string; nome?: string }[]
+  /** Índice do PRÓXIMO produto a sair — o que vem antes já foi postado. */
+  cursor_midia: number
+  /** Rótulo de cada criativo, na ordem do rodízio. null = arte pronta. */
+  produtos: (string | null)[]
+}
+
+export function getDisparo(id: number): Promise<DisparoDetalhe> {
+  return req(`/api/disparos/${id}`)
+}
+
 /** Cria/reconecta a instância Evolution do gestor logado e retorna o QR code. */
 export function conectarMeuWhatsapp(): Promise<StatusInstancia> {
   return req("/api/disparos/whatsapp/conectar", { method: "POST" })
