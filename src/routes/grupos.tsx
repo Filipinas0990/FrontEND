@@ -20,6 +20,7 @@ import { formatarMoeda } from "@/lib/moeda";
 import { desde } from "@/lib/tempo";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import { agruparPostagens } from "@/lib/timelineDisparo";
+import { ehFimDeSemana, nomeDoDia } from "@/lib/diaUtil";
 import { descreverRodizio, PRODUTOS_POR_ENVIO } from "@/lib/rodizio";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 import { CampoCategoria } from "@/components/CampoCategoria";
@@ -2023,6 +2024,12 @@ function ModalAgendamento({
     if (repete && !dataFim) {
       toast.error("Informe a data de término da repetição."); return;
     }
+    // O primeiro envio é a data que o gestor escolheu — o backend recusa fim de
+    // semana, e avisar aqui evita montar a campanha toda para errar no fim.
+    if (ehFimDeSemana(quandoISO)) {
+      toast.error(`O primeiro envio cairia num ${nomeDoDia(quandoISO)}. Disparos só saem em dia útil.`);
+      return;
+    }
     if (repete && dataFim < dataInicio) {
       toast.error("A data de término é anterior à de início."); return;
     }
@@ -2411,6 +2418,12 @@ function ModalAgendamento({
                 </span>
               </label>
             </div>
+          )}
+
+          {ehFimDeSemana(quandoISO) && (
+            <p className="text-[11px] text-red-600">
+              Esse dia é {nomeDoDia(quandoISO)} — disparos só saem em dia útil. Escolha outra data.
+            </p>
           )}
 
           {jaPassou && (

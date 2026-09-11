@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
+import { ehFimDeSemana, nomeDoDia } from "@/lib/diaUtil";
 import { descreverRodizio } from "@/lib/rodizio";
 import { CriativoCard } from "@/components/CriativoCard";
 import { exportarCriativoPng, comprimirParaEnvio, orcamentoPorCriativo } from "@/lib/exportarCriativo";
@@ -441,6 +442,11 @@ export function EnviarGrupoWizard({
       }
       if (repete && !dataFim) {
         toast.error("Informe até quando a campanha se repete."); return;
+      }
+      // O primeiro envio é a data escolhida aqui — o backend recusa fim de semana.
+      if (ehFimDeSemana(quandoISO)) {
+        toast.error(`O primeiro envio cairia num ${nomeDoDia(quandoISO)}. Disparos só saem em dia útil.`);
+        return;
       }
       setEtapa(6);
       void gerarMidias();
@@ -1242,6 +1248,12 @@ export function EnviarGrupoWizard({
                         </span>
                       </label>
                     </div>
+                  )}
+
+                  {ehFimDeSemana(quandoISO) && (
+                    <p className="text-[11px] text-red-600">
+                      Esse dia é {nomeDoDia(quandoISO)} — disparos só saem em dia útil. Escolha outra data.
+                    </p>
                   )}
 
                   {jaPassou && (
