@@ -2792,7 +2792,12 @@ function ModalDisparo({ disparoId, onFechar }: { disparoId: number; onFechar: ()
           ) : (
             <>
               {/* ── Resumo ── */}
+              {/* Na ordem em que a campanha acontece: nasceu, vai sair, acaba. */}
               <div className="grid sm:grid-cols-2 gap-4">
+                <Dado rotulo="Criada em">
+                  {fmtData(d.criado_em)}
+                </Dado>
+
                 <Dado rotulo={d.status === "agendado" ? "Próximo envio" : "Último envio"}>
                   {fmtData(d.status === "agendado" ? (d.proximo_envio ?? d.agendado_para) : d.ultimo_envio)}
                 </Dado>
