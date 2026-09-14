@@ -4,9 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus, FileSpreadsheet, Pencil, UploadCloud, Info, CheckCircle2,
   LayoutTemplate, Tags, ImageIcon, PlusCircle, Loader2, Download, ZoomIn, X, Trash2,
+  LayoutGrid, ArrowRight,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CriativosModal, type CriativosConfig } from "@/components/CriativosModal";
+import { SeletorProdutosModal } from "@/components/SeletorProdutosModal";
 import { CriativoCard } from "@/components/CriativoCard";
 import { exportarCriativoPng, baixarPng } from "@/lib/exportarCriativo";
 import { identificarCatalogo, type ProdutoIdentificado } from "@/lib/api";
@@ -92,6 +94,9 @@ function CriativosCampanhasPage() {
   const [produtos, setProdutos] = useState<ItemProduto[]>(salvo.produtos ?? []);
   const [carregando, setCarregando] = useState(false);
   const [confirmado, setConfirmado] = useState(salvo.confirmado ?? false);
+
+  // Etapa 1: grade do catálogo (o caminho principal para escolher produtos)
+  const [showSeletor, setShowSeletor] = useState(false);
 
   // Etapa 3: modal de criativos + config gerada
   const [showCriativos, setShowCriativos] = useState(false);
@@ -220,6 +225,22 @@ function CriativosCampanhasPage() {
     }
   }
 
+  /**
+   * Produtos vindos da grade do catálogo. Passam pelo MESMO identificar dos
+   * outros caminhos — assim a etapa 2 recebe a imagem em data URI, que é o que
+   * o criativo precisa para rasterizar. O `catalogoId` faz o casamento ser
+   * exato, sem depender do nome.
+   */
+  function usarDoCatalogo(escolhidos: { id: number; nome: string }[]) {
+    setShowSeletor(false);
+    // Preço de quem já estava no fluxo não se perde ao voltar na grade.
+    const precoAtual = new Map(produtos.map((p) => [p.catalogoId, p.preco]));
+    identificar(escolhidos.map((p) => {
+      const preco = precoAtual.get(p.id);
+      return { nome: p.nome, catalogoId: p.id, preco: preco && preco !== "—" ? preco : undefined };
+    }));
+  }
+
   // Tira um item identificado do fluxo (não mexe no catálogo do banco —
   // identificar de novo traz o produto de volta).
   function removerProduto(item: ItemProduto) {
@@ -303,9 +324,22 @@ function CriativosCampanhasPage() {
       <EtapaRow
         numero={1}
         titulo="Informações dos produtos"
-        descricao="Você pode iniciar de duas formas."
+        descricao="Escolha do catálogo ou informe a lista você mesmo."
         left={
           <>
+            {/* Escolher do catálogo é o caminho principal: com 200 produtos no
+                banco, lembrar o nome exato de cada um é o que travava o gestor. */}
+            <button
+              onClick={() => setShowSeletor(true)}
+              className="w-full p-4 mb-3 border-2 border-brand bg-brand/5 rounded-xl hover:bg-brand/10 transition flex items-center gap-3 text-left"
+            >
+              <LayoutGrid className="size-6 text-brand shrink-0" />
+              <span>
+                <span className="block text-sm font-semibold text-zinc-900">Escolher do Catálogo</span>
+                <span className="block text-xs text-zinc-500">Veja os produtos com foto e clique</span>
+              </span>
+            </button>
+
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -330,7 +364,30 @@ function CriativosCampanhasPage() {
           </>
         }
         right={
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+          <>
+            {/* Caminho principal em destaque; planilha e digitação ficam como
+                alternativa para quem já tem a lista pronta em outro lugar. */}
+            <button
+              onClick={() => setShowSeletor(true)}
+              className="w-full bg-white border-2 border-brand rounded-xl p-5 flex items-center gap-4 hover:bg-brand/5 transition text-left"
+            >
+              <LayoutGrid className="size-8 text-brand shrink-0" />
+              <span className="flex-1">
+                <span className="block text-sm font-semibold text-zinc-900">Escolher do Catálogo</span>
+                <span className="block text-xs text-zinc-500 mt-0.5">
+                  Busque por nome ou categoria e clique nas fotos dos produtos.
+                </span>
+              </span>
+              <ArrowRight className="size-5 text-brand shrink-0" />
+            </button>
+
+            <div className="flex items-center gap-3 my-4">
+              <div className="h-px flex-1 bg-zinc-200" />
+              <span className="text-xs text-zinc-400">ou informe a lista</span>
+              <div className="h-px flex-1 bg-zinc-200" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
             {/* Exemplo: Subir Planilha */}
             <div>
               <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">Exemplo: Subir Planilha</p>
@@ -376,7 +433,8 @@ function CriativosCampanhasPage() {
                 )}
               </div>
             </div>
-          </div>
+            </div>
+          </>
         }
       />
 
@@ -590,6 +648,15 @@ function CriativosCampanhasPage() {
           )
         }
       />
+
+      {/* Grade do catálogo (etapa 1) */}
+      {showSeletor && (
+        <SeletorProdutosModal
+          jaEscolhidos={produtos.map((p) => p.catalogoId).filter((id): id is number => id !== null)}
+          onConfirmar={usarDoCatalogo}
+          onClose={() => setShowSeletor(false)}
+        />
+      )}
 
       {/* Modal de edição de criativos (etapa 3) */}
       {showCriativos && (

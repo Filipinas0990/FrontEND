@@ -625,8 +625,9 @@ function CampoLocalizacao({
     const emCache = CACHE_COORDENADAS.get(valor.key);
     if (emCache !== undefined) { setCoord(emCache); setCarregandoMapa(false); return; }
 
+    // A coordenada anterior fica até a nova chegar: o mapa continua montado e
+    // não pisca entre uma cidade e outra.
     let cancelado = false;
-    setCoord(null);
     setCarregandoMapa(true);
     buscarCoordenadas(valor.nome, valor.regiao)
       .then((r) => {
@@ -652,9 +653,10 @@ function CampoLocalizacao({
     return () => clearTimeout(t);
   }, [busca]);
 
-  if (valor) {
-    return (
-      <div className="space-y-4">
+  return (
+    <div className="space-y-4">
+      {/* Cidade escolhida vira um chip; sem cidade, fica a busca. */}
+      {valor ? (
         <div className="flex items-center gap-3 p-3 rounded-xl border border-brand/20 bg-brand/5">
           <MapPin className="size-5 text-brand shrink-0" />
           <div className="flex-1 min-w-0">
@@ -668,16 +670,62 @@ function CampoLocalizacao({
             Trocar
           </button>
         </div>
-
-        {carregandoMapa ? (
-          <div className="h-56 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-center gap-2">
-            <Loader2 className="size-4 text-zinc-400 animate-spin" />
-            <span className="text-xs text-zinc-400">Carregando o mapa...</span>
+      ) : (
+        <div className="relative">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
+            <input
+              value={busca}
+              onChange={(e) => { setBusca(e.target.value); setAberto(true); }}
+              onFocus={() => setAberto(true)}
+              onBlur={() => setTimeout(() => setAberto(false), 150)}
+              placeholder="Buscar cidade... (ex: Fortaleza)"
+              className="w-full pl-11 pr-4 py-3 text-sm bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+            />
+            {buscando && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400 animate-spin" />}
           </div>
-        ) : coord ? (
-          <MapaRaio lat={coord.lat} lon={coord.lon} raioKm={raioKm} rotulo={valor.nome} />
-        ) : null}
+          <p className="text-[11px] text-zinc-400 mt-1.5">
+            Deixe em branco para segmentar o Brasil inteiro.
+          </p>
 
+          {/* z alto: as camadas do Leaflet, logo abaixo, sobem até 800. */}
+          {aberto && busca.trim().length >= 2 && (
+            <div className="absolute z-[1000] mt-1 w-full bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+              {resultados.length === 0 && !buscando ? (
+                <p className="text-xs text-zinc-400 text-center py-4">Nenhuma cidade encontrada.</p>
+              ) : (
+                resultados.map((r) => (
+                  <button
+                    key={r.key}
+                    onClick={() => { onSelecionar(r); setBusca(""); setAberto(false); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-zinc-50 transition"
+                  >
+                    <MapPin className="size-4 text-zinc-400 shrink-0" />
+                    <span className="text-sm text-zinc-800">{r.nome}</span>
+                    {r.regiao && <span className="text-xs text-zinc-400">— {r.regiao}</span>}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* O mapa aparece desde o início: sem cidade mostra o Brasil inteiro,
+          que é exatamente a área que a campanha vai pegar. */}
+      <MapaRaio
+        centro={valor ? coord : null}
+        raioKm={raioKm}
+        rotulo={valor && coord ? valor.nome : "Brasil inteiro"}
+        sublinha={
+          carregandoMapa    ? "Procurando a cidade no mapa..."
+            : valor && coord ? `Raio de ${raioKm} km`
+            : valor          ? "Não achamos essa cidade no mapa — a segmentação continua valendo."
+            : "Escolha uma cidade para segmentar por raio."
+        }
+      />
+
+      {valor && (
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <p className="text-sm font-medium text-zinc-700">Raio ao redor da cidade</p>
@@ -702,46 +750,6 @@ function CampoLocalizacao({
             <span className="text-[10px] text-zinc-400">{RAIO_MIN_KM} km</span>
             <span className="text-[10px] text-zinc-400">{RAIO_MAX_KM} km</span>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative">
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
-        <input
-          value={busca}
-          onChange={(e) => { setBusca(e.target.value); setAberto(true); }}
-          onFocus={() => setAberto(true)}
-          onBlur={() => setTimeout(() => setAberto(false), 150)}
-          placeholder="Buscar cidade... (ex: Fortaleza)"
-          className="w-full pl-11 pr-4 py-3 text-sm bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-        />
-        {buscando && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400 animate-spin" />}
-      </div>
-      <p className="text-[11px] text-zinc-400 mt-1.5">
-        Deixe em branco para segmentar o Brasil inteiro.
-      </p>
-
-      {aberto && busca.trim().length >= 2 && (
-        <div className="absolute z-10 mt-1 w-full bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
-          {resultados.length === 0 && !buscando ? (
-            <p className="text-xs text-zinc-400 text-center py-4">Nenhuma cidade encontrada.</p>
-          ) : (
-            resultados.map((r) => (
-              <button
-                key={r.key}
-                onClick={() => { onSelecionar(r); setBusca(""); setAberto(false); }}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-zinc-50 transition"
-              >
-                <MapPin className="size-4 text-zinc-400 shrink-0" />
-                <span className="text-sm text-zinc-800">{r.nome}</span>
-                {r.regiao && <span className="text-xs text-zinc-400">— {r.regiao}</span>}
-              </button>
-            ))
-          )}
         </div>
       )}
     </div>

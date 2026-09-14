@@ -83,19 +83,21 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
         {etapa === "layout" && (
           <>
             <div className="flex-1 overflow-y-auto p-8">
-              <div className="max-w-2xl mx-auto grid grid-cols-2 gap-6">
+              {/* Os quatro lado a lado: em 2x2 a segunda fila ficava fora da
+                  área visível do modal e o gestor via os modelos cortados. */}
+              <div className="max-w-4xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {LAYOUTS.map((l) => (
                   <button
                     key={l.id}
                     onClick={() => setLayout(l.id)}
-                    className={`rounded-2xl p-4 border-2 transition text-center ${layout === l.id ? "border-brand ring-2 ring-brand/20 bg-brand/5" : "border-zinc-200 hover:border-zinc-300"}`}
+                    className={`rounded-2xl p-3 border-2 transition text-center ${layout === l.id ? "border-brand ring-2 ring-brand/20 bg-brand/5" : "border-zinc-200 hover:border-zinc-300"}`}
                   >
-                    <div className="max-w-[220px] mx-auto"><ModeloThumb layout={l.id} enquadramento="4:5" /></div>
-                    <div className="flex items-center justify-center gap-1.5 mt-4">
-                      {layout === l.id && <Check className="size-4 text-brand" />}
-                      <span className={`font-semibold ${layout === l.id ? "text-brand" : "text-zinc-700"}`}>{l.nome}</span>
+                    <div className="max-w-[180px] mx-auto"><ModeloThumb layout={l.id} enquadramento="4:5" /></div>
+                    <div className="flex items-center justify-center gap-1.5 mt-3">
+                      {layout === l.id && <Check className="size-4 text-brand shrink-0" />}
+                      <span className={`text-sm font-semibold ${layout === l.id ? "text-brand" : "text-zinc-700"}`}>{l.nome}</span>
                     </div>
-                    <p className="text-xs text-zinc-500 mt-1">{l.desc}</p>
+                    <p className="text-[11px] leading-snug text-zinc-500 mt-1">{l.desc}</p>
                   </button>
                 ))}
               </div>

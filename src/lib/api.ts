@@ -1144,6 +1144,8 @@ export function getConjuntosDaConta(contaId: string): Promise<{ conjuntos: Conju
 export interface ProdutoEntrada {
   nome: string
   preco?: string
+  /** Escolhido na grade do catálogo: casa pelo id, sem depender do nome. */
+  catalogoId?: number | null
 }
 
 export interface ProdutoIdentificado {
