@@ -327,19 +327,8 @@ function CriativosCampanhasPage() {
         descricao="Escolha do catálogo ou informe a lista você mesmo."
         left={
           <>
-            {/* Escolher do catálogo é o caminho principal: com 200 produtos no
-                banco, lembrar o nome exato de cada um é o que travava o gestor. */}
-            <button
-              onClick={() => setShowSeletor(true)}
-              className="w-full p-4 mb-3 border-2 border-brand bg-brand/5 rounded-xl hover:bg-brand/10 transition flex items-center gap-3 text-left"
-            >
-              <LayoutGrid className="size-6 text-brand shrink-0" />
-              <span>
-                <span className="block text-sm font-semibold text-zinc-900">Escolher do Catálogo</span>
-                <span className="block text-xs text-zinc-500">Veja os produtos com foto e clique</span>
-              </span>
-            </button>
-
+            {/* "Escolher do Catálogo" vive só no painel da direita — aqui
+                ficava repetido, ao lado do botão que faz a mesma coisa. */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => fileInputRef.current?.click()}
