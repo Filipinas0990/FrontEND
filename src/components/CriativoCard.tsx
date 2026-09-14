@@ -66,7 +66,7 @@ export interface CriativoDados {
 //
 // `apoio` é a cor que faz par com a principal — o Banner usa as duas ao mesmo
 // tempo (faixa numa, preço na outra), então elas trocam de papel juntas.
-export type Paleta = "azul" | "vermelho";
+export type Paleta = "azul" | "vermelho" | "laranja";
 
 interface Tinta {
   /** Gradiente das caixas de preço/farmácia. */
@@ -103,6 +103,18 @@ const TINTAS: Record<Paleta, Tinta> = {
     chapadoRgb: "143, 16, 21",
     faixa:      "#d61f27",
     apoio:      "#1f3f9e",
+  },
+  // A cor da Semana do Consumidor. O `apoio` aqui é um marrom quase preto, e
+  // não outra cor viva: laranja com vermelho embola (são hues vizinhos) e
+  // laranja com azul devolveria justamente o azul que esta paleta evita.
+  laranja: {
+    gradiente:  "linear-gradient(180deg, #ff9d2e 0%, #e4600a 100%)",
+    borda:      "#ffffff",
+    brilho:     "rgba(255, 141, 26, 0.7)",
+    chapado:    "#8a3703",
+    chapadoRgb: "138, 55, 3",
+    faixa:      "#ef6c0a",
+    apoio:      "#2a1a0f",
   },
 };
 
@@ -301,12 +313,70 @@ function Foto({ imagem, nome }: { imagem?: string | null; nome: string }) {
 }
 
 // ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
+//
+// A faixa do topo nasceu para caber "ABRE MÊS" / "FECHA MÊS" — dois títulos
+// curtos — e por isso o tamanho era fixo em 13cqw. "SEMANA DO CONSUMIDOR" tem
+// o dobro da largura e vazava a faixa inteira. Daqui para baixo o título se
+// mede: encolhe até o piso, e abaixo disso quebra em duas linhas em vez de
+// virar letrinha. Título curto continua em 13cqw numa linha — a arte de
+// Abre/Fecha Mês sai exatamente como antes.
+
+/** Largura interna da faixa em cqw: 90% do card, menos o px-[4%] e a borda. */
+const FAIXA_UTIL_CQW  = 80;
+const TITULO_MAX_CQW  = 13;   // o tamanho do design
+const TITULO_MIN_CQW  = 9;    // abaixo disto a faixa fica fina demais: quebra
+
+// Larguras médias por caractere em maiúscula na fonte black, em `em`, medidas
+// como as do preço e com folga para variação de fonte.
+const LARGURA_LETRA  = 0.68;
+const LARGURA_ESPACO = 0.30;
+
+function larguraEm(texto: string): number {
+  let em = 0;
+  for (const ch of texto) em += ch === " " ? LARGURA_ESPACO : LARGURA_LETRA;
+  return em;
+}
+
+/** Quebra o título no espaço que deixa as duas linhas mais parecidas. */
+function partirTitulo(texto: string): [string, string] | null {
+  const p = texto.split(/\s+/).filter(Boolean);
+  if (p.length < 2) return null;
+  let corte = 1;
+  let menorDif = Infinity;
+  for (let i = 1; i < p.length; i++) {
+    const dif = Math.abs(larguraEm(p.slice(0, i).join(" ")) - larguraEm(p.slice(i).join(" ")));
+    if (dif < menorDif) { menorDif = dif; corte = i; }
+  }
+  return [p.slice(0, corte).join(" "), p.slice(corte).join(" ")];
+}
+
+/** As linhas do título e a fonte em que elas cabem na faixa. */
+function tituloQueCabe(texto: string): { linhas: string[]; fonte: number } {
+  const numa = Math.min(TITULO_MAX_CQW, FAIXA_UTIL_CQW / larguraEm(texto));
+  if (numa >= TITULO_MIN_CQW) return { linhas: [texto], fonte: numa };
+
+  const duas = partirTitulo(texto);
+  if (!duas) return { linhas: [texto], fonte: numa };  // palavra única: só encolhe
+
+  const maior = Math.max(larguraEm(duas[0]), larguraEm(duas[1]));
+  return { linhas: duas, fonte: Math.min(TITULO_MAX_CQW, FAIXA_UTIL_CQW / maior) };
+}
+
 function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo, paleta }: CriativoDados) {
   // Caixa do preço: bloco de 38% do card, menos o px-[4%] dos dois lados.
   // Os três números andam juntos com o w-[38%] lá embaixo: encolher a caixa sem
   // baixar `utilCqw` e `maxCqw` faz o preço transbordar de novo.
   const tamanho = tamanhoQueCabe(valorPreco(preco), 0.60, 35, 17.5);
   const tinta = tintaDe(paleta);
+
+  const { linhas, fonte } = tituloQueCabe(titulo || "FECHA MÊS");
+  // A pílula das datas encosta na faixa por baixo, e a faixa muda de altura com
+  // o título. Sem este empurrão, título de duas linhas engoliria a pílula e
+  // título encolhido deixaria um buraco: o deslocamento mantém a MESMA sobra
+  // que a arte de uma linha em 13cqw sempre teve. Vai em `top` (e não em
+  // transform) porque o transform é do ajuste fino do gestor.
+  const deslocaSub = linhas.length * fonte - TITULO_MAX_CQW;
+
   return (
     <>
       <Foto imagem={imagem} nome={nome} />
@@ -315,15 +385,19 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo, paleta 
       <Movivel alvo="titulo" className="absolute top-[3.5%] left-[5%] right-[5%]">
         <div className="rounded-full py-[2.5%] px-[4%] text-center"
              style={{ background: tinta.faixa, border: "0.85cqw solid #fff", boxShadow: "0 1.1cqw 3.3cqw rgba(0,0,0,.18)" }}>
-          <span className="block text-white font-black uppercase leading-none tracking-tight"
-                style={{ fontSize: "13cqw" }}>
-            {titulo || "FECHA MÊS"}
-          </span>
+          {linhas.map((linha) => (
+            <span key={linha} className="block text-white font-black uppercase leading-none tracking-tight"
+                  style={{ fontSize: `${fonte.toFixed(2)}cqw` }}>
+              {linha}
+            </span>
+          ))}
         </div>
       </Movivel>
 
       {/* Subtítulo / datas (pílula branca) */}
-      <Movivel alvo="subtitulo" className="absolute top-[15%] left-[15%] right-[15%]">
+      <Movivel alvo="subtitulo"
+               className="absolute left-[15%] right-[15%]"
+               style={{ top: `calc(15% + ${deslocaSub.toFixed(2)}cqw)` }}>
         <div className="rounded-full py-[1.4%] px-[3%] text-center bg-white"
              style={{ boxShadow: "0 0.8cqw 2.2cqw rgba(0,0,0,.14)" }}>
           <span className="block font-black uppercase leading-none tracking-tight"

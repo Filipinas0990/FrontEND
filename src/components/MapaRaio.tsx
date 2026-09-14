@@ -35,11 +35,15 @@ export default function MapaRaio({
       const L = (await import("leaflet")).default;
       if (cancelado || !container.current || mapa.current) return;
 
+      // setView antes de qualquer camada: sem vista inicial o Leaflet quebra
+      // ao adicionar o círculo ("layerPointToLatLng of undefined").
       const m = L.map(container.current, {
-        zoomControl:     true,
+        zoomControl:     false,   // recriado à direita, para não cobrir o rótulo
         scrollWheelZoom: false,   // a página rola por cima do mapa sem prender o scroll
         attributionControl: true,
-      });
+      }).setView([lat, lon], 11);
+
+      L.control.zoom({ position: "topright" }).addTo(m);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,

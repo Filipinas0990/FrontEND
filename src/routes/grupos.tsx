@@ -67,7 +67,7 @@ function fmtDia(iso: string | null): string {
  * cadastrar no banco. Ela pula a escolha de produto e de preço e vai direto
  * para o agendamento.
  */
-type ModeloId = "padrao" | "abre" | "fecha" | "destaque" | "vermelho" | "novo";
+type ModeloId = "padrao" | "abre" | "fecha" | "consumidor" | "destaque" | "vermelho" | "novo";
 
 function GruposPage() {
   const { aba: abaInicial } = Route.useSearch();
@@ -781,6 +781,10 @@ const MODELOS: {
   titulo?: string;
   /** Sugestão do campo de texto livre. Ter isto é o que faz o campo aparecer. */
   subtituloPadrao?: string;
+  /** Cor obrigatória do modelo. Quase nenhum tem: a cor é da farmácia, não do
+   *  template. A exceção é campanha de data — "Semana do Consumidor" é laranja
+   *  em toda loja, e deixar o seletor mandar aqui devolveria a faixa em azul. */
+  paletaFixa?: Paleta;
   /** Como o campo se chama e onde o texto sai — muda de modelo para modelo:
    *  num é intervalo de dias na pílula, no outro é validade, no outro é o
    *  aviso da tarja preta. */
@@ -798,6 +802,14 @@ const MODELOS: {
   {
     id: "fecha", nome: "Fecha Mês", layout: "banner", titulo: "FECHA MÊS", subtituloPadrao: "DIAS 25 A 31",
     desc: "Faixa “FECHA MÊS”, datas e preço em destaque.",
+  },
+  {
+    id: "consumidor", nome: "Semana do Consumidor", layout: "banner",
+    titulo: "SEMANA DO CONSUMIDOR", subtituloPadrao: "SÓ ESTA SEMANA",
+    paletaFixa: "laranja",
+    desc: "O banner em laranja, com a faixa da Semana do Consumidor.",
+    rotuloData: "Datas na arte",
+    dicaData: "aparece na pílula branca — cabe o intervalo da semana",
   },
   {
     id: "destaque", nome: "Destaque", layout: "destaque", subtituloPadrao: "00/00",
@@ -827,9 +839,19 @@ const MODELOS: {
 const CORES_PALETA: { valor: Paleta; nome: string; amostra: string }[] = [
   { valor: "azul",     nome: "Azul",     amostra: "linear-gradient(180deg,#3f74dd,#0a2c78)" },
   { valor: "vermelho", nome: "Vermelho", amostra: "linear-gradient(180deg,#f2353c,#cf1a22)" },
+  { valor: "laranja",  nome: "Laranja",  amostra: "linear-gradient(180deg,#ff9d2e,#e4600a)" },
 ];
 
-function SeletorPaleta({ paleta, onEscolher }: { paleta: Paleta; onEscolher: (p: Paleta) => void }) {
+/**
+ * `travada` é a cor que o modelo escolhido impõe (campanha de data). Os botões
+ * continuam na tela, apagados e mostrando qual cor está valendo: sumir com o
+ * seletor faria parecer que a escolha de cor deixou de existir.
+ */
+function SeletorPaleta({ paleta, onEscolher, travada }: {
+  paleta: Paleta;
+  onEscolher: (p: Paleta) => void;
+  travada?: Paleta;
+}) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
@@ -837,16 +859,18 @@ function SeletorPaleta({ paleta, onEscolher }: { paleta: Paleta; onEscolher: (p:
       </span>
       <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-100" role="group" aria-label="Cor da arte">
         {CORES_PALETA.map((c) => {
-          const ativa = paleta === c.valor;
+          const ativa = (travada ?? paleta) === c.valor;
           return (
             <button
               key={c.valor}
               type="button"
               onClick={() => onEscolher(c.valor)}
               aria-pressed={ativa}
+              disabled={Boolean(travada)}
+              title={travada ? "Este modelo tem cor própria." : undefined}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
                 ativa ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-              }`}
+              } ${travada ? "cursor-not-allowed opacity-60 hover:text-zinc-500" : ""}`}
             >
               <span
                 className="size-3.5 rounded-full ring-1 ring-black/10"
@@ -1047,6 +1071,9 @@ function PassoCriativo({
   const modeloAtual = MODELOS.find((m) => m.id === modelo);
   /** Arte pronta: sem banco de imagens, sem preço, sem prévia de template. */
   const ehNovo = modelo === "novo";
+  /** A cor que vai sair na arte: a do modelo, quando ele tem uma, senão a do
+   *  seletor. Vale para a prévia, para o PNG e para o disparo. */
+  const paletaEfetiva = modeloAtual?.paletaFixa ?? paleta;
 
   function adicionarArquivos(novos: { nome: string; dataUrl: string }[]) {
     setArquivos((atual) => [
@@ -1104,7 +1131,7 @@ function PassoCriativo({
       localizacao:   nomeVisivel(farmacia),
       titulo:        modeloAtual?.titulo,
       subtitulo,
-      paleta,
+      paleta:        paletaEfetiva,
       // Vai junto para o PNG e para o disparo: quem exporta renderiza este
       // mesmo componente, então o ajuste não precisa ser aplicado duas vezes.
       ajustes:       ajustes[produto.id],
@@ -1175,7 +1202,7 @@ function PassoCriativo({
           {/* Cor da arte. Fica aqui em cima, e não dentro de cada card, porque
               é uma escolha só: ela vale para o modelo que o gestor acabar
               escolhendo, e as miniaturas já mostram o resultado. */}
-          <SeletorPaleta paleta={paleta} onEscolher={setPaleta} />
+          <SeletorPaleta paleta={paleta} onEscolher={setPaleta} travada={modeloAtual?.paletaFixa} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-5">
@@ -1230,7 +1257,7 @@ function PassoCriativo({
                     localizacao={nomeVisivel(farmacia)}
                     titulo={m.titulo}
                     subtitulo={m.subtituloPadrao}
-                    paleta={paleta}
+                    paleta={m.paletaFixa ?? paleta}
                   />
                 </div>
                 <div className="flex items-center justify-center gap-1.5 mt-4">
@@ -1817,10 +1844,10 @@ function imagemDaPeca(peca: PecaEnvio): Promise<string> {
 /**
  * Texto que acompanha a oferta, por modelo de criativo.
  *
- * Abre Mês e Fecha Mês têm copy própria, definida pelo dono — a campanha de
- * início de mês fala de uma coisa e a de fim de mês de outra, e reescrever
- * isso à mão a cada disparo é onde entra erro. O modelo Padrão segue com o
- * cabeçalho genérico de sempre.
+ * Abre Mês, Fecha Mês e Semana do Consumidor têm copy própria, definida pelo
+ * dono — cada campanha fala de uma coisa, e reescrever isso à mão a cada
+ * disparo é onde entra erro. O modelo Padrão segue com o cabeçalho genérico de
+ * sempre.
  *
  * `datas` é o subtítulo do criativo (ex.: "DIAS 01 A 10"). Vem do que o gestor
  * editou na tela anterior, então o texto e a arte nunca divergem. Pode chegar
@@ -1834,8 +1861,9 @@ function mensagemDoModelo(
   const nome = nomeVisivel(farmacia);
   const validade = datas.trim();
 
-  if (modelo === "abre")  return TEXTO_ABRE_MES(nome, validade);
-  if (modelo === "fecha") return TEXTO_FECHA_MES(nome, validade);
+  if (modelo === "abre")       return TEXTO_ABRE_MES(nome, validade);
+  if (modelo === "fecha")      return TEXTO_FECHA_MES(nome, validade);
+  if (modelo === "consumidor") return TEXTO_CONSUMIDOR(nome, validade);
   return `🔥 *OFERTAS* — ${nome} 🔥`;
 }
 
@@ -1851,6 +1879,11 @@ const TEXTO_ABRE_MES = (nome: string, datas: string): string =>
 
 const TEXTO_FECHA_MES = (nome: string, datas: string): string =>
   [`🔥 *OFERTAS* — ${nome} 🔥`, datas && `Válidas ${datas.toLowerCase()}.`]
+    .filter(Boolean)
+    .join("\n\n");
+
+const TEXTO_CONSUMIDOR = (nome: string, datas: string): string =>
+  [`🧡 *SEMANA DO CONSUMIDOR* — ${nome} 🧡`, datas && `Ofertas válidas ${datas.toLowerCase()}.`]
     .filter(Boolean)
     .join("\n\n");
 
