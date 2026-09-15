@@ -104,7 +104,7 @@ const TINTAS: Record<Paleta, Tinta> = {
     faixa:      "#d61f27",
     apoio:      "#1f3f9e",
   },
-  // A cor da Semana do Consumidor. O `apoio` aqui é um marrom quase preto, e
+  // A cor da Semana do Cliente. O `apoio` aqui é um marrom quase preto, e
   // não outra cor viva: laranja com vermelho embola (são hues vizinhos) e
   // laranja com azul devolveria justamente o azul que esta paleta evita.
   laranja: {
@@ -315,7 +315,7 @@ function Foto({ imagem, nome }: { imagem?: string | null; nome: string }) {
 // ── Modelo 3: Banner Oferta ────────────────────────────────────────────────────
 //
 // A faixa do topo nasceu para caber "ABRE MÊS" / "FECHA MÊS" — dois títulos
-// curtos — e por isso o tamanho era fixo em 13cqw. "SEMANA DO CONSUMIDOR" tem
+// curtos — e por isso o tamanho era fixo em 13cqw. "SEMANA DO CLIENTE" tem
 // o dobro da largura e vazava a faixa inteira. Daqui para baixo o título se
 // mede: encolhe até o piso, e abaixo disso quebra em duas linhas em vez de
 // virar letrinha. Título curto continua em 13cqw numa linha — a arte de

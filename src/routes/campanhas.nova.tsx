@@ -24,6 +24,7 @@ import {
   type Coordenada,
 } from "@/lib/api";
 import MapaRaio from "@/components/MapaRaio";
+import { carregarCriativos } from "@/lib/transferenciaCriativos";
 
 export const Route = createFileRoute("/campanhas/nova")({
   component: NovaCampanhaPage,
@@ -1058,16 +1059,16 @@ const CRIATIVOS_DATA_VAZIO: CriativosResultado = {
   selecionados: [], textoPrincipal: "", titulo: "", descricao: "",
 };
 
-// Lê os criativos "puxados" do fluxo de Anúncios (salvos ao clicar em "Subir na Campanha")
-function lerCriativosPuxados(): CriativoWizard[] {
-  try {
-    const raw = sessionStorage.getItem("campanha_criativos");
-    if (!raw) return [];
-    const arr = JSON.parse(raw) as Array<{ id: string; nome: string; preco: string; imagem?: string | null; localizacao: string; layout?: LayoutCriativo; enquadramento?: Enquadramento; titulo?: string; subtitulo?: string; png?: string }>;
-    return arr.map((c) => ({ ...c, tipo: "gerado" as const }));
-  } catch {
-    return [];
-  }
+// Lê os criativos "puxados" do fluxo de Anúncios (salvos ao clicar em "Subir na
+// Campanha"). Vem do IndexedDB, que é assíncrono — daí o efeito no componente.
+async function lerCriativosPuxados(): Promise<CriativoWizard[]> {
+  const arr = await carregarCriativos();
+  return arr.map((c) => ({
+    ...c,
+    layout:        c.layout as LayoutCriativo | undefined,
+    enquadramento: c.enquadramento as Enquadramento | undefined,
+    tipo:          "gerado" as const,
+  }));
 }
 
 // ── Copy padrão (template) ────────────────────────────────────────────────────
@@ -1116,8 +1117,20 @@ function expandirCopy(tpl: string, ctx: CopyCtx): string {
 }
 
 function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => void }) {
-  const [criativos, setCriativos] = useState<CriativoWizard[]>(() => lerCriativosPuxados());
-  const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set(lerCriativosPuxados().map((c) => c.id)));
+  const [criativos, setCriativos] = useState<CriativoWizard[]>([]);
+  const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set());
+
+  // Os criativos vêm do IndexedDB (leitura assíncrona) e já entram todos
+  // marcados, como era quando a lista vinha pronta do sessionStorage.
+  useEffect(() => {
+    let cancelado = false;
+    void lerCriativosPuxados().then((lista) => {
+      if (cancelado || lista.length === 0) return;
+      setCriativos(lista);
+      setSelecionados(new Set(lista.map((c) => c.id)));
+    });
+    return () => { cancelado = true; };
+  }, []);
 
   // Copy padrão (modelo). {produto}/{preco} trocam por criativo — automático, sem inputs extras.
   const [tplTexto, setTplTexto] = useState(COPY_PADRAO.textoPrincipal);

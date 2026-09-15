@@ -9,6 +9,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { CriativosModal, type CriativosConfig } from "@/components/CriativosModal";
 import { SeletorProdutosModal } from "@/components/SeletorProdutosModal";
+import { salvarCriativos } from "@/lib/transferenciaCriativos";
 import { CriativoCard } from "@/components/CriativoCard";
 import { exportarCriativoPng, baixarPng } from "@/lib/exportarCriativo";
 import { identificarCatalogo, type ProdutoIdentificado } from "@/lib/api";
@@ -176,11 +177,18 @@ function CriativosCampanhasPage() {
           };
         }),
       );
-      sessionStorage.setItem("campanha_criativos", JSON.stringify(criativos));
+      await salvarCriativos(criativos);
       navigate({ to: "/campanhas/nova" });
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao preparar os criativos.");
+      // Mensagem separada por causa: "erro ao preparar" não dizia se o problema
+      // foi gerar a imagem ou guardá-la, e são coisas diferentes de investigar.
+      const nome = (err as Error)?.name;
+      toast.error(
+        nome === "QuotaExceededError"
+          ? "Não há espaço no navegador para tantos criativos. Gere menos de uma vez."
+          : "Erro ao preparar os criativos.",
+      );
     } finally {
       setExportando(false);
     }

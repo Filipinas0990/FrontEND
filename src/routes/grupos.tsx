@@ -67,7 +67,7 @@ function fmtDia(iso: string | null): string {
  * cadastrar no banco. Ela pula a escolha de produto e de preço e vai direto
  * para o agendamento.
  */
-type ModeloId = "padrao" | "abre" | "fecha" | "consumidor" | "destaque" | "vermelho" | "novo";
+type ModeloId = "padrao" | "abre" | "fecha" | "cliente" | "destaque" | "vermelho" | "novo";
 
 function GruposPage() {
   const { aba: abaInicial } = Route.useSearch();
@@ -782,7 +782,7 @@ const MODELOS: {
   /** Sugestão do campo de texto livre. Ter isto é o que faz o campo aparecer. */
   subtituloPadrao?: string;
   /** Cor obrigatória do modelo. Quase nenhum tem: a cor é da farmácia, não do
-   *  template. A exceção é campanha de data — "Semana do Consumidor" é laranja
+   *  template. A exceção é campanha de data — "Semana do Cliente" é laranja
    *  em toda loja, e deixar o seletor mandar aqui devolveria a faixa em azul. */
   paletaFixa?: Paleta;
   /** Como o campo se chama e onde o texto sai — muda de modelo para modelo:
@@ -804,10 +804,10 @@ const MODELOS: {
     desc: "Faixa “FECHA MÊS”, datas e preço em destaque.",
   },
   {
-    id: "consumidor", nome: "Semana do Consumidor", layout: "banner",
-    titulo: "SEMANA DO CONSUMIDOR", subtituloPadrao: "SÓ ESTA SEMANA",
+    id: "cliente", nome: "Semana do Cliente", layout: "banner",
+    titulo: "SEMANA DO CLIENTE", subtituloPadrao: "SÓ ESTA SEMANA",
     paletaFixa: "laranja",
-    desc: "O banner em laranja, com a faixa da Semana do Consumidor.",
+    desc: "O banner em laranja, com a faixa da Semana do Cliente.",
     rotuloData: "Datas na arte",
     dicaData: "aparece na pílula branca — cabe o intervalo da semana",
   },
@@ -1844,7 +1844,7 @@ function imagemDaPeca(peca: PecaEnvio): Promise<string> {
 /**
  * Texto que acompanha a oferta, por modelo de criativo.
  *
- * Abre Mês, Fecha Mês e Semana do Consumidor têm copy própria, definida pelo
+ * Abre Mês, Fecha Mês e Semana do Cliente têm copy própria, definida pelo
  * dono — cada campanha fala de uma coisa, e reescrever isso à mão a cada
  * disparo é onde entra erro. O modelo Padrão segue com o cabeçalho genérico de
  * sempre.
@@ -1863,7 +1863,7 @@ function mensagemDoModelo(
 
   if (modelo === "abre")       return TEXTO_ABRE_MES(nome, validade);
   if (modelo === "fecha")      return TEXTO_FECHA_MES(nome, validade);
-  if (modelo === "consumidor") return TEXTO_CONSUMIDOR(nome, validade);
+  if (modelo === "cliente") return TEXTO_CLIENTE(nome, validade);
   return `🔥 *OFERTAS* — ${nome} 🔥`;
 }
 
@@ -1882,8 +1882,8 @@ const TEXTO_FECHA_MES = (nome: string, datas: string): string =>
     .filter(Boolean)
     .join("\n\n");
 
-const TEXTO_CONSUMIDOR = (nome: string, datas: string): string =>
-  [`🧡 *SEMANA DO CONSUMIDOR* — ${nome} 🧡`, datas && `Ofertas válidas ${datas.toLowerCase()}.`]
+const TEXTO_CLIENTE = (nome: string, datas: string): string =>
+  [`🧡 *SEMANA DO CLIENTE* — ${nome} 🧡`, datas && `Ofertas válidas ${datas.toLowerCase()}.`]
     .filter(Boolean)
     .join("\n\n");
 
