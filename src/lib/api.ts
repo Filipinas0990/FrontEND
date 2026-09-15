@@ -1087,7 +1087,23 @@ export interface PublicarCampanhaResultado {
   avisos: string[]
 }
 
-/** Envia o JSON do wizard (+ PNGs) para criar a campanha ativa no Meta. */
+/**
+ * Sobe UMA imagem de criativo e devolve o hash dela no Meta.
+ *
+ * As imagens vão uma por requisição porque o proxy recusa corpo acima de
+ * ~4,2 MB: mandar os PNGs todos juntos estourava a partir de uns três
+ * criativos. A publicação em si leva só os hashes, e fica minúscula.
+ */
+export function subirImagemCriativo(
+  contaId: string, nome: string, pngBase64: string,
+): Promise<{ hash: string }> {
+  return req("/api/campanhas/midias", {
+    method: "POST",
+    body: JSON.stringify({ conta: { id: contaId }, nome, pngBase64 }),
+  })
+}
+
+/** Envia o JSON do wizard (com os hashes das imagens) para criar a campanha ativa no Meta. */
 export function publicarCampanha(payload: unknown): Promise<PublicarCampanhaResultado> {
   return req("/api/campanhas/criar", { method: "POST", body: JSON.stringify(payload) })
 }

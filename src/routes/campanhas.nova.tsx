@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, buscarLocalizacoes,
-  buscarCoordenadas,
+  buscarCoordenadas, subirImagemCriativo,
   type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado, type LocalizacaoMeta,
   type Coordenada,
 } from "@/lib/api";
@@ -1579,8 +1579,12 @@ function NovaCampanhaPage() {
   const [criativosData, setCriativosData] = useState<CriativosResultado>(CRIATIVOS_DATA_VAZIO);
 
   const [publicando, setPublicando] = useState(false);
+  // Quantas imagens já subiram — as artes vão uma por requisição e isso pode
+  // levar alguns segundos; sem contador o botão parece travado.
+  const [enviadas, setEnviadas] = useState(0);
   const [resultado, setResultado] = useState<PublicarCampanhaResultado | NovosAnunciosResultado | null>(null);
   const [confirmarAberto, setConfirmarAberto] = useState(false);
+  const totalImagens = criativosData.selecionados.filter((c) => c.pngBase64).length;
 
   const progresso = Math.round((passo / TOTAL) * 100);
 
@@ -1596,12 +1600,13 @@ function NovaCampanhaPage() {
     setConfirmarAberto(false);
     setPublicando(true);
     try {
+      const hashes = await subirImagens();
       if (modo === "conjunto" && conjunto) {
-        const r = await publicarNovosAnuncios(conjunto.id, montarPayloadConjunto());
+        const r = await publicarNovosAnuncios(conjunto.id, montarPayloadConjunto(hashes));
         setResultado(r);
         toast.success("Novos anúncios publicados!");
       } else {
-        const r = await publicarCampanha(montarPayload(true));
+        const r = await publicarCampanha(montarPayload(hashes));
         setResultado(r);
         toast.success("Campanha criada no Meta!");
       }
@@ -1609,11 +1614,35 @@ function NovaCampanhaPage() {
       toast.error((err as Error)?.message ?? "Erro ao publicar.");
     } finally {
       setPublicando(false);
+      setEnviadas(0);
     }
   }
 
+  /**
+   * Sobe as imagens ANTES de publicar, uma requisição por criativo, e devolve
+   * o hash de cada uma.
+   *
+   * Antes os PNGs iam todos no corpo da publicação e o proxy recusava acima de
+   * ~4,2 MB — com três ou quatro criativos já dava "Envio grande demais". Uma
+   * de cada vez (e não em paralelo) porque o gargalo aqui é o upload para o
+   * Meta, e disparar tudo junto só aumenta a chance de erro por limite de taxa.
+   */
+  async function subirImagens(): Promise<Map<string, string>> {
+    const contaId = cliente?.id;
+    const comPng = criativosData.selecionados.filter((c) => c.pngBase64);
+    const hashes = new Map<string, string>();
+    if (!contaId || comPng.length === 0) return hashes;
+
+    for (const c of comPng) {
+      const { hash } = await subirImagemCriativo(contaId, c.nome, c.pngBase64!);
+      hashes.set(c.id, hash);
+      setEnviadas((n) => n + 1);
+    }
+    return hashes;
+  }
+
   /** Payload do modo "conjunto": cópia do conjunto + configs revisadas + criativos. */
-  function montarPayloadConjunto() {
+  function montarPayloadConjunto(hashes?: Map<string, string>) {
     return {
       conta: cliente && {
         id: cliente.id, nome: cliente.nome, cliente: cliente.cliente,
@@ -1633,8 +1662,9 @@ function NovaCampanhaPage() {
         dataFim:        publico.dataFim || null,
       },
       criativos: {
+        // Com a imagem já subida, vai só o hash — o PNG não viaja aqui.
         itens: criativosData.selecionados.map((c) => ({
-          nome: c.nome, preco: c.preco, pngBase64: c.pngBase64,
+          nome: c.nome, preco: c.preco, imagemHash: hashes?.get(c.id) ?? null,
           textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
         })),
         copy: {
@@ -1647,9 +1677,9 @@ function NovaCampanhaPage() {
     };
   }
 
-  // Monta o JSON da campanha. incluirPng=true anexa os PNGs (para publicar);
-  // false = versão limpa para exibir na revisão.
-  function montarPayload(incluirPng = false) {
+  // Monta o JSON da campanha. `hashes` só existe na hora de publicar — na
+  // revisão o payload sai sem referência de imagem, para ficar legível.
+  function montarPayload(hashes?: Map<string, string>) {
     return {
       nomeCampanha: nomeCampanha.trim(),
       conta: cliente && {
@@ -1682,8 +1712,8 @@ function NovaCampanhaPage() {
       },
       criativos: {
         itens: criativosData.selecionados.map((c) =>
-          incluirPng
-            ? { nome: c.nome, preco: c.preco, pngBase64: c.pngBase64,
+          hashes
+            ? { nome: c.nome, preco: c.preco, imagemHash: hashes.get(c.id) ?? null,
                 textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao }
             : { nome: c.nome, preco: c.preco,
                 textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao }),
@@ -1818,7 +1848,16 @@ function NovaCampanhaPage() {
               className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
             >
               {publicando
-                ? <><Loader2 className="size-4 animate-spin" /> Publicando...</>
+                ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    {/* As imagens sobem uma a uma: mostrar o andamento evita a
+                        impressão de travado quando são muitos criativos. */}
+                    {enviadas < totalImagens
+                      ? `Enviando imagens ${enviadas + 1}/${totalImagens}...`
+                      : "Publicando..."}
+                  </>
+                )
                 : resultado
                   ? <><Check className="size-4" /> Publicada</>
                   : <><Rocket className="size-4" /> Publicar campanha</>}
