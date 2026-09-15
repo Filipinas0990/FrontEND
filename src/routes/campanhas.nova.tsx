@@ -19,9 +19,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, buscarLocalizacoes,
-  buscarCoordenadas, subirImagemCriativo,
+  buscarCoordenadas, subirImagemCriativo, listarPaginasDaConta,
   type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado, type LocalizacaoMeta,
-  type Coordenada,
+  type Coordenada, type PaginaMeta,
 } from "@/lib/api";
 import MapaRaio from "@/components/MapaRaio";
 import { carregarCriativos } from "@/lib/transferenciaCriativos";
@@ -124,6 +124,85 @@ function Stepper({ atual, modo }: { atual: number; modo: Modo }) {
 }
 
 // ── Etapa 1: seleção de cliente ────────────────────────────────────────────────
+
+/**
+ * Página do Facebook que vai assinar os anúncios.
+ *
+ * Antes o backend usava a PRIMEIRA página do Business Manager. Num BM com uma
+ * página por farmácia, o anúncio saía assinado pela página errada e o Meta
+ * bloqueava com "As Páginas não correspondem" (#1885029). A conta do Instagram
+ * vem junto: sem ela, posicionamento no Instagram é recusado (#1772103).
+ */
+function CampoPaginaFacebook({
+  contaId, valor, onSelect,
+}: {
+  contaId: string;
+  valor: PaginaMeta | null;
+  onSelect: (p: PaginaMeta | null) => void;
+}) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["paginas-conta", contaId],
+    queryFn: () => listarPaginasDaConta(contaId),
+    staleTime: 5 * 60_000,
+  });
+  const paginas = data?.paginas ?? [];
+
+  // Uma página só: não faz sentido obrigar a escolher o único item da lista.
+  useEffect(() => {
+    if (!valor && paginas.length === 1) onSelect(paginas[0]);
+  }, [paginas, valor, onSelect]);
+
+  return (
+    <div className="mt-6 border-t border-zinc-100 pt-5">
+      <p className="text-sm font-semibold text-zinc-800">Página do Facebook</p>
+      <p className="text-xs text-zinc-500 mt-0.5 mb-3">
+        É a página que assina os anúncios. Precisa ser a do cliente desta conta.
+      </p>
+
+      {isLoading ? (
+        <p className="flex items-center gap-2 text-sm text-zinc-400">
+          <Loader2 className="size-4 animate-spin" /> Carregando páginas...
+        </p>
+      ) : isError ? (
+        <p className="text-sm text-red-600">Não foi possível carregar as páginas desta conta.</p>
+      ) : paginas.length === 0 ? (
+        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Nenhuma página encontrada para esta conta. Sem página não é possível criar os anúncios.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {paginas.map((p) => {
+              const ativa = valor?.id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onSelect(p)}
+                  className={`text-left px-3 py-2.5 rounded-lg border transition ${
+                    ativa ? "border-brand bg-brand/5 ring-2 ring-brand/20" : "border-zinc-200 hover:border-zinc-300"
+                  }`}
+                >
+                  <span className="block text-sm font-medium text-zinc-800 truncate">{p.nome}</span>
+                  <span className={`block text-[11px] truncate ${p.instagramId ? "text-zinc-500" : "text-amber-700"}`}>
+                    {p.instagramId ? `Instagram: @${p.instagramNome ?? p.instagramId}` : "Sem Instagram vinculado"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {/* Avisa ANTES de publicar: descobrir isso no Gerenciador, com o
+              anúncio já criado e bloqueado, custa uma ida e volta inteira. */}
+          {valor && !valor.instagramId && (
+            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Esta página não tem conta do Instagram vinculada. Os anúncios vão rodar só no Facebook —
+              se o público escolhido incluir Instagram, o Meta vai recusar.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function EtapaCliente({
   selecionado, onSelect, nome, onNomeChange, pedirNome,
@@ -1466,12 +1545,19 @@ function EtapaRevisao({ payload, resultado, modo }: {
             >
               Abrir no Gerenciador de Anúncios →
             </a>
+            {/* Rótulo explícito: sem ele a lista âmbar era lida como erro, mesmo
+                estando dentro do painel verde de sucesso. */}
             {resultado.avisos.length > 0 && (
-              <ul className="mt-3 space-y-1">
-                {resultado.avisos.map((a, i) => (
-                  <li key={i} className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">⚠️ {a}</li>
-                ))}
-              </ul>
+              <div className="mt-3">
+                <p className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wide mb-1">
+                  Observações — a publicação deu certo
+                </p>
+                <ul className="space-y-1">
+                  {resultado.avisos.map((a, i) => (
+                    <li key={i} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">{a}</li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </div>
@@ -1547,6 +1633,8 @@ function NovaCampanhaPage() {
 
   // ── Estado central da campanha (vira o JSON detalhado no final) ──────────────
   const [cliente, setCliente] = useState<ContaAnuncio | null>(null);
+  // Página que assina os anúncios — escolhida na etapa 1, junto com a conta.
+  const [paginaFb, setPaginaFb] = useState<PaginaMeta | null>(null);
   const [nomeCampanha, setNomeCampanha] = useState("");
   const [objetivo, setObjetivo] = useState<Objetivo | null>(null);
 
@@ -1558,6 +1646,9 @@ function NovaCampanhaPage() {
   // Ao selecionar a conta, sugere um nome e pergunta qual fluxo seguir
   function selecionarConta(c: ContaAnuncio) {
     setCliente(c);
+    // Cada conta tem as suas páginas — a escolhida para a conta anterior não
+    // vale aqui, e mantê-la selecionada assinaria o anúncio com a página errada.
+    if (c.id !== cliente?.id) setPaginaFb(null);
     if (!nomeCampanha.trim()) setNomeCampanha(sugerirNomeCampanha(c));
     setPerguntando(c);
   }
@@ -1604,7 +1695,11 @@ function NovaCampanhaPage() {
       if (modo === "conjunto" && conjunto) {
         const r = await publicarNovosAnuncios(conjunto.id, montarPayloadConjunto(hashes));
         setResultado(r);
-        toast.success("Novos anúncios publicados!");
+        // Quando o Meta recusa a cópia direta, o conjunto é recriado — o gestor
+        // precisa saber disso na hora, e como notícia boa: deu certo.
+        toast.success(r.conjuntoRecriado
+          ? "Conjunto duplicado e anúncios publicados!"
+          : "Novos anúncios publicados!");
       } else {
         const r = await publicarCampanha(montarPayload(hashes));
         setResultado(r);
@@ -1647,6 +1742,8 @@ function NovaCampanhaPage() {
       conta: cliente && {
         id: cliente.id, nome: cliente.nome, cliente: cliente.cliente,
       },
+      // Assina o anúncio; sem ela o backend voltaria a adivinhar a página.
+      pagina: paginaFb && { id: paginaFb.id, nome: paginaFb.nome, instagramId: paginaFb.instagramId },
       conjuntoOrigem:  conjunto && { id: conjunto.id, nome: conjunto.nome, campanha: conjunto.campanhaNome },
       nomeConjunto:    conjunto?.nome,
       destinoWhatsapp: conjunto?.destinoWhatsapp ?? false,
@@ -1689,6 +1786,8 @@ function NovaCampanhaPage() {
         cliente:   cliente.cliente,     // Business Manager
         moeda:     cliente.moeda,
       },
+      // Assina o anúncio; sem ela o backend voltaria a adivinhar a página.
+      pagina: paginaFb && { id: paginaFb.id, nome: paginaFb.nome, instagramId: paginaFb.instagramId },
       objetivo: objetivo && {
         codigo:    objetivo.codigo,     // código oficial do Meta
         nome:      objetivo.nome,
@@ -1728,7 +1827,9 @@ function NovaCampanhaPage() {
 
   function podeAvancar(): boolean {
     if (passo === 1) {
-      if (cliente === null) return false;
+      // Sem página não dá para criar o criativo — e errar a página faz o Meta
+      // bloquear o anúncio depois de tudo publicado.
+      if (cliente === null || paginaFb === null) return false;
       return modo === "conjunto" || nomeCampanha.trim().length > 0;
     }
     if (passo === 2) return modo === "conjunto" ? conjunto !== null : objetivo !== null;
@@ -1768,13 +1869,18 @@ function NovaCampanhaPage() {
       {/* Conteúdo da etapa */}
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6 md:p-8 mb-6">
         {passo === 1 && (
-          <EtapaCliente
-            selecionado={cliente?.id ?? null}
-            onSelect={selecionarConta}
-            nome={nomeCampanha}
-            onNomeChange={setNomeCampanha}
-            pedirNome={modo === "nova"}
-          />
+          <>
+            <EtapaCliente
+              selecionado={cliente?.id ?? null}
+              onSelect={selecionarConta}
+              nome={nomeCampanha}
+              onNomeChange={setNomeCampanha}
+              pedirNome={modo === "nova"}
+            />
+            {cliente && (
+              <CampoPaginaFacebook contaId={cliente.id} valor={paginaFb} onSelect={setPaginaFb} />
+            )}
+          </>
         )}
         {passo === 2 && (modo === "conjunto"
           ? <EtapaConjunto contaId={cliente!.id} selecionado={conjunto?.id ?? null} onSelect={selecionarConjunto} />

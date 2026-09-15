@@ -1062,6 +1062,23 @@ export function buscarLocalizacoes(q: string): Promise<{ resultados: Localizacao
   return req(`/api/ads/geo-busca?q=${encodeURIComponent(q)}`)
 }
 
+export interface PaginaMeta {
+  id: string
+  nome: string
+  /** Conta do Instagram vinculada. null = anúncio não roda no Instagram. */
+  instagramId: string | null
+  instagramNome: string | null
+}
+
+/**
+ * Páginas do Facebook que a conta de anúncios pode usar no criativo.
+ * O gestor escolhe uma na etapa 1 — antes o sistema pegava a primeira do
+ * Business Manager e o Meta recusava com "As Páginas não correspondem".
+ */
+export function listarPaginasDaConta(contaId: string): Promise<{ paginas: PaginaMeta[] }> {
+  return req(`/api/campanhas/paginas?conta=${encodeURIComponent(contaId)}`)
+}
+
 export interface Coordenada {
   lat: number
   lon: number
