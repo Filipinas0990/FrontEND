@@ -427,13 +427,18 @@ function iniciaisCliente(nome: string): string {
 
 // ── Modal: campanha nova ou partir de um conjunto existente? ──────────────────
 
-function ModalEscolhaFluxo({ conta, onEscolher }: {
+function ModalEscolhaFluxo({ conta, onEscolher, onFechar }: {
   conta: ContaAnuncio;
   onEscolher: (m: Modo) => void;
+  /** Clicar fora volta para a etapa 1 — dá para trocar de conta antes de decidir. */
+  onFechar: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onFechar}>
+      <div
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="px-6 pt-6 pb-5 text-center">
           <div className="size-12 rounded-full bg-brand/10 grid place-items-center mx-auto mb-4">
             <Rocket className="size-6 text-brand" />
@@ -1638,19 +1643,27 @@ function NovaCampanhaPage() {
   const [nomeCampanha, setNomeCampanha] = useState("");
   const [objetivo, setObjetivo] = useState<Objetivo | null>(null);
 
-  // Fluxo escolhido no modal que abre logo após selecionar o cliente.
+  // Fluxo (campanha nova x partir de um conjunto), perguntado ao SAIR da etapa 1.
   const [modo, setModo] = useState<Modo>("nova");
   const [perguntando, setPerguntando] = useState<ContaAnuncio | null>(null);
+  // Já respondeu a pergunta para a conta atual? Zera ao trocar de conta.
+  const [fluxoEscolhido, setFluxoEscolhido] = useState(false);
   const [conjunto, setConjunto] = useState<ConjuntoMeta | null>(null);
 
-  // Ao selecionar a conta, sugere um nome e pergunta qual fluxo seguir
+  /**
+   * Seleciona a conta e sugere um nome. NÃO abre o modal de fluxo: clicar numa
+   * conta é só navegar pela lista, e o pop-up a cada clique atrapalhava quem
+   * ainda estava comparando as contas. A pergunta vai para o "Próximo passo".
+   */
   function selecionarConta(c: ContaAnuncio) {
     setCliente(c);
     // Cada conta tem as suas páginas — a escolhida para a conta anterior não
     // vale aqui, e mantê-la selecionada assinaria o anúncio com a página errada.
-    if (c.id !== cliente?.id) setPaginaFb(null);
+    if (c.id !== cliente?.id) {
+      setPaginaFb(null);
+      setFluxoEscolhido(false);
+    }
     if (!nomeCampanha.trim()) setNomeCampanha(sugerirNomeCampanha(c));
-    setPerguntando(c);
   }
 
   /** Conjunto escolhido: herda as configurações dele na etapa de público. */
@@ -1840,6 +1853,12 @@ function NovaCampanhaPage() {
 
   function proximo() {
     if (!podeAvancar()) return;
+    // Sair da etapa 1 é a hora de decidir o fluxo: campanha nova ou partir de um
+    // conjunto que já roda. O modal decide e avança; aqui só paramos.
+    if (passo === 1 && !fluxoEscolhido && cliente) {
+      setPerguntando(cliente);
+      return;
+    }
     if (passo < TOTAL) setPasso(passo + 1);
   }
 
@@ -1902,10 +1921,12 @@ function NovaCampanhaPage() {
           onEscolher={(m) => {
             setModo(m);
             setPerguntando(null);
-            // "Não" já pula para a escolha do conjunto — o cliente foi definido
-            // no clique que abriu este modal, não há mais nada a fazer na etapa 1.
-            if (m === "conjunto") setPasso(2);
+            setFluxoEscolhido(true);
+            // O modal abre no "Próximo passo", então responder já avança — nos
+            // dois casos a etapa 1 terminou. Só o que vem na 2 é que muda.
+            setPasso(2);
           }}
+          onFechar={() => setPerguntando(null)}
         />
       )}
 

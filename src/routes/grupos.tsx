@@ -2571,6 +2571,13 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
     staleTime: 30_000,
   });
 
+  // Disparo aguardando confirmação de cancelamento (null = nenhum).
+  // Cancelar é a única ação irreversível desta tela; até 14/09/2026 ela saía
+  // num clique só e sete campanhas foram canceladas em doze segundos — a linha
+  // cancelada pula de "Agendados" para "Histórico" e a próxima sobe para
+  // debaixo do cursor. Uma delas tinha 42 criativos e ninguém quis cancelar.
+  const [confirmando, setConfirmando] = useState<DisparoResumo | null>(null);
+
   const cancelar = useMutation({
     mutationFn: cancelarDisparo,
     onSuccess: () => {
@@ -2578,6 +2585,7 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
       queryClient.invalidateQueries({ queryKey: ["disparos"] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Não foi possível cancelar."),
+    onSettled: () => setConfirmando(null),
   });
 
   // Agendados primeiro — é o que ainda dá para mexer; depois o histórico.
@@ -2631,7 +2639,7 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
             <LinhaDisparo
               key={d.id}
               disparo={d}
-              onCancelar={() => cancelar.mutate(d.id)}
+              onCancelar={() => setConfirmando(d)}
               cancelando={cancelar.isPending && cancelar.variables === d.id}
               onAbrir={() => setDetalheId(d.id)}
             />
@@ -2649,6 +2657,15 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
 
       {detalheId !== null && (
         <ModalDisparo disparoId={detalheId} onFechar={() => setDetalheId(null)} />
+      )}
+
+      {confirmando && (
+        <ModalConfirmarCancelamento
+          disparo={confirmando}
+          cancelando={cancelar.isPending}
+          onFechar={() => setConfirmando(null)}
+          onConfirmar={() => cancelar.mutate(confirmando.id)}
+        />
       )}
     </div>
   );
@@ -2944,6 +2961,89 @@ function ModalDisparo({ disparoId, onFechar }: { disparoId: number; onFechar: ()
               <TimelineDisparo disparo={d} />
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Confirmação de cancelamento, NOMEANDO a campanha.
+ *
+ * Em 14/09/2026 sete campanhas foram canceladas em doze segundos, com
+ * intervalos de 0,5s a 4s — o botão saía num clique e, a cada cancelamento, a
+ * linha some de "Agendados" e a seguinte sobe para debaixo do cursor. Entre as
+ * sete foi uma campanha de 42 criativos que ninguém pretendia cancelar.
+ *
+ * Por isso a confirmação diz NOME, criativos e repetição, e não só "tem
+ * certeza?" — é a mesma lição do incidente de 21/08, quando confirmar por
+ * contagem escondeu a oferta indo para o grupo do cliente errado: o que é
+ * irreversível se confirma por nome.
+ *
+ * O botão que confirma fica no rodapé do modal, longe de onde o cursor estava
+ * na lista: quem está clicando em rajada não acerta o próximo por inércia.
+ */
+function ModalConfirmarCancelamento({
+  disparo, cancelando, onFechar, onConfirmar,
+}: {
+  disparo:    DisparoResumo;
+  cancelando: boolean;
+  onFechar:   () => void;
+  onConfirmar: () => void;
+}) {
+  const repeticao = REPETICAO_ROTULO[disparo.repetir] ?? "";
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4"
+      onClick={onFechar}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-5 flex gap-3.5">
+          <span className="shrink-0 size-10 rounded-full bg-red-50 grid place-items-center">
+            <TriangleAlert className="size-5 text-red-600" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-bold text-zinc-900">Cancelar esta campanha?</h3>
+            <p className="text-sm text-zinc-500 mt-0.5">
+              O cancelamento não tem volta — para disparar de novo é preciso montar tudo outra vez.
+            </p>
+          </div>
+        </div>
+
+        {/* O que exatamente vai ser cancelado. É este bloco que faltava. */}
+        <div className="mx-6 mb-5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+          <p className="text-sm font-semibold text-zinc-900 break-words">{disparo.titulo}</p>
+          <p className="text-xs text-zinc-600 mt-1">
+            {disparo.total_grupos} grupo(s) · {disparo.total_midias} criativo(s)
+            {repeticao && ` · repete ${repeticao}`}
+          </p>
+          {disparo.proximo_envio && (
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Próximo envio em {fmtData(disparo.proximo_envio)}
+            </p>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-zinc-100 flex justify-end gap-2">
+          <button
+            onClick={onFechar}
+            disabled={cancelando}
+            className="px-4 py-2 text-sm font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 disabled:opacity-50 transition"
+          >
+            Manter campanha
+          </button>
+          <button
+            onClick={onConfirmar}
+            disabled={cancelando}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
+          >
+            {cancelando ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />}
+            Sim, cancelar
+          </button>
         </div>
       </div>
     </div>
