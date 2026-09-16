@@ -24,6 +24,9 @@ import {
   getWhatsAppQrCode,
   disconnectWhatsApp,
   deleteWhatsAppInstance,
+  getMeuWhatsappStatus,
+  conectarMeuWhatsapp,
+  desconectarMeuWhatsapp,
   type ConexaoWhatsApp,
 } from "@/lib/api";
 import {
@@ -50,6 +53,26 @@ export const Route = createFileRoute("/conexoes")({
 });
 
 type ModalState = "none" | "connect_form" | "qr" | "qr_expired" | "success";
+
+/**
+ * As conexões vêm de dois cadastros diferentes e esta tela mostra os dois:
+ *   • "global" — as conexões da agência (tabela whatsapp_configs, rotas
+ *     /api/whatsapp/*), que qualquer gestor pode usar e só o admin configura;
+ *   • "gestor" — o WhatsApp do próprio gestor logado (tabela gestor_whatsapp,
+ *     rotas /api/disparos/whatsapp/*), o mesmo que o seletor do disparo mostra
+ *     como "Meu WhatsApp (sua)". Sem ele aqui, o gestor via no wizard uma
+ *     conexão que não existia em nenhum card.
+ */
+type TipoConexao = "gestor" | "global";
+
+type CardConexao = {
+  instancia: string;
+  nome: string;
+  status: ConexaoWhatsApp["status"];
+  numero: string | null;
+  conectado: boolean;
+  tipo: TipoConexao;
+};
 
 const MAX_TENTATIVAS = 40; // 40 × 3 s = 2 min
 
@@ -107,18 +130,51 @@ function ConexoesPage() {
     retry: false,
   });
 
-  const conexoes = data?.conexoes ?? [];
+  /** A conexão do gestor logado — outro cadastro, outra rota (ver TipoConexao). */
+  const { data: meu } = useQuery({
+    queryKey: ["meu-whatsapp-status"],
+    queryFn: getMeuWhatsappStatus,
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const conexoes: CardConexao[] = [
+    // A do gestor vem primeiro: é a que ele mexe sem depender do admin.
+    ...(meu?.instancia
+      ? [
+          {
+            instancia: meu.instancia,
+            nome: "Meu WhatsApp",
+            status: meu.status,
+            numero: meu.numero,
+            conectado: meu.conectado,
+            tipo: "gestor" as const,
+          },
+        ]
+      : []),
+    ...(data?.conexoes ?? []).map(
+      (c): CardConexao => ({
+        instancia: c.instancia,
+        nome: c.nome,
+        status: c.status,
+        numero: c.numero,
+        conectado: c.conectado,
+        tipo: "global",
+      }),
+    ),
+  ];
 
   const [busca, setBusca] = useState("");
   const [modalState, setModalState] = useState<ModalState>("none");
   const [nomeConexao, setNomeConexao] = useState("");
   const [instanceName, setInstanceName] = useState("");
-  /** Instância que o modal de QR está acompanhando. */
+  /** Instância que o modal de QR está acompanhando (e de qual cadastro ela é). */
   const [instanciaAtiva, setInstanciaAtiva] = useState<string | null>(null);
+  const [tipoAtivo, setTipoAtivo] = useState<TipoConexao>("global");
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(120);
   const [confirmacao, setConfirmacao] = useState<
-    { tipo: "desconectar" | "excluir"; conexao: ConexaoWhatsApp } | null
+    { tipo: "desconectar" | "excluir"; conexao: CardConexao } | null
   >(null);
   /** Instância cuja ação está em voo — para o spinner ficar no card certo. */
   const [emAcao, setEmAcao] = useState<string | null>(null);
@@ -136,11 +192,12 @@ function ConexoesPage() {
 
   const invalidarConexoes = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["whatsapp-conexoes"] });
+    qc.invalidateQueries({ queryKey: ["meu-whatsapp-status"] });
     // O pontinho verde da sidebar vem do /status — segue a mesma verdade.
     qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
   }, [qc]);
 
-  const startPolling = useCallback((instancia: string) => {
+  const startPolling = useCallback((instancia: string, tipo: TipoConexao) => {
     stopPolling();
     tentativasRef.current = 0;
     setCountdown(120);
@@ -157,7 +214,10 @@ function ConexoesPage() {
         return;
       }
       try {
-        const data = await getWhatsAppQrCode(instancia);
+        // Cada cadastro tem sua rota de QR, mas as duas devolvem { status, qr_code }.
+        const data = tipo === "gestor"
+          ? await getMeuWhatsappStatus()
+          : await getWhatsAppQrCode(instancia);
         if (data.status === "open") {
           stopPolling();
           setModalState("success");
@@ -172,20 +232,32 @@ function ConexoesPage() {
   }, [stopPolling, invalidarConexoes]);
 
   const connectMut = useMutation({
-    mutationFn: ({ instancia, nome }: { instancia: string; nome?: string }) =>
-      connectWhatsApp(instancia, nome),
-    onSuccess: (data) => {
-      setInstanciaAtiva(data.instancia);
+    // As duas rotas devolvem formatos diferentes; aqui vira { instancia, qr_code }.
+    mutationFn: async ({ tipo, instancia, nome }: { tipo: TipoConexao; instancia: string; nome?: string }) => {
+      if (tipo === "gestor") {
+        const s = await conectarMeuWhatsapp();
+        return { instancia: s.instancia ?? instancia, qr_code: s.qr_code };
+      }
+      const r = await connectWhatsApp(instancia, nome);
+      return { instancia: r.instancia, qr_code: r.qr_code };
+    },
+    onSuccess: (data, vars) => {
+      const instancia = data.instancia || vars.instancia;
+      setInstanciaAtiva(instancia);
+      setTipoAtivo(vars.tipo);
       setQrCode(data.qr_code);
       setModalState("qr");
-      startPolling(data.instancia);
+      startPolling(instancia, vars.tipo);
       invalidarConexoes();
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const disconnectMut = useMutation({
-    mutationFn: (instancia: string) => disconnectWhatsApp(instancia),
+    mutationFn: async ({ tipo, instancia }: { tipo: TipoConexao; instancia: string }) => {
+      if (tipo === "gestor") await desconectarMeuWhatsapp();
+      else await disconnectWhatsApp(instancia);
+    },
     onSuccess: () => {
       toast.success("WhatsApp desconectado.");
       invalidarConexoes();
@@ -212,18 +284,19 @@ function ConexoesPage() {
       toast.error("Já existe uma conexão com esse identificador. Escolha outro nome.");
       return;
     }
-    connectMut.mutate({ instancia, nome: nomeConexao.trim() || instancia });
+    connectMut.mutate({ tipo: "global", instancia, nome: nomeConexao.trim() || instancia });
   };
 
   /** Reabre o QR de uma conexão que já existe (caiu ou nunca foi escaneada). */
-  const handleReconectar = (conexao: ConexaoWhatsApp) => {
-    if (!isAdmin) {
+  const handleReconectar = (conexao: CardConexao) => {
+    // O número do próprio gestor é dele: não passa pelo gate de admin.
+    if (conexao.tipo === "global" && !isAdmin) {
       toast.info("Apenas administradores podem configurar conexões.");
       return;
     }
     setEmAcao(conexao.instancia);
     connectMut.mutate(
-      { instancia: conexao.instancia, nome: conexao.nome },
+      { tipo: conexao.tipo, instancia: conexao.instancia, nome: conexao.nome },
       { onSettled: () => setEmAcao(null) },
     );
   };
@@ -231,7 +304,7 @@ function ConexoesPage() {
   const handleRegenerate = () => {
     if (!instanciaAtiva) return;
     stopPolling();
-    connectMut.mutate({ instancia: instanciaAtiva });
+    connectMut.mutate({ tipo: tipoAtivo, instancia: instanciaAtiva });
   };
 
   const handleCloseQrModal = () => {
@@ -326,6 +399,9 @@ function ConexoesPage() {
           <div className="flex flex-wrap justify-center gap-6">
             {visiveis.map((conexao) => {
               const ocupado = emAcao === conexao.instancia;
+              const doGestor = conexao.tipo === "gestor";
+              // A do gestor ele mesmo gerencia; as da agência, só o admin.
+              const podeGerenciar = isAdmin || doGestor;
               return (
                 <div
                   key={conexao.instancia}
@@ -342,9 +418,21 @@ function ConexoesPage() {
                       <MessageCircle className="size-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-zinc-900 truncate" title={conexao.nome}>
-                        {conexao.nome}
-                      </p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-semibold text-zinc-900 truncate" title={conexao.nome}>
+                          {conexao.nome}
+                        </p>
+                        {/* Mesma linguagem do seletor do disparo: "sua" vs "agência". */}
+                        <span
+                          className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                            doGestor
+                              ? "bg-brand/10 text-brand"
+                              : "bg-zinc-100 text-zinc-500"
+                          }`}
+                        >
+                          {doGestor ? "Sua conexão" : "Agência"}
+                        </span>
+                      </div>
                       <StatusBadge status={conexao.status} />
                     </div>
                   </div>
@@ -363,7 +451,7 @@ function ConexoesPage() {
                     )}
                   </div>
 
-                  {isAdmin && (
+                  {podeGerenciar && (
                     <div className="mt-auto flex gap-2">
                       {conexao.conectado ? (
                         <button
@@ -392,14 +480,18 @@ function ConexoesPage() {
                           Conectar
                         </button>
                       )}
-                      <button
-                        onClick={() => setConfirmacao({ tipo: "excluir", conexao })}
-                        disabled={ocupado}
-                        title="Excluir conexão"
-                        className="px-3 py-2 text-zinc-500 bg-zinc-50 rounded-lg hover:bg-zinc-100 hover:text-red-600 transition disabled:opacity-60"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                      {/* Excluir só existe para as da agência — a do gestor não
+                          tem rota de remoção, apenas logout. */}
+                      {!doGestor && isAdmin && (
+                        <button
+                          onClick={() => setConfirmacao({ tipo: "excluir", conexao })}
+                          disabled={ocupado}
+                          title="Excluir conexão"
+                          className="px-3 py-2 text-zinc-500 bg-zinc-50 rounded-lg hover:bg-zinc-100 hover:text-red-600 transition disabled:opacity-60"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -581,7 +673,7 @@ function ConexoesPage() {
                 setConfirmacao(null);
                 setEmAcao(conexao.instancia);
                 if (tipo === "excluir") deleteMut.mutate(conexao.instancia);
-                else disconnectMut.mutate(conexao.instancia);
+                else disconnectMut.mutate({ tipo: conexao.tipo, instancia: conexao.instancia });
               }}
               className="bg-red-500 text-white hover:bg-red-600"
             >
