@@ -262,7 +262,9 @@ export function EnviarGrupoWizard({
   useEffect(() => {
     if (!clienteInicialId || clienteAbertoRef.current || carteira.length === 0) return;
     const alvo = carteira.find((c) => c.farmacia_id === clienteInicialId);
-    if (alvo?.respondeu) {
+    // Também abre no cliente já atendido: a lista dele continua de pé, e é o
+    // que o "Montar de novo" da carteira usa.
+    if (alvo?.solicitacao || alvo?.ultima_solicitacao) {
       clienteAbertoRef.current = true;
       abrirCliente(alvo);
     }
@@ -271,11 +273,14 @@ export function EnviarGrupoWizard({
 
   /** Monta os itens a partir do pedido do cliente (catálogo + escritos à mão). */
   function abrirCliente(c: ClienteCarteira) {
-    if (!c.solicitacao) return;
+    // A lista pendente quando existe; senão a última, que o gestor já montou
+    // uma vez e pode querer repetir.
+    const pedido = c.solicitacao ?? c.ultima_solicitacao;
+    if (!pedido) return;
     setClienteSel(c);
     setUsarDaTela(false);
 
-    const doCatalogo: ItemOferta[] = c.solicitacao.produtos.map((p) => ({
+    const doCatalogo: ItemOferta[] = pedido.produtos.map((p) => ({
       chave:   `cat-${p.id}`,
       nome:    p.nome,
       imagem:  catalogoImagemUrl(p.id),
@@ -507,7 +512,9 @@ export function EnviarGrupoWizard({
         repetir_produtos: repete && repetirProdutos,
         timezone: "America/Sao_Paulo",
         farmacia_id: clienteSel?.farmacia_id ?? null,
-        solicitacao_id: clienteSel?.solicitacao?.id ?? null,
+        // O pedido que esta campanha fecha — a pendente, ou a última lista
+        // quando o gestor está montando de novo em cima dela.
+        solicitacao_id: clienteSel?.solicitacao?.id ?? clienteSel?.ultima_solicitacao?.id ?? null,
         instance: conexaoSel,
       });
 

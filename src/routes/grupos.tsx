@@ -5,8 +5,12 @@ import {
   Send, Users, Inbox, Search, X, ArrowRight, ArrowLeft, Clock, RefreshCw, Loader2,
   CalendarClock, CheckCircle2, AlertCircle, Ban, Link2, Copy, Store, Check,
   ChevronRight, QrCode, Smartphone, History, MapPin, PencilLine, Download,
-  MessageSquareText, RotateCcw, Upload, ImagePlus, TriangleAlert, Maximize2,
+  MessageSquareText, RotateCcw, Upload, ImagePlus, TriangleAlert, Maximize2, Trash2,
 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EnviarGrupoWizard } from "@/components/EnviarGrupoWizard";
@@ -29,7 +33,7 @@ import {
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
   listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo, nomeVisivel,
   getDonosDeGrupos, getDisparoLogs, getDisparo,
-  getUltimosProdutosDisparados,
+  getUltimosProdutosDisparados, atualizarSolicitacao,
   type Farmacia, type DisparoResumo, type DisparoDetalhe, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
 } from "@/lib/api";
@@ -204,6 +208,10 @@ function GruposPage() {
                   recomecar();
                   setAba("historico");
                   queryClient.invalidateQueries({ queryKey: ["disparos"] });
+                  // O pedido do cliente acabou de virar campanha: a carteira e
+                  // o badge do menu precisam parar de contá-lo como pendente.
+                  queryClient.invalidateQueries({ queryKey: ["ofertas-carteira"] });
+                  queryClient.invalidateQueries({ queryKey: ["ofertas-pendentes"] });
                 }}
               />
             )}
@@ -1615,6 +1623,9 @@ function PassoCriativo({
           // Arte pronta não sai do catálogo: sem id de produto para registrar,
           // e por isso ela não alimenta o chip "Recentes" da próxima campanha.
           produtos={ehNovo ? [] : selecionados.map((p) => ({ id: p.id, nome: p.nome }))}
+          // Qual pedido esta campanha está atendendo. É o que faz o cliente
+          // sair do "aguardando" na carteira assim que a campanha é criada.
+          solicitacaoId={ultima?.id ?? null}
           onFechar={onFecharAgendamento}
           onPronto={onAgendado}
         />
@@ -1910,7 +1921,8 @@ const TEXTO_CLIENTE = (nome: string, datas: string): string =>
 const MAX_LEGENDA = 1024;
 
 function ModalAgendamento({
-  farmacia, grupos, conexaoInicial, modelo, datas, pecas, produtos, onFechar, onPronto,
+  farmacia, grupos, conexaoInicial, modelo, datas, pecas, produtos, solicitacaoId,
+  onFechar, onPronto,
 }: {
   farmacia: Farmacia;
   grupos: GrupoWhatsApp[];
@@ -1923,6 +1935,12 @@ function ModalAgendamento({
   pecas: PecaEnvio[];
   /** Os produtos que geraram os criativos, com id — o PNG rasterizado o perde. */
   produtos: { id: number; nome: string }[];
+  /**
+   * O pedido do cliente que esta campanha atende. A API o marca como atendido
+   * ao criar o disparo — é assim que o cliente sai da fila da carteira.
+   * Null = campanha montada do banco de imagens, sem pedido por trás.
+   */
+  solicitacaoId: number | null;
   onFechar: () => void;
   onPronto: () => void;
 }) {
@@ -2138,6 +2156,9 @@ function ModalAgendamento({
         repetir_produtos: repete && repetirProdutos,
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
+        // Fecha o pedido do cliente: sem isto ele continua "aguardando" na
+        // carteira mesmo com a campanha já programada.
+        solicitacao_id: solicitacaoId,
         instance:      conexao,
         // A API repete a checagem do lado dela e recusa com 409 sem isto.
         confirmar_grupo_de_outro_cliente: cienteEstranhos,
@@ -3128,6 +3149,42 @@ function LinhaDisparo({
 }
 
 // ── Aba: ofertas dos clientes ─────────────────────────────────────────────────
+11
+/**
+ * O que aconteceu com a lista deste cliente depois que ela saiu da fila.
+ *
+ * O gestor não precisa do estado interno da campanha — ele precisa saber se
+ * ainda vai sair (e quando) ou se já saiu (e quando). Por isso a frase é
+ * sempre uma data: é a pergunta que ele faz olhando a linha.
+ */
+function estadoDaCampanha(c: ClienteCarteira): string {
+  const campanha = c.campanha;
+
+  if (campanha) {
+    // Campanha que repete continua com próximo envio marcado mesmo depois de
+    // já ter saído uma vez — o que vem primeiro é o que está por vir.
+    const futuro = campanha.proximo_envio ?? campanha.agendado_para;
+    if (campanha.status === "agendado" && futuro && new Date(futuro).getTime() > Date.now()) {
+      return `Campanha agendada para ${fmtData(futuro)}`;
+    }
+    if (campanha.status === "enviando") return "Campanha saindo agora...";
+    if (campanha.status === "erro")     return `Campanha com erro em ${fmtData(campanha.criado_em)}`;
+
+    const saiu = campanha.ultimo_envio ?? campanha.agendado_para ?? campanha.criado_em;
+    return `Último envio em ${fmtData(saiu)}`;
+  }
+
+  // Sem campanha no histórico: a lista foi fechada na mão (ou por um disparo
+  // que acabou cancelado). A data que existe é a de quando foi atendida.
+  const quando = c.ultima_solicitacao?.atendida_em ?? c.ultima_solicitacao?.criado_em ?? null;
+  return `Lista montada em ${fmtData(quando)}`;
+}
+
+/** Ordem da carteira: esperando > já montado > nunca enviou. */
+function prioridade(c: ClienteCarteira): number {
+  if (c.respondeu) return 2;
+  return c.ultima_solicitacao ? 1 : 0;
+}
 
 function AbaClientes({
   carteira, onMontar,
@@ -3138,8 +3195,34 @@ function AbaClientes({
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
   const [copiado, setCopiado] = useState<number | null>(null);
+  // Cliente com a confirmação de excluir aberta; null = nenhuma.
+  const [excluindo, setExcluindo] = useState<ClienteCarteira | null>(null);
+
+  /**
+   * Tira a lista daquele cliente da carteira. Não apaga o histórico: a
+   * solicitação vira 'descartada' e some da tela, e o cliente volta para
+   * "aguardando" até mandar a lista nova. Campanha já disparada não é tocada.
+   */
+  const excluirMut = useMutation({
+    mutationFn: (id: number) => atualizarSolicitacao(id, "descartada"),
+    onSuccess: () => {
+      toast.success("Lista excluída da carteira.");
+      queryClient.invalidateQueries({ queryKey: ["ofertas-carteira"] });
+      queryClient.invalidateQueries({ queryKey: ["ofertas-pendentes"] });
+      // O passo 3 pré-marca a lista do cliente: sem isto ele continuaria
+      // montando em cima de uma lista que o gestor acabou de excluir.
+      queryClient.invalidateQueries({ queryKey: ["ultima-escolha"] });
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Não consegui excluir a lista.");
+    },
+  });
 
   const responderam = carteira.filter((c) => c.respondeu);
+  // Já montados: a lista chegou e virou campanha. Saem do verde, mas continuam
+  // na tela com a data — sem isso o gestor não sabe se o pedido foi atendido
+  // ou se o cliente nunca respondeu.
+  const montados = carteira.filter((c) => !c.respondeu && c.ultima_solicitacao);
 
   /** Copia o link daquele cliente. Cada farmácia tem o seu. */
   function copiarLink(c: ClienteCarteira) {
@@ -3159,8 +3242,10 @@ function AbaClientes({
       .filter((c) =>
         (c.farmacia_visivel ?? c.farmacia).toLowerCase().includes(filtro)
         || c.farmacia.toLowerCase().includes(filtro))
-      // Quem respondeu primeiro — é onde o gestor consegue agir
-      .sort((a, b) => Number(b.respondeu) - Number(a.respondeu) || a.farmacia.localeCompare(b.farmacia, "pt-BR"));
+      // Quem respondeu primeiro — é onde o gestor consegue agir. Depois vêm
+      // os já montados (só de consulta), e por último quem nunca enviou nada.
+      .sort((a, b) => prioridade(b) - prioridade(a)
+        || a.farmacia.localeCompare(b.farmacia, "pt-BR"));
   }, [carteira, busca]);
 
   return (
@@ -3171,8 +3256,13 @@ function AbaClientes({
           <div className="flex-1">
             <p className="text-sm text-zinc-700">
               <strong className="text-zinc-900 text-lg">{responderam.length}</strong>
-              {" "}de <strong className="text-zinc-900">{carteira.length}</strong> clientes enviaram a lista de ofertas
+              {" "}de <strong className="text-zinc-900">{carteira.length}</strong> clientes com lista esperando você
             </p>
+            {montados.length > 0 && (
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {montados.length} já com campanha montada — saem daqui até o cliente mandar a lista nova.
+              </p>
+            )}
             <div className="mt-2 h-2 rounded-full bg-zinc-100 overflow-hidden max-w-md">
               <div
                 className="h-full bg-emerald-500 transition-all"
@@ -3223,7 +3313,7 @@ function AbaClientes({
         <div className="px-5 py-3.5 border-b border-zinc-100 grid grid-cols-[1fr_auto_auto] items-center gap-6">
           <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Farmácia</p>
           <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider text-center w-28">Produtos</p>
-          <div className="w-56" />
+          <div className="w-72" />
         </div>
 
         <div className="divide-y divide-zinc-50">
@@ -3232,12 +3322,20 @@ function AbaClientes({
               {busca ? `Nenhuma farmácia encontrada para "${busca}".` : "Nenhuma farmácia na carteira."}
             </div>
           ) : (
-            rows.map((c) => (
+            rows.map((c) => {
+              // Lista já montada em campanha: some do verde, mas fica na tela
+              // com a data. `ultima_solicitacao` sobrevive ao "atendida".
+              const montado = !c.respondeu && c.ultima_solicitacao;
+              const lista = c.respondeu ? c.solicitacao : c.ultima_solicitacao;
+
+              return (
               <div
                 key={c.farmacia_id}
-                onClick={() => { if (c.respondeu) onMontar(c); }}
+                onClick={() => { if (lista) onMontar(c); }}
                 className={`px-5 py-4 grid grid-cols-[1fr_auto_auto] items-center gap-6 transition-colors ${
-                  c.respondeu ? "hover:bg-emerald-50/40 cursor-pointer" : ""
+                  c.respondeu
+                    ? "hover:bg-emerald-50/40 cursor-pointer"
+                    : montado ? "hover:bg-zinc-50 cursor-pointer" : ""
                 }`}
               >
                 {/* Nome + estado */}
@@ -3256,6 +3354,11 @@ function AbaClientes({
                       <p className="text-[11px] text-emerald-700 mt-0.5">
                         {c.solicitacao.enviado_por ? `Enviado por ${c.solicitacao.enviado_por}` : "Lista enviada"}
                       </p>
+                    ) : montado ? (
+                      <p className="text-[11px] text-zinc-500 mt-0.5 flex items-center gap-1">
+                        <CheckCircle2 className="size-3 text-zinc-400" />
+                        {estadoDaCampanha(c)}
+                      </p>
                     ) : (
                       <p className="text-[11px] text-zinc-400 mt-0.5 italic flex items-center gap-1">
                         <Clock className="size-3" /> aguardando o cliente enviar
@@ -3266,15 +3369,17 @@ function AbaClientes({
 
                 {/* Produtos enviados */}
                 <div className="text-center w-28">
-                  {c.respondeu && c.solicitacao ? (
-                    <p className="text-sm font-bold text-emerald-600">{c.solicitacao.produtos.length}</p>
+                  {lista ? (
+                    <p className={`text-sm font-bold ${c.respondeu ? "text-emerald-600" : "text-zinc-400"}`}>
+                      {lista.produtos.length}
+                    </p>
                   ) : (
                     <p className="text-sm text-zinc-300">—</p>
                   )}
                 </div>
 
                 {/* Ações */}
-                <div className="w-56 flex justify-end items-center gap-2">
+                <div className="w-72 flex justify-end items-center gap-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); copiarLink(c); }}
                     disabled={!c.link}
@@ -3285,20 +3390,71 @@ function AbaClientes({
                       ? <><Check className="size-3.5 text-emerald-600" /> Copiado</>
                       : <><Copy className="size-3.5" /> Copiar link</>}
                   </button>
-                  {c.respondeu && (
+                  {c.respondeu ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); onMontar(c); }}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand text-white rounded-lg hover:bg-brand/90 shrink-0"
                     >
                       Montar <ArrowRight className="size-3.5" />
                     </button>
+                  ) : montado ? (
+                    // A lista continua de pé: dá para montar outra campanha em
+                    // cima dela sem esperar o cliente mandar tudo de novo.
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onMontar(c); }}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-50 shrink-0 transition"
+                    >
+                      Montar de novo <ArrowRight className="size-3.5" />
+                    </button>
+                  ) : null}
+
+                  {/* Tira a lista da carteira — para o cliente que já foi
+                      atendido e não deve mais aparecer esperando. */}
+                  {lista && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setExcluindo(c); }}
+                      title="Excluir a lista deste cliente"
+                      aria-label={`Excluir a lista de ${c.farmacia_visivel ?? c.farmacia}`}
+                      className="size-7 rounded-lg grid place-items-center text-zinc-400 hover:bg-red-50 hover:text-red-500 shrink-0 transition"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
                   )}
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
+
+      <AlertDialog open={!!excluindo} onOpenChange={(aberto) => !aberto && setExcluindo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Excluir a lista da {excluindo?.farmacia_visivel ?? excluindo?.farmacia}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              A lista sai da carteira e o cliente volta para “aguardando”, até ele mandar a
+              próxima pelo link dele. As campanhas que já foram montadas continuam do jeito
+              que estão — isto não cancela nem apaga disparo nenhum.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const id = excluindo?.solicitacao?.id ?? excluindo?.ultima_solicitacao?.id;
+                if (id) excluirMut.mutate(id);
+                setExcluindo(null);
+              }}
+              className="bg-red-500 text-white hover:bg-red-600"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

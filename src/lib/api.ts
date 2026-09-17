@@ -1768,6 +1768,30 @@ export interface ClienteCarteira {
     enviado_por: string
     criado_em: string
   } | null
+  /**
+   * A última lista deste cliente em QUALQUER status. Depois que o pedido vira
+   * campanha ele sai de `solicitacao` (e de `respondeu`), mas continua aqui —
+   * é o que a linha mostra no lugar do "aguardando".
+   */
+  ultima_solicitacao: {
+    id: number
+    produtos: ProdutoOferta[]
+    enviado_por: string
+    status: StatusSolicitacao
+    criado_em: string
+    /** Quando o gestor montou a campanha em cima desta lista. */
+    atendida_em: string | null
+  } | null
+  /** Campanha mais recente deste cliente. Cancelada não conta. */
+  campanha: {
+    id: number
+    status: string
+    agendado_para: string | null
+    /** Próxima ocorrência de uma campanha que repete. */
+    proximo_envio: string | null
+    ultimo_envio: string | null
+    criado_em: string | null
+  } | null
   ultimo_envio_em: string | null
 }
 

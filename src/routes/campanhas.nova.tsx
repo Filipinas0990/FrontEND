@@ -1151,7 +1151,9 @@ async function lerCriativosPuxados(): Promise<CriativoWizard[]> {
     ...c,
     layout:        c.layout as LayoutCriativo | undefined,
     enquadramento: c.enquadramento as Enquadramento | undefined,
-    tipo:          "gerado" as const,
+    // Arte pronta (upload) é exibida como veio; criativo gerado é redesenhado
+    // a partir do modelo. Sem `tipo` é fluxo antigo, sempre gerado.
+    tipo:          c.tipo === "upload" ? ("upload" as const) : ("gerado" as const),
   }));
 }
 
@@ -1195,9 +1197,15 @@ interface CopyCtx {
 
 /** Substitui os marcadores da copy pelos dados de um criativo. */
 function expandirCopy(tpl: string, ctx: CopyCtx): string {
-  return tpl
-    .replace(/\{\s*produto\s*\}/gi, ctx.produto)
-    .replace(/\{\s*pre(?:c|ç)o\s*\}/gi, ctx.preco);
+  const preco = ctx.preco.trim();
+  const texto = tpl.replace(/\{\s*produto\s*\}/gi, ctx.produto);
+  if (preco) return texto.replace(/\{\s*pre(?:c|ç)o\s*\}/gi, preco);
+  // Arte pronta pode vir sem preço (o valor já está desenhado na peça). Trocar
+  // o marcador por vazio deixaria "Produto: R$ " na copy — some junto com o
+  // "R$" e a pontuação que só existiam para apresentar o número.
+  return texto
+    .replace(/\s*[:\-–]?\s*(?:por\s+)?R\$\s*\{\s*pre(?:c|ç)o\s*\}/gi, "")
+    .replace(/\{\s*pre(?:c|ç)o\s*\}/gi, "");
 }
 
 function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => void }) {

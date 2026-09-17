@@ -4,10 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus, FileSpreadsheet, Pencil, UploadCloud, Info, CheckCircle2,
   LayoutTemplate, Tags, ImageIcon, PlusCircle, Loader2, Download, ZoomIn, X, Trash2,
-  LayoutGrid, ArrowRight,
+  LayoutGrid, ArrowRight, ImagePlus,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CriativosModal, type CriativosConfig } from "@/components/CriativosModal";
+import { CriativosProntosModal, type CriativoProntoItem } from "@/components/CriativosProntosModal";
 import { SeletorProdutosModal } from "@/components/SeletorProdutosModal";
 import { salvarCriativos } from "@/lib/transferenciaCriativos";
 import { CriativoCard } from "@/components/CriativoCard";
@@ -98,6 +99,9 @@ function CriativosCampanhasPage() {
 
   // Etapa 1: grade do catálogo (o caminho principal para escolher produtos)
   const [showSeletor, setShowSeletor] = useState(false);
+
+  // Atalho: artes já prontas sobem direto para a campanha, sem as 4 etapas
+  const [showProntos, setShowProntos] = useState(false);
 
   // Etapa 3: modal de criativos + config gerada
   const [showCriativos, setShowCriativos] = useState(false);
@@ -191,6 +195,37 @@ function CriativosCampanhasPage() {
       );
     } finally {
       setExportando(false);
+    }
+  }
+
+  /**
+   * Artes prontas: não passam por catálogo nem por modelo — já são a imagem
+   * final. Vão para o mesmo transporte dos criativos gerados, marcadas como
+   * "upload" para o wizard exibir a arte em vez de redesenhar um card.
+   */
+  async function subirProntosNaCampanha(itens: CriativoProntoItem[]) {
+    void qc.prefetchQuery(opcoesContas());
+    try {
+      await salvarCriativos(
+        itens.map((i) => ({
+          id: i.id,
+          nome: i.nome,
+          preco: i.preco,
+          localizacao: "",
+          tipo: "upload" as const,
+          arquivoUrl: i.arquivoUrl,
+        })),
+      );
+      setShowProntos(false);
+      navigate({ to: "/campanhas/nova" });
+    } catch (err) {
+      console.error(err);
+      const nome = (err as Error)?.name;
+      toast.error(
+        nome === "QuotaExceededError"
+          ? "Não há espaço no navegador para tantas artes. Suba menos de uma vez."
+          : "Erro ao preparar os criativos.",
+      );
     }
   }
 
@@ -326,6 +361,25 @@ function CriativosCampanhasPage() {
             <Plus className="size-4" /> Novo Fluxo
           </button>
         </div>
+      </div>
+
+      {/* Atalho: quem já tem a arte pronta não precisa passar pelas quatro etapas */}
+      <div className="mb-6 bg-white rounded-2xl border border-zinc-200 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="shrink-0 size-11 rounded-xl bg-brand/10 grid place-items-center">
+          <ImagePlus className="size-5 text-brand" />
+        </div>
+        <div className="flex-1">
+          <p className="font-bold text-zinc-900">Já tem os criativos prontos?</p>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            Suba as artes finalizadas e vá direto para a escolha da conta de anúncio — sem passar pelas etapas abaixo.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowProntos(true)}
+          className="shrink-0 bg-white border-2 border-brand text-brand hover:bg-brand/5 font-semibold px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition"
+        >
+          <UploadCloud className="size-4" /> Subir Criativos Prontos
+        </button>
       </div>
 
       {/* ── ETAPA 1 ──────────────────────────────────────────────────────────── */}
@@ -652,6 +706,14 @@ function CriativosCampanhasPage() {
           jaEscolhidos={produtos.map((p) => p.catalogoId).filter((id): id is number => id !== null)}
           onConfirmar={usarDoCatalogo}
           onClose={() => setShowSeletor(false)}
+        />
+      )}
+
+      {/* Artes prontas → direto para a campanha */}
+      {showProntos && (
+        <CriativosProntosModal
+          onConcluir={subirProntosNaCampanha}
+          onClose={() => setShowProntos(false)}
         />
       )}
 

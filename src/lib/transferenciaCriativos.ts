@@ -27,6 +27,14 @@ export interface CriativoTransferido {
   subtitulo?: string;
   /** PNG achatado (data URI), pronto para o Meta. */
   png?: string;
+  /**
+   * "gerado" = montado a partir de um modelo (o wizard redesenha o card).
+   * "upload" = arte pronta que o gestor subiu; a imagem final está em
+   * `arquivoUrl` e o wizard só a exibe. Ausente = gerado (fluxo antigo).
+   */
+  tipo?: "gerado" | "upload";
+  /** Arte pronta em data URI — usada quando `tipo` é "upload". */
+  arquivoUrl?: string;
 }
 
 function abrir(): Promise<IDBDatabase> {
