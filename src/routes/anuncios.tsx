@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, FileSpreadsheet, Pencil, UploadCloud, Info, CheckCircle2,
+  Plus, UploadCloud, Info, CheckCircle2,
   LayoutTemplate, Tags, ImageIcon, PlusCircle, Loader2, Download, ZoomIn, X, Trash2,
   LayoutGrid, ArrowRight, ImagePlus,
 } from "lucide-react";
@@ -363,25 +363,6 @@ function CriativosCampanhasPage() {
         </div>
       </div>
 
-      {/* Atalho: quem já tem a arte pronta não precisa passar pelas quatro etapas */}
-      <div className="mb-6 bg-white rounded-2xl border border-zinc-200 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="shrink-0 size-11 rounded-xl bg-brand/10 grid place-items-center">
-          <ImagePlus className="size-5 text-brand" />
-        </div>
-        <div className="flex-1">
-          <p className="font-bold text-zinc-900">Já tem os criativos prontos?</p>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            Suba as artes finalizadas e vá direto para a escolha da conta de anúncio — sem passar pelas etapas abaixo.
-          </p>
-        </div>
-        <button
-          onClick={() => setShowProntos(true)}
-          className="shrink-0 bg-white border-2 border-brand text-brand hover:bg-brand/5 font-semibold px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition"
-        >
-          <UploadCloud className="size-4" /> Subir Criativos Prontos
-        </button>
-      </div>
-
       {/* ── ETAPA 1 ──────────────────────────────────────────────────────────── */}
       <EtapaRow
         numero={1}
@@ -389,22 +370,31 @@ function CriativosCampanhasPage() {
         descricao="Escolha do catálogo ou informe a lista você mesmo."
         left={
           <>
-            {/* "Escolher do Catálogo" vive só no painel da direita — aqui
-                ficava repetido, ao lado do botão que faz a mesma coisa. */}
-            <div className="grid grid-cols-2 gap-3">
+            {/*
+             * Atalho de quem já tem a arte pronta. Ele morava num banner acima
+             * das etapas; desceu para cá porque os dois botões que ocupavam
+             * este espaço ("Subir Planilha" e "Escrever Produtos") eram atalhos
+             * para o dropzone e o campo de texto que já estão no painel ao
+             * lado — clique a mais para chegar no mesmo lugar.
+             */}
+            <div className="border border-zinc-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 size-10 rounded-xl bg-brand/10 grid place-items-center">
+                  <ImagePlus className="size-5 text-brand" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-zinc-900 leading-tight">Já tem os criativos prontos?</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Suba as artes finalizadas e vá direto para a escolha da conta de anúncio —
+                    sem passar pelas etapas abaixo.
+                  </p>
+                </div>
+              </div>
               <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-4 border border-zinc-200 rounded-xl hover:border-brand hover:bg-brand/5 transition flex flex-col items-center gap-2 text-center"
+                onClick={() => setShowProntos(true)}
+                className="mt-3 w-full bg-white border-2 border-brand text-brand hover:bg-brand/5 font-semibold px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition"
               >
-                <FileSpreadsheet className="size-6 text-emerald-600" />
-                <span className="text-sm font-semibold text-zinc-800">Subir Planilha</span>
-              </button>
-              <button
-                onClick={() => document.getElementById("txt-produtos")?.focus()}
-                className="p-4 border border-zinc-200 rounded-xl hover:border-brand hover:bg-brand/5 transition flex flex-col items-center gap-2 text-center"
-              >
-                <Pencil className="size-6 text-brand" />
-                <span className="text-sm font-semibold text-zinc-800">Escrever Produtos</span>
+                <UploadCloud className="size-4" /> Subir Criativos Prontos
               </button>
             </div>
             <p className="flex items-start gap-1.5 text-xs text-zinc-400 mt-4">
@@ -439,9 +429,10 @@ function CriativosCampanhasPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
-            {/* Exemplo: Subir Planilha */}
+            {/* Subir planilha — o dropzone é a ação, não um exemplo dela: o
+                botão que abria este mesmo seletor saiu da coluna da esquerda. */}
             <div>
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">Exemplo: Subir Planilha</p>
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">Subir planilha</p>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full border-2 border-dashed border-zinc-300 rounded-xl p-6 flex flex-col items-center gap-1.5 hover:border-brand hover:bg-white transition"
@@ -461,9 +452,9 @@ function CriativosCampanhasPage() {
               <div className="w-px h-10 bg-zinc-200" />
             </div>
 
-            {/* Exemplo: Escrever Produtos */}
+            {/* Escrever produtos */}
             <div>
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">Exemplo: Escrever Produtos</p>
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">Escrever produtos</p>
               <textarea
                 id="txt-produtos"
                 value={textoProdutos}
