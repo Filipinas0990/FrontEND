@@ -1640,6 +1640,11 @@ export interface ProdutoOferta {
   /** Preço que o dono informou no link ("9,90"). Null = deixou para o gestor. */
   preco?: string | null
   /**
+   * Preço antigo da oferta "de/por" — sai riscado na arte, acima do `preco`.
+   * Null (ou ausente, nos pedidos antigos) = oferta com um preço só.
+   */
+  preco_de?: string | null
+  /**
    * Categoria — só vem na vitrine do link público, para os chips de filtro.
    * As listas de pedido já enviado gravam {id, nome} e não têm o campo.
    */
@@ -1658,8 +1663,11 @@ export interface OfertaPublica {
 export interface EnviarOfertaPayload {
   /** Ignorado nos links de cliente: lá a farmácia vem do próprio token. */
   farmacia_id: number
-  /** O dono manda o preço junto; `preco` null = ele não informou. */
-  produtos: { id: number; preco?: string | null }[]
+  /**
+   * O dono manda o preço junto; `preco` null = ele não informou.
+   * `preco_de` só vai preenchido nos produtos em que ele ligou o "de/por".
+   */
+  produtos: { id: number; preco?: string | null; preco_de?: string | null }[]
   /** Obrigatório: sem nome o envio é recusado. */
   enviado_por: string
 }

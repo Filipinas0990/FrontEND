@@ -54,6 +54,8 @@ interface ItemOferta {
   nome:    string;
   imagem?: string | null;
   preco:   string;
+  /** Preço antigo pedido pelo cliente no link dele. "" = oferta de preço só. */
+  precoDe: string;
 }
 
 const TITULOS: Record<Etapa, { titulo: string; descricao: string }> = {
@@ -124,6 +126,10 @@ export function EnviarGrupoWizard({
 
   // Etapa 3 — preços e mensagem
   const [precos, setPrecos] = useState<Record<string, string>>({});
+  // Itens com oferta "de/por" e o preço antigo (riscado) de cada um. Começa
+  // pelo que o cliente marcou no link, e o gestor pode ligar/desligar aqui.
+  const [dePor, setDePor] = useState<Set<string>>(new Set());
+  const [precosDe, setPrecosDe] = useState<Record<string, string>>({});
   const [mensagem, setMensagem] = useState("");
 
   // Etapa 4 — grupos
@@ -270,11 +276,13 @@ export function EnviarGrupoWizard({
     setUsarDaTela(false);
 
     const doCatalogo: ItemOferta[] = c.solicitacao.produtos.map((p) => ({
-      chave:  `cat-${p.id}`,
-      nome:   p.nome,
-      imagem: catalogoImagemUrl(p.id),
+      chave:   `cat-${p.id}`,
+      nome:    p.nome,
+      imagem:  catalogoImagemUrl(p.id),
       // O dono já pode ter mandado o preço no link dele
-      preco:  p.preco ?? "",
+      preco:   p.preco ?? "",
+      // ...e o preço antigo, quando ligou o de/por lá
+      precoDe: (p.preco && p.preco_de) ? p.preco_de : "",
     }));
 
     const lista = doCatalogo;
@@ -285,6 +293,11 @@ export function EnviarGrupoWizard({
     setPrecos(Object.fromEntries(
       lista.filter((i) => i.preco).map((i) => [i.chave, i.preco]),
     ));
+    // O de/por do cliente já chega ligado, com o preço riscado dele
+    setPrecosDe(Object.fromEntries(
+      lista.filter((i) => i.precoDe).map((i) => [i.chave, i.precoDe]),
+    ));
+    setDePor(new Set(lista.filter((i) => i.precoDe).map((i) => i.chave)));
     // Vai para o grupo: nome de fachada, nunca a razão social
     setMensagem(`🔥 *OFERTAS* — ${(c.farmacia_visivel ?? c.farmacia)} 🔥`);
   }
@@ -325,14 +338,19 @@ export function EnviarGrupoWizard({
     setClienteSel(null);
     setUsarDaTela(true);
     const lista: ItemOferta[] = produtos.map((p) => ({
-      chave:  p.id,
-      nome:   p.nome,
-      imagem: p.imagem,
-      preco:  criativosConfig.precos[p.id] ?? p.preco,
+      chave:   p.id,
+      nome:    p.nome,
+      imagem:  p.imagem,
+      preco:   criativosConfig.precos[p.id] ?? p.preco,
+      // A tela de anúncios não tem de/por: aqui ele começa desligado e o
+      // gestor liga no que quiser.
+      precoDe: "",
     }));
     setItens(lista);
     setEscolhidos(new Set(lista.map((i) => i.chave)));
     setPrecos(Object.fromEntries(lista.map((i) => [i.chave, i.preco])));
+    setPrecosDe({});
+    setDePor(new Set());
     setMensagem("🔥 *OFERTAS DA SEMANA* 🔥");
   }
 
@@ -377,11 +395,16 @@ export function EnviarGrupoWizard({
       const geradas: MidiaDisparo[] = [];
       for (const item of itensEscolhidos) {
         const preco = precos[item.chave] ?? item.preco;
+        // Só sai preço riscado em quem está com o de/por ligado.
+        const precoDe = dePor.has(item.chave)
+          ? (precosDe[item.chave] ?? item.precoDe) || undefined
+          : undefined;
         const png = await exportarCriativoPng({
           layout:        criativosConfig.layout,
           enquadramento: criativosConfig.enquadramento,
           nome:          item.nome,
           preco,
+          precoDe,
           imagem:        item.imagem,
           localizacao:   localizacaoCriativo,
           titulo:        criativosConfig.titulo,
@@ -392,7 +415,11 @@ export function EnviarGrupoWizard({
         geradas.push({
           b64:    comprimido.b64,
           mime:   comprimido.mime,
-          rotulo: preco ? `${item.nome} — ${preco}` : item.nome,
+          rotulo: preco
+            ? (precoDe
+              ? `${item.nome} — de R$${precoDe} por R$${preco}`
+              : `${item.nome} — ${preco}`)
+            : item.nome,
         });
       }
       setMidias(geradas);
@@ -884,7 +911,9 @@ export function EnviarGrupoWizard({
           {etapa === 3 && (
             <div className="flex flex-col gap-4">
               <div className="grid gap-2 max-h-64 overflow-y-auto">
-                {itensEscolhidos.map((item) => (
+                {itensEscolhidos.map((item) => {
+                  const ehDePor = dePor.has(item.chave);
+                  return (
                   <div key={item.chave} className="flex items-center gap-3 p-2.5 rounded-xl border border-zinc-200">
                     {item.imagem ? (
                       <img src={item.imagem} alt="" className="size-9 rounded object-contain bg-zinc-50 shrink-0" />
@@ -894,20 +923,69 @@ export function EnviarGrupoWizard({
                       </span>
                     )}
                     <span className="flex-1 min-w-0 text-sm text-zinc-800 truncate">{item.nome}</span>
+
+                    {/* Liga o preço riscado nesta peça — e só nela */}
+                    <label className="flex items-center gap-1.5 shrink-0 cursor-pointer select-none">
+                      <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">
+                        De / Por
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={ehDePor}
+                        aria-label={`Preço de/por de ${item.nome}`}
+                        onClick={() => setDePor((atual) => {
+                          const novo = new Set(atual);
+                          if (novo.has(item.chave)) novo.delete(item.chave);
+                          else novo.add(item.chave);
+                          return novo;
+                        })}
+                        className={`relative h-5 w-9 rounded-full transition-colors shrink-0 ${
+                          ehDePor ? "bg-brand" : "bg-zinc-300"
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${
+                          ehDePor ? "left-[1.125rem]" : "left-0.5"
+                        }`} />
+                      </button>
+                    </label>
+
+                    {ehDePor && (
+                      <div className="relative w-28 shrink-0">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                          <span className="text-[10px] font-semibold text-zinc-400 uppercase">De</span>
+                          <span className="text-sm text-zinc-400">R$</span>
+                        </span>
+                        <input
+                          value={precosDe[item.chave] ?? item.precoDe}
+                          onChange={(e) => setPrecosDe((p) => ({ ...p, [item.chave]: formatarMoeda(e.target.value) }))}
+                          inputMode="numeric"
+                          placeholder="0,00"
+                          aria-label={`Preço antigo de ${item.nome}`}
+                          className="w-full pl-14 pr-2.5 py-1.5 rounded-lg border border-zinc-200 text-sm text-right text-zinc-500 line-through focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        />
+                      </div>
+                    )}
+
                     <div className="relative w-28 shrink-0">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-zinc-400 pointer-events-none">
-                        R$
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                        {ehDePor && (
+                          <span className="text-[10px] font-semibold text-zinc-400 uppercase">Por</span>
+                        )}
+                        <span className="text-sm text-zinc-400">R$</span>
                       </span>
                       <input
                         value={precos[item.chave] ?? item.preco}
                         onChange={(e) => setPrecos((p) => ({ ...p, [item.chave]: formatarMoeda(e.target.value) }))}
                         inputMode="numeric"
                         placeholder="0,00"
-                        className="w-full pl-8 pr-2.5 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        aria-label={`Preço de ${item.nome}`}
+                        className={`w-full ${ehDePor ? "pl-14" : "pl-8"} pr-2.5 py-1.5 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30`}
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -943,6 +1021,9 @@ export function EnviarGrupoWizard({
                           enquadramento={criativosConfig.enquadramento}
                           nome={item.nome}
                           preco={precos[item.chave] ?? item.preco}
+                          precoDe={dePor.has(item.chave)
+                            ? (precosDe[item.chave] ?? item.precoDe) || undefined
+                            : undefined}
                           imagem={item.imagem}
                           localizacao={localizacaoCriativo}
                           titulo={criativosConfig.titulo}

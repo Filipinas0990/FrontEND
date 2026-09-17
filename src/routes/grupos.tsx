@@ -1010,6 +1010,18 @@ function PassoCriativo({
     return mapa;
   }, [ultima]);
 
+  /**
+   * Preço antigo dos produtos em que o cliente ligou o "de/por" no link dele.
+   * Só entra com os dois preços: um riscado sem preço de oferta não é arte.
+   */
+  const dePorDoCliente = useMemo(() => {
+    const mapa: Record<number, string> = {};
+    for (const p of ultima?.produtos ?? []) {
+      if (p.preco_de && p.preco) mapa[p.id] = p.preco_de;
+    }
+    return mapa;
+  }, [ultima]);
+
   // Já vêm marcados os produtos do pedido, com o preço que o cliente mandou.
   // Uma vez por pedido, para não desfazer o que o gestor mexeu.
   const preMarcado = useRef<string | null>(null);
@@ -1021,7 +1033,14 @@ function PassoCriativo({
     setEscolhidos(new Set(doCliente.map((p) => p.id)));
     // Só os do pedido: preço digitado à mão para outro produto fica de pé.
     setPrecos((atual) => ({ ...atual, ...precosDoCliente }));
-  }, [ultima, doCliente, farmacia.id, precosDoCliente]);
+    // O de/por que o cliente pediu já chega ligado — o gestor só confere.
+    setPrecosDe((atual) => ({ ...atual, ...dePorDoCliente }));
+    setDePor((atual) => {
+      const novo = new Set(atual);
+      for (const id of Object.keys(dePorDoCliente)) novo.add(Number(id));
+      return novo;
+    });
+  }, [ultima, doCliente, farmacia.id, precosDoCliente, dePorDoCliente]);
 
   /**
    * Opções do campo de filtro. "Recentes" vem sempre primeiro — repetir a

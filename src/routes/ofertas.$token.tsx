@@ -36,6 +36,10 @@ function OfertasPublicaPage() {
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   // Preço por produto, no mesmo formato do criativo ("9,90"). Opcional.
   const [precos, setPrecos] = useState<Record<number, string>>({});
+  // Produtos em que o dono ligou o "de/por", e o preço antigo (o riscado) de
+  // cada um. Fora deste conjunto a arte sai com um preço só, como sempre saiu.
+  const [dePor, setDePor] = useState<Set<number>>(new Set());
+  const [precosDe, setPrecosDe] = useState<Record<number, string>>({});
   const [busca, setBusca] = useState("");
   const [filtroCat, setFiltroCat] = useState<string>("todas");
   const [buscaFarmacia, setBuscaFarmacia] = useState("");
@@ -105,17 +109,40 @@ function OfertasPublicaPage() {
     });
   }
 
+  function alternarDePor(id: number) {
+    setDePor((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id); else novo.add(id);
+      return novo;
+    });
+  }
+
   /** Regra: sem nome não envia (o pedido não pode chegar anônimo). */
   const nomeOk = enviadoPor.trim().length >= 2;
 
+  /**
+   * Produtos com o "de/por" ligado e algum dos dois preços em branco. O preço
+   * solto é opcional nesta tela, mas o riscado só existe em relação ao preço
+   * da oferta: com um dos dois faltando a arte sairia errada.
+   */
+  const dePorIncompleto = [...selecionados].filter(
+    (id) => dePor.has(id) && (!precos[id]?.trim() || !precosDe[id]?.trim()),
+  );
+
   async function enviar() {
-    if (!farmaciaId || !nomeOk) return;
+    if (!farmaciaId || !nomeOk || dePorIncompleto.length > 0) return;
     setEnviando(true);
     setErroEnvio(null);
     try {
       await enviarOfertaPublica(token, {
         farmacia_id: farmaciaId,
-        produtos: [...selecionados].map((id) => ({ id, preco: precos[id]?.trim() || null })),
+        produtos: [...selecionados].map((id) => ({
+          id,
+          preco: precos[id]?.trim() || null,
+          // Só vai preço antigo de quem ligou o botão — o resto continua
+          // chegando ao gestor exatamente como antes.
+          preco_de: dePor.has(id) ? (precosDe[id]?.trim() || null) : null,
+        })),
         enviado_por: enviadoPor.trim(),
       });
       setEnviado(true);
@@ -259,6 +286,7 @@ function OfertasPublicaPage() {
         <p className="text-sm text-zinc-500 mt-1 mb-3">
           Marque os produtos que entram na oferta e informe o preço de cada um.
           Se não souber o preço agora, pode deixar em branco — seu gestor completa.
+          Para mostrar o preço antigo cortado na arte, ligue o “De / Por” do produto.
         </p>
 
         <div className="relative mb-3">
@@ -328,10 +356,38 @@ function OfertasPublicaPage() {
 
                 {/* Preço só aparece depois de marcar — e é opcional */}
                 {marcado && (
-                  <CampoPreco
-                    valor={precos[p.id] ?? ""}
-                    onChange={(v) => setPrecos((atual) => ({ ...atual, [p.id]: v }))}
-                  />
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {/* Liga o "de/por": um preço riscado antes do preço da
+                        oferta. A linha inteira é a área de toque — no celular
+                        acertar só a chavinha é difícil. */}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={dePor.has(p.id)}
+                      aria-label={`Preço de/por de ${p.nome}`}
+                      onClick={() => alternarDePor(p.id)}
+                      className="flex items-center justify-between gap-2 w-full select-none"
+                    >
+                      <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">
+                        De / Por
+                      </span>
+                      <Toggle ligado={dePor.has(p.id)} />
+                    </button>
+
+                    {dePor.has(p.id) && (
+                      <CampoPreco
+                        rotulo="De"
+                        riscado
+                        valor={precosDe[p.id] ?? ""}
+                        onChange={(v) => setPrecosDe((atual) => ({ ...atual, [p.id]: v }))}
+                      />
+                    )}
+                    <CampoPreco
+                      rotulo={dePor.has(p.id) ? "Por" : undefined}
+                      valor={precos[p.id] ?? ""}
+                      onChange={(v) => setPrecos((atual) => ({ ...atual, [p.id]: v }))}
+                    />
+                  </div>
                 )}
               </div>
             );
@@ -375,13 +431,15 @@ function OfertasPublicaPage() {
           <p className="text-sm text-zinc-500 flex-1">
             {totalEscolhido === 0
               ? "Nenhum produto escolhido"
-              : !nomeOk
-                ? "Falta informar o seu nome"
-                : <><strong className="text-zinc-900">{selecionados.size}</strong> produto(s)</>}
+              : dePorIncompleto.length > 0
+                ? `Falta o preço de/por de ${dePorIncompleto.length} produto(s)`
+                : !nomeOk
+                  ? "Falta informar o seu nome"
+                  : <><strong className="text-zinc-900">{selecionados.size}</strong> produto(s)</>}
           </p>
           <button
             onClick={enviar}
-            disabled={enviando || totalEscolhido === 0 || !nomeOk}
+            disabled={enviando || totalEscolhido === 0 || !nomeOk || dePorIncompleto.length > 0}
             className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
           >
             {enviando
@@ -398,27 +456,56 @@ function OfertasPublicaPage() {
  * Preço do produto no link do dono — opcional, e no mesmo formato que o
  * criativo espera ("9,90"), para o gestor não ter que redigitar no passo 3.
  * Campo alto e `inputMode="numeric"` porque o dono abre isto no celular.
+ * Com `rotulo` ("De"/"Por") é uma das duas pontas da oferta de/por.
  */
 function CampoPreco({
-  valor, onChange,
+  rotulo, valor, onChange, riscado,
 }: {
+  rotulo?: string;
   valor: string;
   onChange: (v: string) => void;
+  /** Mostra o valor cortado, como ele vai sair na arte. */
+  riscado?: boolean;
 }) {
   return (
-    <div className="relative mt-2">
-      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400 pointer-events-none">
-        R$
+    <div className="relative">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+        {rotulo && (
+          <span className="text-[10px] font-semibold text-zinc-400 uppercase">{rotulo}</span>
+        )}
+        <span className="text-xs text-zinc-400">R$</span>
       </span>
       <input
         value={valor}
         onChange={(e) => onChange(formatarMoeda(e.target.value))}
         inputMode="numeric"
         placeholder="0,00"
-        aria-label="Preço da oferta"
-        className="w-full pl-8 pr-2 py-2 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30"
+        aria-label={rotulo ? `Preço "${rotulo.toLowerCase()}" da oferta` : "Preço da oferta"}
+        className={`w-full ${rotulo ? "pl-14" : "pl-8"} pr-2 py-2 rounded-lg border border-zinc-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+          riscado ? "text-zinc-500 line-through" : ""
+        }`}
       />
     </div>
+  );
+}
+
+/**
+ * Chavinha do "de/por" — o mesmo desenho do passo 3 do gestor. Só o visual:
+ * quem recebe o toque (e carrega o `role="switch"`) é a linha inteira.
+ */
+function Toggle({ ligado }: { ligado: boolean }) {
+  return (
+    <span
+      className={`relative block h-5 w-9 rounded-full transition-colors shrink-0 ${
+        ligado ? "bg-brand" : "bg-zinc-300"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${
+          ligado ? "left-[1.125rem]" : "left-0.5"
+        }`}
+      />
+    </span>
   );
 }
 
