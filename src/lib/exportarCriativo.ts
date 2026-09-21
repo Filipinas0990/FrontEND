@@ -196,6 +196,129 @@ export async function comprimirParaEnvio(
   return { b64: ultimo, mime: "image/jpeg" };
 }
 
+// ── Formato obrigatório do anúncio ───────────────────────────────────────────
+
+/**
+ * Todo anúncio sobe ao Meta em 1080×1350 (retrato 4:5).
+ *
+ * Os criativos GERADOS já nascem assim (ver DIMENSOES). O problema eram as
+ * artes prontas e os uploads do wizard: iam para a Graph API na dimensão do
+ * arquivo do designer — quadrado, paisagem, 2000px — e o Meta reenquadrava por
+ * conta própria, cortando preço e logo no feed.
+ */
+export const FORMATO_ANUNCIO = { w: 1080, h: 1350 } as const;
+
+/**
+ * Teto por arte de anúncio. Cada imagem viaja no corpo do POST da campanha, e o
+ * proxy da Vercel recusa acima de ~4,2 MB. 1,5 MB preserva bem mais qualidade
+ * que o teto do disparo por WhatsApp — e um 1080×1350 em JPEG fica bem abaixo
+ * disso na prática.
+ */
+export const TETO_POR_ARTE_ANUNCIO = 1.5 * 1024 * 1024;
+
+/**
+ * Desfoque do fundo, em px na escala 1080×1350.
+ *
+ * O que sobra ao redor da arte é a própria imagem ampliada e borrada, não uma
+ * faixa branca: no feed a barra branca denuncia o criativo mal formatado, e
+ * cortar a arte para preencher perderia justamente as bordas onde o designer
+ * põe preço e marca.
+ */
+const DESFOQUE_FUNDO = 40;
+
+/**
+ * Quanto o fundo é ampliado além do necessário para cobrir a tela.
+ *
+ * O blur do canvas puxa transparência de fora da imagem para dentro, deixando
+ * uma moldura lavada nas beiradas. Ampliando o fundo, essa faixa cai fora do
+ * enquadramento.
+ */
+const OVERSCAN_FUNDO = 1.15;
+
+/** Tamanho real (em bytes do base64) de um data URI. */
+function pesoBase64(dataUrl: string): number {
+  return dataUrl.length - (dataUrl.indexOf(",") + 1);
+}
+
+/** Desenha a imagem em 1080×1350 (× escala): fundo borrado + arte inteira por cima. */
+function enquadrarEm45(img: HTMLImageElement, escala: number): HTMLCanvasElement {
+  const largura = Math.max(1, Math.round(FORMATO_ANUNCIO.w * escala));
+  const altura = Math.max(1, Math.round(FORMATO_ANUNCIO.h * escala));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = largura;
+  canvas.height = altura;
+  const ctx = canvas.getContext("2d")!;
+
+  // Base branca: se o navegador ignorar ctx.filter, o fundo ainda sai limpo.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, largura, altura);
+
+  const nw = img.naturalWidth || largura;
+  const nh = img.naturalHeight || altura;
+
+  // Fundo: cobre a tela inteira (e sobra), borrado.
+  const cobrir = Math.max(largura / nw, altura / nh) * OVERSCAN_FUNDO;
+  const fw = nw * cobrir;
+  const fh = nh * cobrir;
+  ctx.filter = `blur(${Math.max(1, Math.round(DESFOQUE_FUNDO * escala))}px)`;
+  ctx.drawImage(img, (largura - fw) / 2, (altura - fh) / 2, fw, fh);
+  ctx.filter = "none";
+
+  // Arte: cabe inteira, centralizada, sem corte nenhum.
+  const caber = Math.min(largura / nw, altura / nh);
+  const aw = nw * caber;
+  const ah = nh * caber;
+  ctx.drawImage(img, (largura - aw) / 2, (altura - ah) / 2, aw, ah);
+
+  return canvas;
+}
+
+/**
+ * Põe qualquer imagem no formato do anúncio (1080×1350) e dentro de `maxBytes`.
+ *
+ * A arte não é cortada: entra inteira, centralizada, com o vazio preenchido
+ * pelo fundo borrado. Devolve data URI pronto para o campo `pngBase64` que o
+ * backend manda para a Graph API.
+ *
+ * Arte que já está exatamente em 1080×1350 e dentro do teto passa intacta —
+ * re-encodar à toa só perderia qualidade.
+ */
+export async function normalizarParaAnuncio(
+  dataUrl: string,
+  maxBytes = TETO_POR_ARTE_ANUNCIO,
+): Promise<{ dataUrl: string; mime: string }> {
+  const img = await carregarImagem(dataUrl);
+
+  const jaNoFormato =
+    img.naturalWidth === FORMATO_ANUNCIO.w && img.naturalHeight === FORMATO_ANUNCIO.h;
+  const mimeOriginal = /^data:([^;]+)/.exec(dataUrl)?.[1] ?? "";
+  const mimeAceito = mimeOriginal === "image/jpeg" || mimeOriginal === "image/png";
+  if (jaNoFormato && mimeAceito && pesoBase64(dataUrl) <= maxBytes) {
+    return { dataUrl, mime: mimeOriginal };
+  }
+
+  // Qualidade alta primeiro: a arte do designer é o anúncio, não uma prévia.
+  const qualidades = [0.92, 0.85, 0.78, 0.7, 0.6, 0.5];
+
+  let escala = 1;
+  let ultimo = "";
+  for (let tentativa = 0; tentativa < 4; tentativa++) {
+    const canvas = enquadrarEm45(img, escala);
+    for (const q of qualidades) {
+      const jpeg = canvas.toDataURL("image/jpeg", q);
+      ultimo = jpeg;
+      if (pesoBase64(jpeg) <= maxBytes) return { dataUrl: jpeg, mime: "image/jpeg" };
+    }
+    // Ainda grande: encolhe a resolução MANTENDO o 4:5 — o formato é inegociável,
+    // a contagem de pixels não. (Na prática não chega aqui: 1080×1350 em JPEG
+    // 0,92 dá ~400 KB.)
+    escala *= 0.8;
+  }
+
+  return { dataUrl: ultimo, mime: "image/jpeg" };
+}
+
 /** Dispara o download de um data URI no navegador. Mantém a extensão se já houver; senão usa .png */
 export function baixarPng(dataUrl: string, nomeArquivo: string) {
   const a = document.createElement("a");

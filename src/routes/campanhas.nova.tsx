@@ -11,7 +11,7 @@ import * as SliderPrimitive from "@radix-ui/react-slider";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { CriativoCard, type LayoutCriativo, type Enquadramento } from "@/components/CriativoCard";
-import { exportarCriativoPng, baixarPng } from "@/lib/exportarCriativo";
+import { exportarCriativoPng, baixarPng, normalizarParaAnuncio } from "@/lib/exportarCriativo";
 import { desde } from "@/lib/tempo";
 import { CHAVE_CONTAS, opcoesContas } from "@/lib/contasAnuncio";
 import {
@@ -679,8 +679,13 @@ function BlocoNumerado({ n, titulo, desc, children }: {
   );
 }
 
-/** Coordenada por cidade (key do Meta). Cidade não muda de lugar — cache vale a sessão inteira. */
-const CACHE_COORDENADAS = new Map<string, Coordenada | null>();
+/** Coordenada por cidade (key do Meta). Cidade não muda de lugar — cache vale a sessão inteira.
+ *  Só guarda acerto: um "não achei" pode ter sido o Nominatim fora do ar, e cachear
+ *  isso deixaria o mapa travado no Brasil inteiro até recarregar a página. */
+const CACHE_COORDENADAS = new Map<string, Coordenada>();
+
+/** Rótulo curto da cidade. A Meta devolve "Rio Verde, Goias, Brazil" em `name`. */
+const soACidade = (nome: string) => (nome.split(",")[0] ?? "").trim() || nome;
 
 /**
  * Busca de cidade (autocomplete real na Meta) + raio em km + mapa do raio.
@@ -708,7 +713,7 @@ function CampoLocalizacao({
     if (!valor) { setCoord(null); setCarregandoMapa(false); return; }
 
     const emCache = CACHE_COORDENADAS.get(valor.key);
-    if (emCache !== undefined) { setCoord(emCache); setCarregandoMapa(false); return; }
+    if (emCache) { setCoord(emCache); setCarregandoMapa(false); return; }
 
     // A coordenada anterior fica até a nova chegar: o mapa continua montado e
     // não pisca entre uma cidade e outra.
@@ -716,7 +721,7 @@ function CampoLocalizacao({
     setCarregandoMapa(true);
     buscarCoordenadas(valor.nome, valor.regiao)
       .then((r) => {
-        CACHE_COORDENADAS.set(valor.key, r.coordenada);
+        if (r.coordenada) CACHE_COORDENADAS.set(valor.key, r.coordenada);
         if (!cancelado) setCoord(r.coordenada);
       })
       .catch(() => { if (!cancelado) setCoord(null); })
@@ -745,7 +750,7 @@ function CampoLocalizacao({
         <div className="flex items-center gap-3 p-3 rounded-xl border border-brand/20 bg-brand/5">
           <MapPin className="size-5 text-brand shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-zinc-900 truncate">{valor.nome}</p>
+            <p className="text-sm font-semibold text-zinc-900 truncate">{soACidade(valor.nome)}</p>
             {valor.regiao && <p className="text-xs text-zinc-500 truncate">{valor.regiao}</p>}
           </div>
           <button
@@ -801,10 +806,11 @@ function CampoLocalizacao({
       <MapaRaio
         centro={valor ? coord : null}
         raioKm={raioKm}
-        rotulo={valor && coord ? valor.nome : "Brasil inteiro"}
+        carregando={carregandoMapa}
+        rotulo={valor && coord ? soACidade(valor.nome) : "Brasil inteiro"}
         sublinha={
-          carregandoMapa    ? "Procurando a cidade no mapa..."
-            : valor && coord ? `Raio de ${raioKm} km`
+          valor && coord    ? `Raio de ${raioKm} km${valor.regiao ? ` — ${valor.regiao}` : ""}`
+            : carregandoMapa ? "Procurando a cidade no mapa..."
             : valor          ? "Não achamos essa cidade no mapa — a segmentação continua valendo."
             : "Escolha uma cidade para segmentar por raio."
         }
@@ -982,7 +988,7 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
           {/* Resumo do público */}
           <div className="bg-brand/5 border border-brand/10 rounded-xl p-4 h-fit">
             <p className="text-sm font-bold text-brand mb-4">Resumo do público</p>
-            <ResumoItem icon={MapPin}   rotulo="Localização"     valor={valor.localizacao ? `${valor.localizacao.nome} — raio ${valor.raioKm}km` : "Brasil inteiro"} />
+            <ResumoItem icon={MapPin}   rotulo="Localização"     valor={valor.localizacao ? `${soACidade(valor.localizacao.nome)} — raio ${valor.raioKm}km` : "Brasil inteiro"} />
             <ResumoItem icon={Users}     rotulo="Gênero"          valor={nomeGenero(valor.genero)} />
             <ResumoItem icon={Calendar}  rotulo="Idade"           valor={`${labelIdade(valor.idadeMin)} a ${labelIdade(valor.idadeMax)}`} />
             <ResumoItem icon={LayoutGrid} rotulo="Aplicativos"    valor={nomePlataforma(valor.plataforma)} />
@@ -1305,20 +1311,40 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
     }
   }
 
-  function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
-    files.forEach((file) => {
+  function lerArquivo(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error ?? new Error("falha ao ler o arquivo"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Imagem enviada aqui é reenquadrada em 1080×1350 antes de entrar na lista —
+   * é o formato em que o anúncio tem de subir, e o que está na prévia passa a
+   * ser exatamente o que vai para o Meta. Vídeo passa direto: o reenquadramento
+   * é de imagem, e o Meta trata vídeo à parte.
+   */
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
+    e.target.value = "";
+    for (const file of files) {
+      try {
+        const bruto = await lerArquivo(file);
+        const arquivoUrl = file.type.startsWith("image/")
+          ? (await normalizarParaAnuncio(bruto)).dataUrl
+          : bruto;
         const item: CriativoWizard = {
-          id: crypto.randomUUID(), tipo: "upload", nome: file.name, arquivoUrl: reader.result as string,
+          id: crypto.randomUUID(), tipo: "upload", nome: file.name, arquivoUrl,
         };
         setCriativos((prev) => [...prev, item]);
         setSelecionados((prev) => new Set(prev).add(item.id));
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value = "";
+      } catch (err) {
+        console.error(err);
+        toast.error(`Não consegui preparar "${file.name}".`);
+      }
+    }
   }
 
   return (

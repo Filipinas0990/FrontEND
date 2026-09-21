@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { X, UploadCloud, Loader2, Trash2, ArrowRight, ImageIcon } from "lucide-react";
-import { comprimirParaEnvio } from "@/lib/exportarCriativo";
+import { normalizarParaAnuncio, TETO_POR_ARTE_ANUNCIO } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import { toast } from "sonner";
 
@@ -25,13 +25,6 @@ export interface CriativoProntoItem {
   arquivoUrl: string;
 }
 
-/**
- * Teto por arte. Cada imagem sobe numa requisição própria, e o proxy da Vercel
- * recusa corpo acima de ~4,2 MB — 1,5 MB deixa margem folgada e preserva bem
- * mais qualidade do que o teto usado no disparo por WhatsApp.
- */
-const TETO_POR_ARTE = 1.5 * 1024 * 1024;
-
 /** Nome do arquivo virando nome de produto: "oferta_dipirona-500mg.jpg" → "oferta dipirona 500mg". */
 function nomeDoArquivo(arquivo: string): string {
   return arquivo.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim() || "Criativo";
@@ -47,22 +40,18 @@ function lerComoDataUrl(file: File): Promise<string> {
 }
 
 /**
- * Prepara a arte para o Meta. Mantém o arquivo original quando ele já é JPG ou
- * PNG dentro do teto — recomprimir à toa só perde qualidade. Nos demais casos
- * (WEBP, ou imagem pesada demais) re-encoda em JPEG, que é o que a API de
- * imagens do Meta aceita sem discussão.
+ * Prepara a arte para o Meta: reenquadra em 1080×1350 e deixa dentro do teto.
+ *
+ * Antes a arte subia com a dimensão que o designer mandou — quadrada, paisagem,
+ * 2000px — e quem reenquadrava era o Meta, cortando preço e marca no feed.
+ * `normalizarParaAnuncio` encaixa a arte inteira no retrato 4:5 (sem corte) e
+ * já entrega JPEG, que é o que a API de imagens aceita sem discussão. Arte que
+ * já chega em 1080×1350 e dentro do teto passa intacta.
  */
 async function prepararArte(file: File): Promise<CriativoProntoItem> {
   const original = await lerComoDataUrl(file);
-  const base64 = original.slice(original.indexOf(",") + 1);
-  const formatoAceito = file.type === "image/jpeg" || file.type === "image/png";
-  const arquivoUrl =
-    formatoAceito && base64.length <= TETO_POR_ARTE
-      ? original
-      : await comprimirParaEnvio(original, TETO_POR_ARTE).then(
-          ({ b64, mime }) => `data:${mime};base64,${b64}`,
-        );
-  return { id: crypto.randomUUID(), nome: nomeDoArquivo(file.name), preco: "", arquivoUrl };
+  const { dataUrl } = await normalizarParaAnuncio(original, TETO_POR_ARTE_ANUNCIO);
+  return { id: crypto.randomUUID(), nome: nomeDoArquivo(file.name), preco: "", arquivoUrl: dataUrl };
 }
 
 export function CriativosProntosModal({
@@ -186,7 +175,8 @@ export function CriativosProntosModal({
               </p>
               {itens.map((i) => (
                 <div key={i.id} className="flex items-center gap-3 border border-zinc-200 rounded-xl p-3">
-                  <div className="size-16 rounded-lg bg-zinc-100 overflow-hidden shrink-0">
+                  {/* 4:5: a miniatura mostra a arte já reenquadrada, igual ao que sobe. */}
+                  <div className="h-20 aspect-[4/5] rounded-lg bg-zinc-100 overflow-hidden shrink-0">
                     <img src={i.arquivoUrl} alt={i.nome} className="size-full object-cover" />
                   </div>
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-2">
