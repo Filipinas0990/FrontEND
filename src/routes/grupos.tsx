@@ -3149,7 +3149,6 @@ function LinhaDisparo({
 }
 
 // ── Aba: ofertas dos clientes ─────────────────────────────────────────────────
-11
 /**
  * O que aconteceu com a lista deste cliente depois que ela saiu da fila.
  *
@@ -3180,6 +3179,20 @@ function estadoDaCampanha(c: ClienteCarteira): string {
   return `Lista montada em ${fmtData(quando)}`;
 }
 
+/**
+ * Automação rodando: a campanha do cliente ainda vai sair (agendada para o
+ * futuro, ou repetindo) ou está saindo agora.
+ */
+function automacaoRodando(c: ClienteCarteira): boolean {
+  const campanha = c.campanha;
+  if (!campanha) return false;
+  if (campanha.status === "enviando") return true;
+  const futuro = campanha.proximo_envio ?? campanha.agendado_para;
+  return campanha.status === "agendado" && !!futuro && new Date(futuro).getTime() > Date.now();
+}
+
+type FiltroCarteira = "geral" | "link" | "automacao";
+
 /** Ordem da carteira: esperando > já montado > nunca enviou. */
 function prioridade(c: ClienteCarteira): number {
   if (c.respondeu) return 2;
@@ -3194,6 +3207,7 @@ function AbaClientes({
 }) {
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState<FiltroCarteira>("geral");
   const [copiado, setCopiado] = useState<number | null>(null);
   // Cliente com a confirmação de excluir aberta; null = nenhuma.
   const [excluindo, setExcluindo] = useState<ClienteCarteira | null>(null);
@@ -3223,6 +3237,7 @@ function AbaClientes({
   // na tela com a data — sem isso o gestor não sabe se o pedido foi atendido
   // ou se o cliente nunca respondeu.
   const montados = carteira.filter((c) => !c.respondeu && c.ultima_solicitacao);
+  const rodando = carteira.filter(automacaoRodando);
 
   /** Copia o link daquele cliente. Cada farmácia tem o seu. */
   function copiarLink(c: ClienteCarteira) {
@@ -3237,16 +3252,20 @@ function AbaClientes({
   }
 
   const rows = useMemo(() => {
-    const filtro = busca.trim().toLowerCase();
-    return [...carteira]
+    const termo = busca.trim().toLowerCase();
+    return carteira
       .filter((c) =>
-        (c.farmacia_visivel ?? c.farmacia).toLowerCase().includes(filtro)
-        || c.farmacia.toLowerCase().includes(filtro))
+        filtro === "link" ? c.respondeu
+        : filtro === "automacao" ? automacaoRodando(c)
+        : true)
+      .filter((c) =>
+        (c.farmacia_visivel ?? c.farmacia).toLowerCase().includes(termo)
+        || c.farmacia.toLowerCase().includes(termo))
       // Quem respondeu primeiro — é onde o gestor consegue agir. Depois vêm
       // os já montados (só de consulta), e por último quem nunca enviou nada.
       .sort((a, b) => prioridade(b) - prioridade(a)
         || a.farmacia.localeCompare(b.farmacia, "pt-BR"));
-  }, [carteira, busca]);
+  }, [carteira, busca, filtro]);
 
   return (
     <div className="space-y-4">
@@ -3292,6 +3311,26 @@ function AbaClientes({
         </div>
       </div>
 
+      {/* Abas da carteira — mesmo visual das abas de Reuniões */}
+      <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl overflow-x-auto">
+        {([
+          { v: "geral",     icon: <Users className="size-3.5" />,          l: `Clientes gerais · ${carteira.length}` },
+          { v: "link",      icon: <Link2 className="size-3.5" />,          l: `Lojas que enviaram pelo link · ${responderam.length}` },
+          { v: "automacao", icon: <CalendarClock className="size-3.5" />,  l: `Automação rodando · ${rodando.length}` },
+        ] as const).map((a) => (
+          <button
+            key={a.v}
+            onClick={() => setFiltro(a.v)}
+            className={[
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-all",
+              filtro === a.v ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800",
+            ].join(" ")}
+          >
+            {a.icon}{a.l}
+          </button>
+        ))}
+      </div>
+
       {/* Busca */}
       <div className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl ring-1 ring-black/5 shadow-sm max-w-xs">
         <Search className="size-4 text-zinc-400 shrink-0" />
@@ -3319,7 +3358,10 @@ function AbaClientes({
         <div className="divide-y divide-zinc-50">
           {rows.length === 0 ? (
             <div className="text-center py-12 text-zinc-400 text-sm">
-              {busca ? `Nenhuma farmácia encontrada para "${busca}".` : "Nenhuma farmácia na carteira."}
+              {busca ? `Nenhuma farmácia encontrada para "${busca}".`
+                : filtro === "link" ? "Nenhuma loja mandou lista pelo link ainda."
+                : filtro === "automacao" ? "Nenhuma automação rodando agora."
+                : "Nenhuma farmácia na carteira."}
             </div>
           ) : (
             rows.map((c) => {
