@@ -3298,19 +3298,6 @@ function AbaClientes({
         </div>
       </div>
 
-      {/* Cada cliente tem o seu link — o botão fica na linha dele, abaixo */}
-      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex items-start gap-3">
-        <Link2 className="size-5 text-brand shrink-0 mt-0.5" />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-900">Cada cliente tem o seu próprio link</p>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Use o botão <strong className="text-zinc-600">Copiar link</strong> na linha do cliente e
-            mande para ele. O link já abre na farmácia dele — o dono só escolhe os produtos, e o que
-            ele enviar aparece nesta lista.
-          </p>
-        </div>
-      </div>
-
       {/* Abas da carteira — mesmo visual das abas de Reuniões */}
       <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl overflow-x-auto">
         {([
