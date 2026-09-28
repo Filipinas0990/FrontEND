@@ -291,14 +291,30 @@ function Movivel({ alvo, className, style, children }: {
 }
 
 /**
- * Foto do produto ocupando o criativo inteiro.
+ * Foto do produto.
  *
- * Aqui a transform vai na <img>, e não no quadro: o quadro é o recorte e tem de
- * ficar parado, senão empurrar a foto deixaria uma faixa vazia na borda. Com
- * escala abaixo de 1 o produto encolhe dentro do criativo e o que sobra é
- * branco — é justamente o que se quer quando a foto é maior que a arte.
+ * A foto era `object-cover` no card inteiro, com as faixas do modelo por cima:
+ * o título do Banner comia a tampa do produto, o rodapé do Destaque comia a
+ * base, e o que o gestor fotografou saía cortado no anúncio. Agora cada modelo
+ * diz quanto as faixas dele ocupam em cima (`topo`) e embaixo (`base`), e o
+ * produto entra INTEIRO no vão entre elas (`object-contain`). O que sobra em
+ * volta é a própria foto ampliada e desfocada — mesma ideia de
+ * `normalizarParaAnuncio`: faixa branca denuncia arte mal formatada.
+ *
+ * Caixas de canto (o preço) não entram no `topo`/`base`: reservar a altura
+ * delas encolheria o produto à toa, e o produto fica no centro, não no canto.
+ *
+ * A transform do ajuste fino vai na <img> da frente, e não no quadro: o quadro
+ * é o recorte e tem de ficar parado.
  */
-function Foto({ imagem, nome }: { imagem?: string | null; nome: string }) {
+function Foto({ imagem, nome, topo = "0%", base = "0%" }: {
+  imagem?: string | null;
+  nome: string;
+  /** Altura das faixas de cima que não podem cobrir o produto (cqw/%). */
+  topo?: string;
+  /** Idem, embaixo. */
+  base?: string;
+}) {
   const ajuste = useAjuste("foto");
   const edicao = useEdicao("foto");
   return (
@@ -307,7 +323,29 @@ function Foto({ imagem, nome }: { imagem?: string | null; nome: string }) {
       style={edicao.style}
       onPointerDown={edicao.onPointerDown}
     >
-      <Imagem imagem={imagem} nome={nome} className="size-full object-cover" style={{ transform: transformDe(ajuste) }} />
+      {imagem ? (
+        <>
+          {/* Fundo: a foto cobrindo tudo, desfocada. O scale esconde a borda
+              lavada que o blur puxa de fora da imagem. */}
+          <img
+            src={imagem}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 size-full object-cover"
+            style={{ filter: "blur(3cqw)", transform: "scale(1.15)" }}
+          />
+          <div className="absolute inset-x-0" style={{ top: topo, bottom: base }}>
+            <img
+              src={imagem}
+              alt={nome}
+              className="size-full object-contain"
+              style={{ transform: transformDe(ajuste) }}
+            />
+          </div>
+        </>
+      ) : (
+        <Imagem imagem={imagem} nome={nome} className="size-full object-cover" style={{ transform: transformDe(ajuste) }} />
+      )}
     </div>
   );
 }
@@ -376,10 +414,13 @@ function ModeloBanner({ nome, preco, precoDe, imagem, titulo, subtitulo, paleta 
   // que a arte de uma linha em 13cqw sempre teve. Vai em `top` (e não em
   // transform) porque o transform é do ajuste fino do gestor.
   const deslocaSub = linhas.length * fonte - TITULO_MAX_CQW;
+  // O produto começa abaixo da pílula das datas: ela está em 15% + deslocaSub
+  // e mede ~9cqw (fonte 6cqw + py 1.4% dos dois lados), mais uma folga.
+  const topoFoto = `calc(15% + ${(deslocaSub + 10.5).toFixed(2)}cqw)`;
 
   return (
     <>
-      <Foto imagem={imagem} nome={nome} />
+      <Foto imagem={imagem} nome={nome} topo={topoFoto} base="1.6%" />
 
       {/* Título (faixa no topo, na cor principal) */}
       <Movivel alvo="titulo" className="absolute top-[3.5%] left-[5%] right-[5%]">
@@ -553,9 +594,17 @@ function ModeloDestaque({ nome, preco, precoDe, imagem, localizacao, subtitulo, 
   const validade = (subtitulo || "").trim();
   const tinta = tintaDe(paleta);
 
+  // Altura do rodapé em cqw, somando a pilha de baixo: paddings da farmácia,
+  // linha de cima + margem, nome (ou o carrinho, se for maior), arco amarelo e
+  // a faixa da validade quando ela existe. Do véu (16cqw de degradê) entra só
+  // a metade escura: a clara pode passar por cima da foto sem esconder nada.
+  const baseFoto =
+    3.5 + (linhaTopo ? 4 + 1.5 : 0) + Math.max(fonteNome, 5.6) + 3 + 2.2 +
+    (validade ? 3 + 3.4 : 0) + 8;
+
   return (
     <>
-      <Foto imagem={imagem} nome={nome} />
+      <Foto imagem={imagem} nome={nome} base={`${baseFoto.toFixed(2)}cqw`} />
 
       {/* Preço no canto de cima — mesma posição, largura e caixa do modelo
           Padrão, de propósito: os dois modelos mostram o preço no mesmo lugar,
@@ -659,9 +708,22 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo, 
   // caixa por baixo delas que muda de cor.
   const estiloCaixa = caixa(tintaDe(paleta), "4.5cqw", "0.7cqw");
 
+  // Faixa da farmácia: top 4%, py 2.4% dos dois lados, borda e as linhas.
+  const alturaTitulo = 4.8 + 1.4 + fonteNome + (linhaTopo ? fonteNome + 1.5 : 0);
+  const topoFoto = `calc(4% + ${(alturaTitulo + 1.5).toFixed(2)}cqw)`;
+
+  // Embaixo o produto para acima da caixa de preço (larga, quase o card todo)
+  // ou, sem preço, acima da tarja do aviso.
+  const linhasAviso = Math.max(1, Math.ceil(aviso.length / 50));
+  const alturaAviso = aviso ? 2.6 + linhasAviso * 3.5 : 0;
+  const alturaPreco = 4 + 1.4 + tamanho + (precoDe ? 5 : 0);
+  const baseFoto = temPreco(preco)
+    ? `calc(${aviso ? "9%" : "4%"} + ${(alturaPreco + 1.5).toFixed(2)}cqw)`
+    : `${alturaAviso.toFixed(2)}cqw`;
+
   return (
     <>
-      <Foto imagem={imagem} nome={nome} />
+      <Foto imagem={imagem} nome={nome} topo={topoFoto} base={baseFoto} />
 
       {/* Farmácia — faixa do topo */}
       <Movivel alvo="titulo" className="absolute top-[4%] left-[13%] right-[13%]">
@@ -725,9 +787,13 @@ function ModeloVermelho({ nome, preco, precoDe, imagem, localizacao, subtitulo, 
 function ModeloAzul({ nome, preco, precoDe, imagem, localizacao, paleta }: CriativoDados) {
   const farmacia = localizacao || "Sua Farmácia";
   const estiloCaixa = caixa(tintaDe(paleta), "10cqw", "0.6cqw");
+  // Barra da farmácia: bottom 3%, py 2.8% dos dois lados, borda e o texto em
+  // 5.4cqw — que quebra linha a cada ~20 letras na largura da barra.
+  const linhas = Math.max(1, Math.ceil(farmacia.length / 20));
+  const baseFoto = `calc(3% + ${(5.6 + 1.2 + linhas * 6.75 + 1.5).toFixed(2)}cqw)`;
   return (
     <>
-      <Foto imagem={imagem} nome={nome} />
+      <Foto imagem={imagem} nome={nome} base={baseFoto} />
 
       {/* Caixa de preço no topo — a MESMA do modelo Destaque (BlocoPreco).
           Cresceu de 52% para 58% do card porque o valor agora é grande: na
