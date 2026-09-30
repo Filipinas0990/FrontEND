@@ -11,6 +11,8 @@
  * sai da máquina até o wizard publicar.
  */
 
+import type { AjustesCriativo } from "@/lib/ajustesCriativo";
+
 const BANCO = "pharmaflow";
 const LOJA = "transferencia";
 const CHAVE = "campanha_criativos";
@@ -25,6 +27,8 @@ export interface CriativoTransferido {
   enquadramento?: string;
   titulo?: string;
   subtitulo?: string;
+  /** Ajuste fino da arte — o wizard redesenha o card e precisa dele. */
+  ajustes?: AjustesCriativo;
   /** PNG achatado (data URI), pronto para o Meta. */
   png?: string;
   /**

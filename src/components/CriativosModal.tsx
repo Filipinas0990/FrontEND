@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { X, MapPin, Check, LayoutTemplate, ArrowRight, ArrowLeft } from "lucide-react";
-import { CriativoCard, ModeloThumb, type LayoutCriativo, type Enquadramento } from "@/components/CriativoCard";
+import { X, MapPin, Check, LayoutTemplate, ArrowRight, ArrowLeft, Maximize2 } from "lucide-react";
+import { CriativoCard, ModeloThumb, type LayoutCriativo, type Enquadramento, type CriativoDados } from "@/components/CriativoCard";
+import { EditorCriativoModal } from "@/components/EditorCriativoModal";
+import { pecasAjustadas, type AjustesCriativo } from "@/lib/ajustesCriativo";
 import { formatarMoeda } from "@/lib/moeda";
+import { toast } from "sonner";
 
 export interface ProdutoCriativo {
   id: string;
@@ -17,6 +20,8 @@ export interface CriativosConfig {
   precos: Record<string, string>;  // id do produto -> preço editado
   titulo?: string;                 // layout banner: faixa do topo
   subtitulo?: string;              // layout banner: datas
+  /** Ajuste fino por produto (id -> peças movidas), o mesmo do grupo de ofertas. */
+  ajustes?: Record<string, AjustesCriativo>;
 }
 
 interface CriativosModalProps {
@@ -53,9 +58,19 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
     return base;
   });
 
+  const [ajustes, setAjustes] = useState<Record<string, AjustesCriativo>>(configInicial?.ajustes ?? {});
+  const [editando, setEditando] = useState<string | null>(null);
+
   const setPreco = (id: string, v: string) => setPrecos((prev) => ({ ...prev, [id]: v }));
   function concluir() {
-    onConcluir({ layout, enquadramento, localizacao: localizacao.trim(), precos, titulo: titulo.trim(), subtitulo: subtitulo.trim() });
+    onConcluir({ layout, enquadramento, localizacao: localizacao.trim(), precos, titulo: titulo.trim(), subtitulo: subtitulo.trim(), ajustes });
+  }
+
+  function dadosCriativo(p: ProdutoCriativo): CriativoDados {
+    return {
+      layout, enquadramento, nome: p.nome, preco: precos[p.id] ?? p.preco, imagem: p.imagem,
+      localizacao, titulo, subtitulo, ajustes: ajustes[p.id],
+    };
   }
 
   const nomeLayout = LAYOUTS.find((l) => l.id === layout)?.nome ?? "";
@@ -176,7 +191,24 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {produtos.map((p) => (
                     <div key={p.id} className="space-y-2">
-                      <CriativoCard layout={layout} enquadramento={enquadramento} nome={p.nome} preco={precos[p.id] ?? p.preco} imagem={p.imagem} localizacao={localizacao} titulo={titulo} subtitulo={subtitulo} />
+                      {/* Mesmo "Ajustar" do grupo de ofertas: abre a arte em tela
+                          grande para mover e redimensionar as peças. */}
+                      <div className="relative">
+                        <CriativoCard {...dadosCriativo(p)} />
+                        <button
+                          type="button"
+                          onClick={() => setEditando(p.id)}
+                          className="absolute top-1.5 right-1.5 flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/95 text-zinc-700 text-[11px] font-semibold shadow-sm ring-1 ring-black/5 hover:bg-white transition"
+                          title="Abrir em tela cheia para mover e redimensionar as peças"
+                        >
+                          <Maximize2 className="size-3.5" /> Ajustar
+                        </button>
+                        {pecasAjustadas(ajustes[p.id]) > 0 && (
+                          <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-semibold">
+                            arte ajustada
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-md px-2 py-1">
                         <span className="text-[11px] font-semibold text-zinc-400">R$</span>
                         <input value={precos[p.id] ?? p.preco} onChange={(e) => setPreco(p.id, formatarMoeda(e.target.value))} inputMode="numeric" placeholder="0,00"
@@ -194,6 +226,26 @@ export function CriativosModal({ produtos, configInicial, onConcluir, onClose }:
           </>
         )}
       </div>
+
+      {editando !== null && (() => {
+        const produto = produtos.find((p) => p.id === editando);
+        if (!produto) return null;
+        // O clique no editor não pode subir até o fundo deste modal, que fecha tudo.
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <EditorCriativoModal
+              dados={dadosCriativo(produto)}
+              titulo={produto.nome}
+              onFechar={() => setEditando(null)}
+              onSalvar={(novos) => {
+                setAjustes((atual) => ({ ...atual, [produto.id]: novos }));
+                setEditando(null);
+                toast.success("Arte ajustada.");
+              }}
+            />
+          </div>
+        );
+      })()}
     </div>
   );
 }

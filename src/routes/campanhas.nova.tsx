@@ -6,11 +6,13 @@ import {
   Megaphone, MousePointerClick, MessageCircle, Users, ShoppingCart,
   User, Instagram, Facebook, Layers, Globe, Newspaper, Square, Film, Calendar, LayoutGrid,
   UploadCloud, CheckCircle2, ImageIcon, Wallet, Download, Plus, X, RefreshCw, AlertCircle, MapPin,
+  Copy, PlusCircle,
 } from "lucide-react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { CriativoCard, type LayoutCriativo, type Enquadramento } from "@/components/CriativoCard";
+import type { AjustesCriativo } from "@/lib/ajustesCriativo";
 import { exportarCriativoPng, baixarPng, normalizarParaAnuncio } from "@/lib/exportarCriativo";
 import { desde } from "@/lib/tempo";
 import { CHAVE_CONTAS, opcoesContas } from "@/lib/contasAnuncio";
@@ -18,7 +20,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, buscarLocalizacoes,
+  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, publicarAnunciosNoConjunto, buscarLocalizacoes,
   buscarCoordenadas, subirImagemCriativo, listarPaginasDaConta,
   type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado, type LocalizacaoMeta,
   type Coordenada, type PaginaMeta,
@@ -33,9 +35,20 @@ export const Route = createFileRoute("/campanhas/nova")({
 
 // ── Etapas do wizard ──────────────────────────────────────────────────────────
 
-/** "nova" = cria campanha do zero. "conjunto" = parte de um conjunto que já roda. */
-type Modo = "nova" | "conjunto";
+/**
+ * O que o gestor quer fazer no Meta:
+ * - "nova"     = campanha + conjunto + anúncios do zero;
+ * - "conjunto" = novo conjunto a partir de um que já roda (cópia só com os
+ *                criativos novos, público/orçamento revisáveis);
+ * - "anuncios" = anúncios novos DENTRO do conjunto escolhido, sem cópia.
+ */
+type Modo = "nova" | "conjunto" | "anuncios";
 
+/**
+ * Etapas visíveis de cada fluxo. O `n` é o número interno do passo (1 a 5) e
+ * não muda entre fluxos — o "anuncios" só pula o 3 (público/orçamento), que
+ * não se aplica: os anúncios usam o orçamento que o conjunto já tem.
+ */
 const ETAPAS = (modo: Modo) => [
   { n: 1, titulo: "Cliente",   sub: "Selecione o cliente" },
   modo === "nova"
@@ -44,14 +57,16 @@ const ETAPAS = (modo: Modo) => [
   { n: 3, titulo: "Público",   sub: modo === "nova" ? "Defina o público" : "Revise o público" },
   { n: 4, titulo: "Criativos", sub: "Selecione os criativos" },
   { n: 5, titulo: "Revisão",   sub: "Revise e publique" },
-];
+].filter((e) => !(modo === "anuncios" && e.n === 3));
 
 // Subtítulo do cabeçalho por etapa
 const SUBTITULOS = (modo: Modo): Record<number, string> => ({
   1: "Selecione o cliente que receberá esta campanha",
   2: modo === "nova"
     ? "Defina o objetivo da campanha"
-    : "Escolha o conjunto que servirá de base para os novos anúncios",
+    : modo === "conjunto"
+      ? "Escolha o conjunto que servirá de base para o novo conjunto"
+      : "Escolha o conjunto que vai receber os novos anúncios",
   3: modo === "nova"
     ? "Defina o público e os posicionamentos da campanha"
     : "Revise as configurações herdadas do conjunto",
@@ -60,6 +75,12 @@ const SUBTITULOS = (modo: Modo): Record<number, string> => ({
 });
 
 const TOTAL = 5;
+
+const ROTULO_PUBLICAR: Record<Modo, string> = {
+  nova:     "Publicar campanha",
+  conjunto: "Publicar conjunto",
+  anuncios: "Publicar anúncios",
+};
 
 const POR_PAGINA = 5;
 
@@ -108,7 +129,7 @@ function Stepper({ atual, modo }: { atual: number; modo: Modo }) {
                       : "bg-zinc-100 text-zinc-400"
                 }`}
               >
-                {completa ? <Check className="size-5" /> : e.n}
+                {completa ? <Check className="size-5" /> : i + 1}
               </div>
               {/* Rótulos */}
               <p className={`mt-2 text-sm font-semibold ${ativa || completa ? "text-zinc-900" : "text-zinc-400"}`}>
@@ -425,10 +446,33 @@ function iniciaisCliente(nome: string): string {
   return nome.split(" ").slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 }
 
-// ── Modal: campanha nova ou partir de um conjunto existente? ──────────────────
+// ── Modal: o que o gestor quer fazer nesta conta? ─────────────────────────────
 
-function ModalEscolhaFluxo({ conta, onEscolher, onFechar }: {
+const FLUXOS: { modo: Modo; titulo: string; desc: string; meta: string; icon: typeof Rocket }[] = [
+  {
+    modo: "nova", icon: Rocket,
+    titulo: "Nova campanha",
+    desc: "Começa do zero: objetivo, público, orçamento e criativos.",
+    meta: "Cria campanha, conjunto e anúncios.",
+  },
+  {
+    modo: "conjunto", icon: Copy,
+    titulo: "Novo conjunto",
+    desc: "Parte de um conjunto que já roda; dá para mudar público e orçamento.",
+    meta: "Duplica o conjunto só com os criativos novos. O original não muda.",
+  },
+  {
+    modo: "anuncios", icon: PlusCircle,
+    titulo: "Novos anúncios",
+    desc: "Coloca criativos novos no conjunto que já está rodando.",
+    meta: "Não duplica nada. Os anúncios entram ativos e usam o orçamento do conjunto.",
+  },
+];
+
+function ModalEscolhaFluxo({ conta, atual, onEscolher, onFechar }: {
   conta: ContaAnuncio;
+  /** Fluxo já escolhido antes (ao voltar para a etapa 1) — vem destacado. */
+  atual: Modo | null;
   onEscolher: (m: Modo) => void;
   /** Clicar fora volta para a etapa 1 — dá para trocar de conta antes de decidir. */
   onFechar: () => void;
@@ -436,35 +480,38 @@ function ModalEscolhaFluxo({ conta, onEscolher, onFechar }: {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onFechar}>
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden"
+        className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 pt-6 pb-5 text-center">
-          <div className="size-12 rounded-full bg-brand/10 grid place-items-center mx-auto mb-4">
-            <Rocket className="size-6 text-brand" />
-          </div>
-          <h3 className="text-lg font-bold text-zinc-900">Criar uma nova campanha?</h3>
-          <p className="text-sm text-zinc-500 mt-1.5">
-            Para <b className="text-zinc-700">{conta.nome}</b>.
-          </p>
-          <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
-            Escolhendo “Não”, você parte de um conjunto que já está rodando:
-            revisa as configurações dele e sobe só os criativos novos.
+        <div className="px-6 pt-6 pb-4">
+          <h3 className="text-lg font-bold text-zinc-900">O que você quer fazer?</h3>
+          <p className="text-sm text-zinc-500 mt-1">
+            Em <b className="text-zinc-700">{conta.nome}</b>.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 px-6 pb-6">
-          <button
-            onClick={() => onEscolher("conjunto")}
-            className="px-4 py-3 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition"
-          >
-            Não, usar um conjunto
-          </button>
-          <button
-            onClick={() => onEscolher("nova")}
-            className="px-4 py-3 rounded-lg bg-brand hover:bg-brand/90 text-white text-sm font-semibold transition shadow-sm"
-          >
-            Sim, criar nova
-          </button>
+        <div className="px-6 pb-6 space-y-2.5">
+          {FLUXOS.map((f) => {
+            const Icone = f.icon;
+            const marcado = atual === f.modo;
+            return (
+              <button
+                key={f.modo}
+                onClick={() => onEscolher(f.modo)}
+                className={`w-full flex items-start gap-3.5 p-4 rounded-xl border text-left transition ${
+                  marcado ? "border-brand ring-1 ring-brand bg-brand/5" : "border-zinc-200 hover:border-brand/50 hover:bg-zinc-50"
+                }`}
+              >
+                <span className="shrink-0 size-10 rounded-lg bg-brand/10 text-brand grid place-items-center">
+                  <Icone className="size-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-zinc-900">{f.titulo}</span>
+                  <span className="block text-sm text-zinc-600 mt-0.5">{f.desc}</span>
+                  <span className="block text-xs text-zinc-400 mt-1">{f.meta}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -473,8 +520,9 @@ function ModalEscolhaFluxo({ conta, onEscolher, onFechar }: {
 
 // ── Etapa 2 (modo "conjunto"): escolher o conjunto de origem ──────────────────
 
-function EtapaConjunto({ contaId, selecionado, onSelect }: {
+function EtapaConjunto({ contaId, selecionado, onSelect, modo }: {
   contaId: string;
+  modo: Modo;
   selecionado: string | null;
   onSelect: (c: ConjuntoMeta) => void;
 }) {
@@ -492,11 +540,23 @@ function EtapaConjunto({ contaId, selecionado, onSelect }: {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-zinc-900">De qual conjunto vamos partir?</h2>
-      <p className="text-sm text-zinc-500 mt-1 mb-5">
-        As configurações dele (público, orçamento, destino) serão herdadas. O conjunto
-        original continua rodando intacto — criamos uma cópia para os anúncios novos.
-      </p>
+      {modo === "anuncios" ? (
+        <>
+          <h2 className="text-xl font-bold text-zinc-900">Em qual conjunto os anúncios vão entrar?</h2>
+          <p className="text-sm text-zinc-500 mt-1 mb-5">
+            Os anúncios novos entram ativos neste conjunto, junto com os que já estão lá, e
+            dividem o orçamento dele. Nada é duplicado.
+          </p>
+        </>
+      ) : (
+        <>
+          <h2 className="text-xl font-bold text-zinc-900">De qual conjunto vamos partir?</h2>
+          <p className="text-sm text-zinc-500 mt-1 mb-5">
+            As configurações dele (público, orçamento, destino) serão herdadas. O conjunto
+            original continua rodando intacto — criamos uma cópia só com os anúncios novos.
+          </p>
+        </>
+      )}
 
       <div className="relative mb-4">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
@@ -1129,6 +1189,7 @@ interface CriativoWizard {
   enquadramento?: Enquadramento;
   titulo?: string;
   subtitulo?: string;
+  ajustes?: AjustesCriativo;  // ajuste fino feito na tela de Anúncios
   arquivoUrl?: string;   // para uploads
   png?: string;          // PNG achatado (data URI) pronto para o Meta
 }
@@ -1303,7 +1364,7 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
         layout: c.layout ?? "azul", enquadramento: c.enquadramento ?? "4:5",
         nome: c.nome, preco: c.preco ?? "",
         imagem: c.imagem, localizacao: c.localizacao ?? "",
-        titulo: c.titulo, subtitulo: c.subtitulo,
+        titulo: c.titulo, subtitulo: c.subtitulo, ajustes: c.ajustes,
       });
       baixarPng(png, c.nome);
     } catch {
@@ -1387,6 +1448,7 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
                         localizacao={c.localizacao ?? ""}
                         titulo={c.titulo}
                         subtitulo={c.subtitulo}
+                        ajustes={c.ajustes}
                       />
                     ) : (
                       <div className="aspect-[4/5] bg-zinc-100 grid place-items-center overflow-hidden">
@@ -1565,6 +1627,11 @@ function EtapaRevisao({ payload, resultado, modo }: {
             <p className="text-sm text-emerald-700 mt-1">
               {novaCampanha ? (
                 <>ID: <span className="font-mono">{resultado.campanhaId}</span> — está <b>ativa</b>.</>
+              ) : modo === "anuncios" ? (
+                <>
+                  Conjunto <span className="font-mono">{resultado.conjuntoId}</span> — os anúncios
+                  novos já estão <b>ativos</b>, junto com os que existiam.
+                </>
               ) : (
                 <>
                   {resultado.conjuntoRecriado ? "Conjunto novo: " : "Cópia do conjunto: "}
@@ -1624,7 +1691,9 @@ function EtapaRevisao({ payload, resultado, modo }: {
       <p className="text-sm text-zinc-500 mt-1 mb-5">
         {modo === "conjunto"
           ? "Vamos criar uma cópia do conjunto escolhido e subir estes criativos dentro dela. O conjunto original não será alterado. Confira a copy de cada anúncio antes de publicar."
-          : "Confira como cada anúncio vai ficar antes de publicar no Meta."}
+          : modo === "anuncios"
+            ? "Estes anúncios vão entrar ativos no conjunto escolhido, sem duplicar nada. Confira a copy de cada um antes de publicar."
+            : "Confira como cada anúncio vai ficar antes de publicar no Meta."}
       </p>
 
       {itens.length === 0 ? (
@@ -1682,6 +1751,8 @@ function NovaCampanhaPage() {
   const [perguntando, setPerguntando] = useState<ContaAnuncio | null>(null);
   // Já respondeu a pergunta para a conta atual? Zera ao trocar de conta.
   const [fluxoEscolhido, setFluxoEscolhido] = useState(false);
+  // Já escolheu algum fluxo nesta tela? Serve só para destacar a escolha anterior.
+  const [fluxoJaUsado, setFluxoJaUsado] = useState(false);
   const [conjunto, setConjunto] = useState<ConjuntoMeta | null>(null);
 
   /**
@@ -1724,13 +1795,12 @@ function NovaCampanhaPage() {
   const [confirmarAberto, setConfirmarAberto] = useState(false);
   const totalImagens = criativosData.selecionados.filter((c) => c.pngBase64).length;
 
-  const progresso = Math.round((passo / TOTAL) * 100);
 
   async function publicar() {
     if (publicando) return;
     // Guarda final: o passo 3 já barra, mas o gestor pode voltar e alterar o
     // orçamento antes de confirmar. Acima do teto, nem chega a sair requisição.
-    if (!orcamentoValido(publico.orcamentoDiario)) {
+    if (modo !== "anuncios" && !orcamentoValido(publico.orcamentoDiario)) {
       setConfirmarAberto(false);
       toast.error(`Orçamento diário acima do limite de ${brl(ORCAMENTO_MAXIMO)}.`);
       return;
@@ -1739,7 +1809,11 @@ function NovaCampanhaPage() {
     setPublicando(true);
     try {
       const hashes = await subirImagens();
-      if (modo === "conjunto" && conjunto) {
+      if (modo === "anuncios" && conjunto) {
+        const r = await publicarAnunciosNoConjunto(conjunto.id, montarPayloadAnuncios(hashes));
+        setResultado(r);
+        toast.success("Anúncios adicionados ao conjunto!");
+      } else if (modo === "conjunto" && conjunto) {
         const r = await publicarNovosAnuncios(conjunto.id, montarPayloadConjunto(hashes));
         setResultado(r);
         // Quando o Meta recusa a cópia direta, o conjunto é recriado — o gestor
@@ -1821,6 +1895,15 @@ function NovaCampanhaPage() {
     };
   }
 
+  /** Payload do modo "anuncios": só os criativos, para o conjunto escolhido. */
+  function montarPayloadAnuncios(hashes?: Map<string, string>) {
+    const { conta, pagina, nomeConjunto, destinoWhatsapp, criativos } = montarPayloadConjunto(hashes);
+    return {
+      conta, pagina, nomeConjunto, destinoWhatsapp, criativos,
+      conjunto: conjunto && { id: conjunto.id, nome: conjunto.nome, campanha: conjunto.campanhaNome },
+    };
+  }
+
   // Monta o JSON da campanha. `hashes` só existe na hora de publicar — na
   // revisão o payload sai sem referência de imagem, para ficar legível.
   function montarPayload(hashes?: Map<string, string>) {
@@ -1877,9 +1960,9 @@ function NovaCampanhaPage() {
       // Sem página não dá para criar o criativo — e errar a página faz o Meta
       // bloquear o anúncio depois de tudo publicado.
       if (cliente === null || paginaFb === null) return false;
-      return modo === "conjunto" || nomeCampanha.trim().length > 0;
+      return modo !== "nova" || nomeCampanha.trim().length > 0;
     }
-    if (passo === 2) return modo === "conjunto" ? conjunto !== null : objetivo !== null;
+    if (passo === 2) return modo !== "nova" ? conjunto !== null : objetivo !== null;
     if (passo === 3) return orcamentoValido(publico.orcamentoDiario) && publico.dataInicio !== "";
     if (passo === 4) return criativosData.selecionados.length > 0;
     return true;
@@ -1893,12 +1976,23 @@ function NovaCampanhaPage() {
       setPerguntando(cliente);
       return;
     }
-    if (passo < TOTAL) setPasso(passo + 1);
+    // "anuncios" não tem etapa de público: do conjunto vai direto aos criativos.
+    if (passo < TOTAL) setPasso(modo === "anuncios" && passo === 2 ? 4 : passo + 1);
   }
 
   function voltar() {
-    if (passo > 1) setPasso(passo - 1);
+    if (passo <= 1) return;
+    const anterior = modo === "anuncios" && passo === 4 ? 2 : passo - 1;
+    // De volta à etapa 1, o "Próximo passo" pergunta o fluxo de novo — é por
+    // aí que o gestor troca de ideia (o fluxo atual vem destacado).
+    if (anterior === 1) setFluxoEscolhido(false);
+    setPasso(anterior);
   }
+
+  // Posição do passo entre as etapas VISÍVEIS do fluxo (o "anuncios" tem 4).
+  const etapasVisiveis = ETAPAS(modo);
+  const posicao = etapasVisiveis.findIndex((e) => e.n === passo) + 1;
+  const progresso = Math.round((posicao / etapasVisiveis.length) * 100);
 
   return (
     <AppShell title="Nova Campanha" hideHeader>
@@ -1935,14 +2029,14 @@ function NovaCampanhaPage() {
             )}
           </>
         )}
-        {passo === 2 && (modo === "conjunto"
-          ? <EtapaConjunto contaId={cliente!.id} selecionado={conjunto?.id ?? null} onSelect={selecionarConjunto} />
+        {passo === 2 && (modo !== "nova"
+          ? <EtapaConjunto contaId={cliente!.id} selecionado={conjunto?.id ?? null} onSelect={selecionarConjunto} modo={modo} />
           : <EtapaObjetivo selecionado={objetivo?.codigo ?? null} onSelect={setObjetivo} />)}
         {passo === 3 && <EtapaPublico valor={publico} onChange={setPublico} />}
         {passo === 4 && <EtapaCriativos onChange={setCriativosData} />}
         {passo === 5 && (
           <EtapaRevisao
-            payload={modo === "conjunto" ? montarPayloadConjunto() : montarPayload()}
+            payload={modo === "conjunto" ? montarPayloadConjunto() : modo === "anuncios" ? montarPayloadAnuncios() : montarPayload()}
             resultado={resultado}
             modo={modo}
           />
@@ -1952,8 +2046,10 @@ function NovaCampanhaPage() {
       {perguntando && (
         <ModalEscolhaFluxo
           conta={perguntando}
+          atual={fluxoJaUsado ? modo : null}
           onEscolher={(m) => {
             setModo(m);
+            setFluxoJaUsado(true);
             setPerguntando(null);
             setFluxoEscolhido(true);
             // O modal abre no "Próximo passo", então responder já avança — nos
@@ -1967,7 +2063,7 @@ function NovaCampanhaPage() {
       {/* Footer com progresso */}
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm px-6 py-4 flex items-center gap-4 sticky bottom-4">
         <div className="flex-1">
-          <p className="text-xs font-medium text-zinc-500 mb-1.5">Passo {passo} de {TOTAL}</p>
+          <p className="text-xs font-medium text-zinc-500 mb-1.5">Passo {posicao} de {etapasVisiveis.length}</p>
           <div className="flex items-center gap-3">
             <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
               <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${progresso}%` }} />
@@ -2002,8 +2098,8 @@ function NovaCampanhaPage() {
           ) : (
             <button
               onClick={() => setConfirmarAberto(true)}
-              disabled={publicando || resultado !== null || !orcamentoValido(publico.orcamentoDiario)}
-              title={orcamentoValido(publico.orcamentoDiario)
+              disabled={publicando || resultado !== null || (modo !== "anuncios" && !orcamentoValido(publico.orcamentoDiario))}
+              title={modo === "anuncios" || orcamentoValido(publico.orcamentoDiario)
                 ? undefined
                 : `Orçamento diário acima do limite de ${brl(ORCAMENTO_MAXIMO)}.`}
               className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"
@@ -2021,7 +2117,7 @@ function NovaCampanhaPage() {
                 )
                 : resultado
                   ? <><Check className="size-4" /> Publicada</>
-                  : <><Rocket className="size-4" /> Publicar campanha</>}
+                  : <><Rocket className="size-4" /> {ROTULO_PUBLICAR[modo]}</>}
             </button>
           )}
         </div>
@@ -2034,7 +2130,9 @@ function NovaCampanhaPage() {
             <DialogDescription>
               {modo === "conjunto"
                 ? "Uma cópia do conjunto será criada no Meta com os novos anúncios."
-                : "A campanha será criada no Meta e entrará no ar."}
+                : modo === "anuncios"
+                  ? `Os anúncios entrarão ativos no conjunto "${conjunto?.nome ?? ""}", usando o orçamento que ele já tem.`
+                  : "A campanha será criada no Meta e entrará no ar."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

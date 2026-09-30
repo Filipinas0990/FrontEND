@@ -171,12 +171,14 @@ function CriativosCampanhasPage() {
             localizacao: criativosConfig.localizacao,
             titulo: criativosConfig.titulo,
             subtitulo: criativosConfig.subtitulo,
+            ajustes: criativosConfig.ajustes?.[p.id],
           });
           return {
             id: p.id, nome: p.nome, preco, imagem: p.imagem,
             localizacao: criativosConfig.localizacao,
             layout: criativosConfig.layout, enquadramento: criativosConfig.enquadramento,
             titulo: criativosConfig.titulo, subtitulo: criativosConfig.subtitulo,
+            ajustes: criativosConfig.ajustes?.[p.id],
             png,  // PNG achatado pronto para o Meta
           };
         }),
@@ -242,6 +244,7 @@ function CriativosCampanhasPage() {
         localizacao: criativosConfig.localizacao,
         titulo: criativosConfig.titulo,
         subtitulo: criativosConfig.subtitulo,
+        ajustes: criativosConfig.ajustes?.[p.id],
       });
       baixarPng(png, p.nome);
     } catch {
@@ -664,6 +667,7 @@ function CriativosCampanhasPage() {
                       localizacao={criativosConfig!.localizacao}
                       titulo={criativosConfig!.titulo}
                       subtitulo={criativosConfig!.subtitulo}
+                      ajustes={criativosConfig!.ajustes?.[p.id]}
                     />
                     {/* Baixar PNG */}
                     <button

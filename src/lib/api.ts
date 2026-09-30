@@ -1167,6 +1167,17 @@ export function publicarNovosAnuncios(
   })
 }
 
+/** Sobe os criativos novos DENTRO do conjunto, sem cópia (nascem ativos). */
+export function publicarAnunciosNoConjunto(
+  conjuntoId: string,
+  payload: unknown,
+): Promise<NovosAnunciosResultado> {
+  return req(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/anuncios`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
 /** Todos os conjuntos (ad sets) da conta, direto do Meta — lista plana. */
 export function getConjuntosDaConta(contaId: string): Promise<{ conjuntos: ConjuntoMeta[] }> {
   return req(`/api/campanhas/conjuntos?conta=${encodeURIComponent(contaId)}`)
