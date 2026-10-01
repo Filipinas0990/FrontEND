@@ -136,6 +136,9 @@ export function EnviarGrupoWizard({
   const [grupos, setGrupos] = useState<GrupoWhatsApp[]>([]);
   const [carregandoGrupos, setCarregandoGrupos] = useState(false);
   const [erroGrupos, setErroGrupos] = useState<string | null>(null);
+  /** Nova consulta agendada enquanto o servidor ainda busca os grupos. */
+  const reconsultaGruposRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(reconsultaGruposRef.current), []);
   const [busca, setBusca] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   // Mostra só os grupos com o nome do cliente. Filtra o que APARECE — marcar
@@ -363,11 +366,22 @@ export function EnviarGrupoWizard({
   /** `forcar` = ignora o cache do servidor e busca no WhatsApp (botão de
    *  recarregar). Sem ele a lista vem do cache, instantânea. */
   async function carregarGrupos(forcar = false) {
+    clearTimeout(reconsultaGruposRef.current);
     setCarregandoGrupos(true);
     setErroGrupos(null);
     try {
-      const { grupos: lista } = await getMeusGrupos(conexaoSel ?? undefined, forcar);
+      const { grupos: lista, sincronizando } = await getMeusGrupos(conexaoSel ?? undefined, forcar);
       setGrupos(lista);
+      // Conta com muitos grupos: o servidor respondeu antes de terminar de
+      // buscar no WhatsApp. Pergunta de novo daqui a pouco, sem forçar —
+      // a busca que já está rodando lá é reaproveitada.
+      if (sincronizando) {
+        reconsultaGruposRef.current = setTimeout(() => void carregarGrupos(), 15_000);
+        if (lista.length === 0) {
+          setErroGrupos("Buscando os grupos no WhatsApp — numa conta com muitos grupos isso leva até 1 minuto. A lista aparece aqui sozinha.");
+        }
+        return;
+      }
       if (lista.length === 0) setErroGrupos("Nenhum grupo encontrado nesta conexão de WhatsApp.");
     } catch (err) {
       setErroGrupos(err instanceof Error ? err.message : "Erro ao carregar os grupos.");

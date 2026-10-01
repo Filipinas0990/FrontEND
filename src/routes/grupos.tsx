@@ -517,7 +517,10 @@ function PassoGrupos({
     try {
       const nova = await getMeusGrupos(conexao, true);
       queryClient.setQueryData(chaveGrupos(conexao), nova);
-      toast.success(`${nova.grupos.length} grupo(s) sincronizado(s).`);
+      // Conta grande: o servidor respondeu antes de acabar; o efeito de
+      // `sincronizando` acima busca de novo sozinho.
+      if (nova.sincronizando) toast.info("Buscando os grupos no WhatsApp — a lista atualiza sozinha em instantes.");
+      else toast.success(`${nova.grupos.length} grupo(s) sincronizado(s).`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível atualizar os grupos.");
     } finally {

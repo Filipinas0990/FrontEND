@@ -1796,6 +1796,21 @@ function NovaCampanhaPage() {
   const totalImagens = criativosData.selecionados.filter((c) => c.pngBase64).length;
 
 
+  /**
+   * Publicou — mas se a conexão caiu no meio, o gestor precisa saber que a
+   * mensagem de erro que talvez tenha visto não vale: deu certo.
+   */
+  function avisarSucesso(tempoExcedido: boolean | undefined, mensagem: string) {
+    if (tempoExcedido) {
+      toast.warning("Excedeu o tempo limite, mas foi publicado!", {
+        description: "A conexão demorou, mas o Meta concluiu a publicação. Não publique de novo.",
+        duration: 10000,
+      });
+    } else {
+      toast.success(mensagem);
+    }
+  }
+
   async function publicar() {
     if (publicando) return;
     // Guarda final: o passo 3 já barra, mas o gestor pode voltar e alterar o
@@ -1812,19 +1827,19 @@ function NovaCampanhaPage() {
       if (modo === "anuncios" && conjunto) {
         const r = await publicarAnunciosNoConjunto(conjunto.id, montarPayloadAnuncios(hashes));
         setResultado(r);
-        toast.success("Anúncios adicionados ao conjunto!");
+        avisarSucesso(r.tempoExcedido, "Anúncios adicionados ao conjunto!");
       } else if (modo === "conjunto" && conjunto) {
         const r = await publicarNovosAnuncios(conjunto.id, montarPayloadConjunto(hashes));
         setResultado(r);
         // Quando o Meta recusa a cópia direta, o conjunto é recriado — o gestor
         // precisa saber disso na hora, e como notícia boa: deu certo.
-        toast.success(r.conjuntoRecriado
+        avisarSucesso(r.tempoExcedido, r.conjuntoRecriado
           ? "Conjunto duplicado e anúncios publicados!"
           : "Novos anúncios publicados!");
       } else {
         const r = await publicarCampanha(montarPayload(hashes));
         setResultado(r);
-        toast.success("Campanha criada no Meta!");
+        avisarSucesso(r.tempoExcedido, "Campanha criada no Meta!");
       }
     } catch (err) {
       toast.error((err as Error)?.message ?? "Erro ao publicar.");

@@ -13,10 +13,19 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /**
+     * A resposta se perdeu no caminho (tempo limite do proxy da Vercel, rede
+     * caindo) — o servidor pode ter feito o trabalho mesmo assim. Erro que o
+     * backend respondeu de verdade fica `false`.
+     */
+    public conexaoPerdida = false,
   ) {
     super(message)
   }
 }
+
+/** Tempo limite do proxy edge da Vercel (~25 s): volta 504 em texto, sem JSON. */
+const MSG_TEMPO_LIMITE = "O servidor demorou demais para responder (tempo limite excedido)."
 
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
@@ -28,7 +37,13 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers["Content-Type"] = "application/json"
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
+  } catch {
+    // Rede caiu no meio: o pedido pode ou não ter chegado.
+    throw new ApiError(0, "Sem conexão com o servidor.", true)
+  }
 
   if (res.status === 401) {
     clearAuth()
@@ -37,14 +52,18 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
+    const body = await res.json().catch(() => null)
+    // Sem JSON = não foi o backend que respondeu, foi a plataforma no meio.
+    if (body === null && res.status === 504) {
+      throw new ApiError(504, MSG_TEMPO_LIMITE, true)
+    }
     // 413 não vem do backend: é o proxy edge da Vercel recusando um corpo acima
     // de ~4,2 MB, em texto puro. Sem este caso o gestor via "Erro no servidor"
     // e não tinha como saber que o problema era o tamanho do envio.
     if (res.status === 413) {
       throw new ApiError(413, "Envio grande demais para a plataforma. Reduza a quantidade de imagens deste disparo.")
     }
-    throw new ApiError(res.status, body.detail ?? "Erro no servidor")
+    throw new ApiError(res.status, body?.detail ?? "Erro no servidor", body === null && res.status >= 500)
   }
 
   if (res.status === 204) return undefined as T
@@ -1120,9 +1139,78 @@ export function subirImagemCriativo(
   })
 }
 
+/**
+ * Publica no Meta SEM segurar uma requisição longa.
+ *
+ * O proxy edge da Vercel derruba a requisição se a resposta não começar em
+ * ~25 s, e publicar 4 anúncios já leva isso: o Meta concluía, o gestor via
+ * "Erro no servidor" e publicava de novo, duplicando. Agora o backend responde
+ * na hora com um id (`?assincrono=1`) e aqui consultamos até terminar.
+ */
+const AVISO_CONFERIR =
+  "Não consegui confirmar o resultado da publicação. Ela pode ter sido concluída — confira no Gerenciador de Anúncios antes de publicar de novo, para não duplicar."
+
+/** O que toda publicação devolve, mais a marca de que a conexão caiu no meio. */
+export interface ComTempoExcedido {
+  /** A resposta do POST se perdeu (tempo limite), mas a publicação foi concluída. */
+  tempoExcedido?: boolean
+}
+
+async function publicarEAcompanhar<T extends { avisos?: string[] }>(path: string, payload: unknown): Promise<T & ComTempoExcedido> {
+  // O id nasce AQUI: se a resposta do POST se perder no proxy, ainda sabemos
+  // o que perguntar ao servidor. E o servidor não publica duas vezes o mesmo id.
+  const publicacaoId = crypto.randomUUID()
+  let tempoExcedido = false
+  try {
+    await req(`${path}?assincrono=1&publicacao=${publicacaoId}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  } catch (err) {
+    // Erro que o backend respondeu (validação, orçamento...) é definitivo.
+    if (!(err instanceof ApiError && err.conexaoPerdida)) throw err
+    tempoExcedido = true
+  }
+
+  const inicio = Date.now()
+  let falhasSeguidas = 0
+  while (Date.now() - inicio < 10 * 60 * 1000) {
+    await new Promise((r) => setTimeout(r, 2000))
+    let andamento: { status: "rodando" | "concluida"; codigo?: number; corpo?: unknown }
+    try {
+      andamento = await req(`/api/campanhas/publicacoes/${encodeURIComponent(publicacaoId)}`)
+      falhasSeguidas = 0
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        // Com o POST perdido, 404 quer dizer que o pedido nem chegou: nada foi feito.
+        throw new ApiError(404, tempoExcedido
+          ? "A conexão caiu antes de o pedido chegar ao servidor. Nada foi publicado — pode tentar de novo."
+          : AVISO_CONFERIR)
+      }
+      // Oscilação de rede numa consulta não muda nada no Meta: tenta de novo.
+      if (++falhasSeguidas >= 5) throw new ApiError(0, AVISO_CONFERIR)
+      continue
+    }
+    if (andamento.status === "rodando") continue
+    const codigo = andamento.codigo ?? 500
+    if (codigo >= 400) {
+      const detalhe = (andamento.corpo as { detail?: string } | undefined)?.detail ?? "Erro no servidor"
+      throw new ApiError(codigo, tempoExcedido ? `Excedeu o tempo limite e a publicação falhou: ${detalhe}` : detalhe)
+    }
+    const corpo = andamento.corpo as T
+    if (!tempoExcedido) return corpo
+    return {
+      ...corpo,
+      tempoExcedido: true,
+      avisos: ["A conexão excedeu o tempo limite, mas a publicação foi concluída normalmente no Meta.", ...(corpo.avisos ?? [])],
+    }
+  }
+  throw new ApiError(0, AVISO_CONFERIR)
+}
+
 /** Envia o JSON do wizard (com os hashes das imagens) para criar a campanha ativa no Meta. */
-export function publicarCampanha(payload: unknown): Promise<PublicarCampanhaResultado> {
-  return req("/api/campanhas/criar", { method: "POST", body: JSON.stringify(payload) })
+export function publicarCampanha(payload: unknown): Promise<PublicarCampanhaResultado & ComTempoExcedido> {
+  return publicarEAcompanhar("/api/campanhas/criar", payload)
 }
 
 // ── Gerenciador de campanhas (leitura ao vivo do Meta + duplicação) ────────────
@@ -1160,22 +1248,16 @@ export interface NovosAnunciosResultado {
 export function publicarNovosAnuncios(
   conjuntoId: string,
   payload: unknown,
-): Promise<NovosAnunciosResultado> {
-  return req(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/novos-anuncios`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  })
+): Promise<NovosAnunciosResultado & ComTempoExcedido> {
+  return publicarEAcompanhar(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/novos-anuncios`, payload)
 }
 
 /** Sobe os criativos novos DENTRO do conjunto, sem cópia (nascem ativos). */
 export function publicarAnunciosNoConjunto(
   conjuntoId: string,
   payload: unknown,
-): Promise<NovosAnunciosResultado> {
-  return req(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/anuncios`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  })
+): Promise<NovosAnunciosResultado & ComTempoExcedido> {
+  return publicarEAcompanhar(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/anuncios`, payload)
 }
 
 /** Todos os conjuntos (ad sets) da conta, direto do Meta — lista plana. */
