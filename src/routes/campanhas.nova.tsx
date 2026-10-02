@@ -520,9 +520,12 @@ function ModalEscolhaFluxo({ conta, atual, onEscolher, onFechar }: {
 
 // ── Etapa 2 (modo "conjunto"): escolher o conjunto de origem ──────────────────
 
-function EtapaConjunto({ contaId, selecionado, onSelect, modo }: {
+function EtapaConjunto({ contaId, selecionado, onSelect, modo, nomeNovo, onNomeNovo }: {
   contaId: string;
   modo: Modo;
+  /** Nome do conjunto que será criado (só no fluxo "Novo conjunto"). */
+  nomeNovo: string;
+  onNomeNovo: (nome: string) => void;
   selecionado: string | null;
   onSelect: (c: ConjuntoMeta) => void;
 }) {
@@ -556,6 +559,23 @@ function EtapaConjunto({ contaId, selecionado, onSelect, modo }: {
             original continua rodando intacto — criamos uma cópia só com os anúncios novos.
           </p>
         </>
+      )}
+
+      {/* Nome da cópia: aparece assim que um conjunto é escolhido. Nasce com o
+          padrão "<original> — Novos criativos" e o gestor troca à vontade. */}
+      {modo === "conjunto" && selecionado && (
+        <label className="block mb-5 p-4 rounded-xl border border-brand/30 bg-brand/5">
+          <span className="text-sm font-semibold text-zinc-900">Nome do novo conjunto</span>
+          <span className="block text-xs text-zinc-500 mt-0.5">É assim que ele vai aparecer no Gerenciador de Anúncios.</span>
+          <input
+            value={nomeNovo}
+            onChange={(e) => onNomeNovo(e.target.value)}
+            maxLength={100}
+            placeholder="Ex: Ofertas Outubro — Mulheres 25-55"
+            className="mt-2 w-full px-3 py-2.5 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+          />
+          {!nomeNovo.trim() && <span className="block text-xs text-red-600 mt-1">Dê um nome ao conjunto para continuar.</span>}
+        </label>
       )}
 
       <div className="relative mb-4">
@@ -1660,6 +1680,32 @@ function EtapaRevisao({ payload, resultado, modo }: {
   resultado: PublicarCampanhaResultado | NovosAnunciosResultado | null;
   modo: Modo;
 }) {
+  if (resultado && resultado.anuncioIds.length === 0) {
+    // Algo foi criado (campanha ou conjunto), mas vazio. Não é sucesso: o
+    // gestor precisa ver o motivo e saber que sobrou um item vazio no Meta.
+    const novaCampanha = "campanhaId" in resultado;
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
+        <AlertCircle className="size-6 text-red-600 shrink-0" />
+        <div className="min-w-0">
+          <p className="font-bold text-red-900">Nenhum anúncio foi criado</p>
+          <p className="text-sm text-red-800 mt-1">
+            {novaCampanha ? "A campanha" : "O conjunto"} <span className="font-mono">{novaCampanha ? resultado.campanhaId : resultado.conjuntoId}</span> foi
+            criado no Meta, mas ficou <b>vazio</b> — não gasta nada. Corrija o motivo abaixo e publique de novo, ou apague-o no Gerenciador.
+          </p>
+          <ul className="mt-3 space-y-1">
+            {resultado.avisos.map((a, i) => (
+              <li key={i} className="text-xs text-red-800 bg-white border border-red-200 rounded px-2 py-1">{a}</li>
+            ))}
+          </ul>
+          <a href={resultado.linkGerenciador} target="_blank" rel="noopener noreferrer"
+             className="inline-flex items-center gap-1.5 mt-3 text-sm font-semibold text-brand hover:underline">
+            Abrir no Gerenciador de Anúncios →
+          </a>
+        </div>
+      </div>
+    );
+  }
   if (resultado) {
     const novaCampanha = "campanhaId" in resultado;
     return (
@@ -1800,6 +1846,7 @@ function NovaCampanhaPage() {
   // Já escolheu algum fluxo nesta tela? Serve só para destacar a escolha anterior.
   const [fluxoJaUsado, setFluxoJaUsado] = useState(false);
   const [conjunto, setConjunto] = useState<ConjuntoMeta | null>(null);
+  const [nomeNovoConjunto, setNomeNovoConjunto] = useState("");
 
   /**
    * Seleciona a conta e sugere um nome. NÃO abre o modal de fluxo: clicar numa
@@ -1819,6 +1866,8 @@ function NovaCampanhaPage() {
 
   /** Conjunto escolhido: herda as configurações dele na etapa de público. */
   function selecionarConjunto(c: ConjuntoMeta) {
+    // Trocar de conjunto troca o nome sugerido — o anterior era do outro conjunto.
+    if (c.id !== conjunto?.id) setNomeNovoConjunto(`${c.nome} — Novos criativos`.slice(0, 100));
     setConjunto(c);
     setPublico((p) => ({
       ...p,
@@ -1866,6 +1915,12 @@ function NovaCampanhaPage() {
     }
   }
 
+  /** Os avisos do backend explicam a falha; o primeiro costuma bastar. */
+  function motivoFalha(avisos: string[]): string {
+    const especificos = avisos.filter((a) => !/^Nenhum (criativo|anúncio)/.test(a));
+    return (especificos[0] ?? avisos[0] ?? "O Meta recusou os criativos.").slice(0, 300);
+  }
+
   async function publicar() {
     if (publicando) return;
     // Guarda final: o passo 3 já barra, mas o gestor pode voltar e alterar o
@@ -1881,6 +1936,12 @@ function NovaCampanhaPage() {
       const hashes = await subirImagens();
       if (modo === "anuncios" && conjunto) {
         const r = await publicarAnunciosNoConjunto(conjunto.id, montarPayloadAnuncios(hashes));
+        if (r.anuncioIds.length === 0) {
+          // Nada foi criado no Meta (o conjunto já existia): é erro, e dá para
+          // corrigir e publicar de novo — por isso não vira `resultado`.
+          toast.error("Nenhum anúncio foi criado.", { description: motivoFalha(r.avisos), duration: 15000 });
+          return;
+        }
         setResultado(r);
         avisarSucesso(r.tempoExcedido, "Anúncios adicionados ao conjunto!");
       } else if (modo === "conjunto" && conjunto) {
@@ -1888,13 +1949,15 @@ function NovaCampanhaPage() {
         setResultado(r);
         // Quando o Meta recusa a cópia direta, o conjunto é recriado — o gestor
         // precisa saber disso na hora, e como notícia boa: deu certo.
-        avisarSucesso(r.tempoExcedido, r.conjuntoRecriado
+        if (r.anuncioIds.length === 0) toast.error("O conjunto foi criado, mas nenhum anúncio entrou nele.", { description: motivoFalha(r.avisos), duration: 15000 });
+        else avisarSucesso(r.tempoExcedido, r.conjuntoRecriado
           ? "Conjunto duplicado e anúncios publicados!"
           : "Novos anúncios publicados!");
       } else {
         const r = await publicarCampanha(montarPayload(hashes));
         setResultado(r);
-        avisarSucesso(r.tempoExcedido, "Campanha criada no Meta!");
+        if (r.anuncioIds.length === 0) toast.error("A campanha foi criada, mas nenhum anúncio entrou nela.", { description: motivoFalha(r.avisos), duration: 15000 });
+        else avisarSucesso(r.tempoExcedido, "Campanha criada no Meta!");
       }
     } catch (err) {
       toast.error((err as Error)?.message ?? "Erro ao publicar.");
@@ -1937,6 +2000,7 @@ function NovaCampanhaPage() {
       pagina: paginaFb && { id: paginaFb.id, nome: paginaFb.nome, instagramId: paginaFb.instagramId },
       conjuntoOrigem:  conjunto && { id: conjunto.id, nome: conjunto.nome, campanha: conjunto.campanhaNome },
       nomeConjunto:    conjunto?.nome,
+      nomeNovoConjunto: nomeNovoConjunto.trim(),
       destinoWhatsapp: conjunto?.destinoWhatsapp ?? false,
       publico: {
         genero:   publico.genero,
@@ -2033,7 +2097,10 @@ function NovaCampanhaPage() {
       if (cliente === null || paginaFb === null) return false;
       return modo !== "nova" || nomeCampanha.trim().length > 0;
     }
-    if (passo === 2) return modo !== "nova" ? conjunto !== null : objetivo !== null;
+    if (passo === 2) {
+      if (modo === "nova") return objetivo !== null;
+      return conjunto !== null && (modo !== "conjunto" || nomeNovoConjunto.trim().length > 0);
+    }
     if (passo === 3) return (!exigeOrcamento || orcamentoValido(publico.orcamentoDiario)) && publico.dataInicio !== "";
     if (passo === 4) return criativosData.selecionados.length > 0;
     return true;
@@ -2101,7 +2168,8 @@ function NovaCampanhaPage() {
           </>
         )}
         {passo === 2 && (modo !== "nova"
-          ? <EtapaConjunto contaId={cliente!.id} selecionado={conjunto?.id ?? null} onSelect={selecionarConjunto} modo={modo} />
+          ? <EtapaConjunto contaId={cliente!.id} selecionado={conjunto?.id ?? null} onSelect={selecionarConjunto} modo={modo}
+              nomeNovo={nomeNovoConjunto} onNomeNovo={setNomeNovoConjunto} />
           : <EtapaObjetivo selecionado={objetivo?.codigo ?? null} onSelect={setObjetivo} />)}
         {passo === 3 && <EtapaPublico valor={publico} onChange={setPublico} dono={donoOrcamento} />}
         {passo === 4 && <EtapaCriativos onChange={setCriativosData} />}
@@ -2200,7 +2268,7 @@ function NovaCampanhaPage() {
             <DialogTitle>Tem certeza que deseja publicar essas alterações?</DialogTitle>
             <DialogDescription>
               {modo === "conjunto"
-                ? "Uma cópia do conjunto será criada no Meta com os novos anúncios."
+                ? `O conjunto "${nomeNovoConjunto.trim()}" será criado no Meta com os novos anúncios.`
                 : modo === "anuncios"
                   ? `Os anúncios entrarão ativos no conjunto "${conjunto?.nome ?? ""}", usando o orçamento que ele já tem.`
                   : "A campanha será criada no Meta e entrará no ar."}
