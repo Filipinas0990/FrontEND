@@ -599,7 +599,12 @@ function EtapaConjunto({ contaId, selecionado, onSelect, modo }: {
                     <p className="text-xs text-zinc-400 mt-0.5 truncate">em {c.campanhaNome}</p>
                   )}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-zinc-500">
-                    <span className="inline-flex items-center gap-1"><Wallet className="size-3" />{brl(c.orcamentoDiario)}/dia</span>
+                    <span className="inline-flex items-center gap-1"><Wallet className="size-3" />{textoOrcamento(c)}</span>
+                    {c.cbo && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold text-[10px]" title="Orçamento definido na campanha e dividido entre os conjuntos">
+                        CBO
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1">
                       <Users className="size-3" />{c.generos}
                       {c.idadeMin !== null && ` · ${c.idadeMin}–${c.idadeMax}`}
@@ -907,7 +912,21 @@ function CampoLocalizacao({
   );
 }
 
-function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publico) => void }) {
+/** Onde o orçamento mora — muda o que a etapa de público deixa editar. */
+type DonoOrcamento =
+  | { tipo: "conjunto-novo" }                       // campanha nova: vai no conjunto (ABO)
+  | { tipo: "conjunto"; conjunto: ConjuntoMeta }    // cópia de conjunto com orçamento próprio
+  | { tipo: "cbo"; conjunto: ConjuntoMeta };        // cópia em campanha CBO: é da campanha
+
+/** "R$ 20,00/dia" do conjunto, ou o da campanha quando é CBO. */
+function textoOrcamento(c: ConjuntoMeta): string {
+  if (!c.cbo) return `${brl(c.orcamentoDiario)}/dia`;
+  if (c.orcamentoCampanha) return `${brl(c.orcamentoCampanha)}/dia na campanha`;
+  if (c.orcamentoCampanhaTotal) return `${brl(c.orcamentoCampanhaTotal)} no total da campanha`;
+  return "orçamento da campanha";
+}
+
+function EtapaPublico({ valor, onChange, dono }: { valor: Publico; onChange: (p: Publico) => void; dono: DonoOrcamento }) {
   const set = (patch: Partial<Publico>) => onChange({ ...valor, ...patch });
   const minIdx = IDADES.indexOf(valor.idadeMin);
   const maxIdx = IDADES.indexOf(valor.idadeMax);
@@ -1053,7 +1072,7 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
             <ResumoItem icon={Calendar}  rotulo="Idade"           valor={`${labelIdade(valor.idadeMin)} a ${labelIdade(valor.idadeMax)}`} />
             <ResumoItem icon={LayoutGrid} rotulo="Aplicativos"    valor={nomePlataforma(valor.plataforma)} />
             <ResumoItem icon={Layers}    rotulo="Posicionamentos" valor={nomePosicionamento(valor.posicionamento)} />
-            <ResumoItem icon={Wallet}    rotulo="Orçamento/dia"   valor={brl(valor.orcamentoDiario)} />
+            <ResumoItem icon={Wallet}    rotulo="Orçamento"       valor={dono.tipo === "cbo" ? `${textoOrcamento(dono.conjunto)} (CBO)` : `${brl(valor.orcamentoDiario)}/dia no conjunto`} />
           </div>
         </div>
       </BlocoNumerado>
@@ -1062,9 +1081,20 @@ function EtapaPublico({ valor, onChange }: { valor: Publico; onChange: (p: Publi
 
       {/* ── 4) Orçamento e período ───────────────────────────────────────── */}
       <BlocoNumerado n={4} titulo="Orçamento e período" desc="Defina quanto investir por dia e quando a campanha vai rodar.">
+        {/* Onde o valor vai parar no Meta: o gestor tem que saber antes de digitar. */}
+        <AvisoOrcamento dono={dono} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Orçamento diário */}
-          <CampoOrcamento valor={valor.orcamentoDiario} onChange={(v) => set({ orcamentoDiario: v })} />
+          {/* Orçamento diário — em CBO não existe no conjunto, então não se edita aqui */}
+          {dono.tipo === "cbo" ? (
+            <div className="block">
+              <span className="text-xs font-medium text-zinc-500">Orçamento</span>
+              <div className="mt-1 px-3 py-2.5 text-sm bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-600">
+                {textoOrcamento(dono.conjunto)}
+              </div>
+            </div>
+          ) : (
+            <CampoOrcamento valor={valor.orcamentoDiario} onChange={(v) => set({ orcamentoDiario: v })} />
+          )}
 
           {/* Data de início */}
           <label className="block">
@@ -1104,6 +1134,22 @@ const FMT_NUM = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maxim
 // Formata reais para exibição — R$ 1.234,56
 function brl(v: number): string {
   return FMT_BRL.format(v);
+}
+
+function AvisoOrcamento({ dono }: { dono: DonoOrcamento }) {
+  const [tom, texto] =
+    dono.tipo === "cbo"
+      ? ["amber", <>Esta campanha usa <b>orçamento de campanha (CBO)</b>: o valor é definido na campanha e o Meta divide entre os conjuntos dela. O conjunto novo entra nessa divisão — <b>o orçamento não muda</b>. Para alterar, edite a campanha no Gerenciador de Anúncios.</>]
+      : dono.tipo === "conjunto"
+        ? ["blue", <>O valor abaixo vai para o <b>conjunto novo</b> (orçamento de conjunto). A campanha e o conjunto original não mudam.</>]
+        : ["blue", <>O valor abaixo vai para o <b>conjunto</b> da campanha nova (orçamento de conjunto, não CBO).</>];
+  return (
+    <p className={`mb-4 text-xs leading-relaxed rounded-lg px-3 py-2 border ${
+      tom === "amber" ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-sky-50 border-sky-200 text-sky-900"
+    }`}>
+      {texto}
+    </p>
+  );
 }
 
 const ORCAMENTO_MINIMO = 5;
@@ -1785,6 +1831,15 @@ function NovaCampanhaPage() {
     }));
   }
   const [publico, setPublico] = useState<Publico>(PUBLICO_PADRAO);
+
+  // Onde o orçamento mora no Meta. Em CBO o conjunto não tem orçamento: o
+  // wizard não pede valor, não valida teto e não manda nada para o Meta.
+  const ehCbo = modo === "conjunto" && !!conjunto?.cbo;
+  const donoOrcamento: DonoOrcamento = modo === "nova" || !conjunto
+    ? { tipo: "conjunto-novo" }
+    : conjunto.cbo ? { tipo: "cbo", conjunto } : { tipo: "conjunto", conjunto };
+  /** Só pede (e valida) orçamento quando ele vai mesmo para o Meta. */
+  const exigeOrcamento = modo !== "anuncios" && !ehCbo;
   const [criativosData, setCriativosData] = useState<CriativosResultado>(CRIATIVOS_DATA_VAZIO);
 
   const [publicando, setPublicando] = useState(false);
@@ -1815,7 +1870,7 @@ function NovaCampanhaPage() {
     if (publicando) return;
     // Guarda final: o passo 3 já barra, mas o gestor pode voltar e alterar o
     // orçamento antes de confirmar. Acima do teto, nem chega a sair requisição.
-    if (modo !== "anuncios" && !orcamentoValido(publico.orcamentoDiario)) {
+    if (exigeOrcamento && !orcamentoValido(publico.orcamentoDiario)) {
       setConfirmarAberto(false);
       toast.error(`Orçamento diário acima do limite de ${brl(ORCAMENTO_MAXIMO)}.`);
       return;
@@ -1889,8 +1944,9 @@ function NovaCampanhaPage() {
         idadeMax: publico.idadeMax,
       },
       orcamento: {
-        diarioReais:    publico.orcamentoDiario,
-        diarioCentavos: Math.round(publico.orcamentoDiario * 100),
+        // CBO: o orçamento é da campanha e não se mexe — null avisa o backend.
+        diarioReais:    ehCbo ? null : publico.orcamentoDiario,
+        diarioCentavos: ehCbo ? null : Math.round(publico.orcamentoDiario * 100),
         dataInicio:     publico.dataInicio,
         dataFim:        publico.dataFim || null,
       },
@@ -1978,7 +2034,7 @@ function NovaCampanhaPage() {
       return modo !== "nova" || nomeCampanha.trim().length > 0;
     }
     if (passo === 2) return modo !== "nova" ? conjunto !== null : objetivo !== null;
-    if (passo === 3) return orcamentoValido(publico.orcamentoDiario) && publico.dataInicio !== "";
+    if (passo === 3) return (!exigeOrcamento || orcamentoValido(publico.orcamentoDiario)) && publico.dataInicio !== "";
     if (passo === 4) return criativosData.selecionados.length > 0;
     return true;
   }
@@ -2047,7 +2103,7 @@ function NovaCampanhaPage() {
         {passo === 2 && (modo !== "nova"
           ? <EtapaConjunto contaId={cliente!.id} selecionado={conjunto?.id ?? null} onSelect={selecionarConjunto} modo={modo} />
           : <EtapaObjetivo selecionado={objetivo?.codigo ?? null} onSelect={setObjetivo} />)}
-        {passo === 3 && <EtapaPublico valor={publico} onChange={setPublico} />}
+        {passo === 3 && <EtapaPublico valor={publico} onChange={setPublico} dono={donoOrcamento} />}
         {passo === 4 && <EtapaCriativos onChange={setCriativosData} />}
         {passo === 5 && (
           <EtapaRevisao
@@ -2113,8 +2169,8 @@ function NovaCampanhaPage() {
           ) : (
             <button
               onClick={() => setConfirmarAberto(true)}
-              disabled={publicando || resultado !== null || (modo !== "anuncios" && !orcamentoValido(publico.orcamentoDiario))}
-              title={modo === "anuncios" || orcamentoValido(publico.orcamentoDiario)
+              disabled={publicando || resultado !== null || (exigeOrcamento && !orcamentoValido(publico.orcamentoDiario))}
+              title={!exigeOrcamento || orcamentoValido(publico.orcamentoDiario)
                 ? undefined
                 : `Orçamento diário acima do limite de ${brl(ORCAMENTO_MAXIMO)}.`}
               className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition shadow-sm"

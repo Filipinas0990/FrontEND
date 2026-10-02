@@ -1223,7 +1223,13 @@ export interface ConjuntoMeta {
   campanhaNome: string
   status: string            // rótulo legível ("Ativa", "Pausada"...)
   ativa: boolean
-  orcamentoDiario: number   // em reais
+  orcamentoDiario: number   // em reais (0 quando a campanha é CBO)
+  /** Orçamento é da CAMPANHA (CBO): o conjunto não tem orçamento próprio. */
+  cbo: boolean
+  /** Orçamento diário da campanha em reais (CBO; 0 se for vitalício). */
+  orcamentoCampanha: number
+  /** Orçamento total da campanha em reais (CBO vitalício). */
+  orcamentoCampanhaTotal: number
   otimizacao: string
   idadeMin: number | null
   idadeMax: number | null
