@@ -1341,7 +1341,12 @@ function expandirCopy(tpl: string, ctx: CopyCtx): string {
     .replace(/\{\s*pre(?:c|ç)o\s*\}/gi, "");
 }
 
-function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => void }) {
+function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
+  onChange: (r: CriativosResultado) => void;
+  /** Nome do anúncio de cada criativo (padrão "AD01 - produto - 2/10" ou o editado). */
+  nomeDoAnuncio: (id: string) => string;
+  onNomeAnuncio: (id: string, nome: string) => void;
+}) {
   const [criativos, setCriativos] = useState<CriativoWizard[]>([]);
   const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set());
 
@@ -1533,6 +1538,20 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
                 >
                   <Download className="size-4" />
                 </button>
+
+                {/* Renomear: é o nome que o anúncio terá no Gerenciador. Só para
+                    os selecionados — os outros não viram anúncio. */}
+                {sel && (
+                  <label className="block mt-2">
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">Nome do anúncio</span>
+                    <input
+                      value={nomeDoAnuncio(c.id)}
+                      onChange={(e) => onNomeAnuncio(c.id, e.target.value)}
+                      maxLength={100}
+                      className="mt-1 w-full px-2.5 py-1.5 text-xs font-medium bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                    />
+                  </label>
+                )}
               </div>
             );
           })}
@@ -2226,7 +2245,13 @@ function NovaCampanhaPage() {
               nomeNovo={nomeNovoConjunto} onNomeNovo={setNomeNovoConjunto} />
           : <EtapaObjetivo selecionado={objetivo?.codigo ?? null} onSelect={setObjetivo} />)}
         {passo === 3 && <EtapaPublico valor={publico} onChange={setPublico} dono={donoOrcamento} />}
-        {passo === 4 && <EtapaCriativos onChange={setCriativosData} />}
+        {passo === 4 && (
+          <EtapaCriativos
+            onChange={setCriativosData}
+            nomeDoAnuncio={nomeDoAnuncio}
+            onNomeAnuncio={(id, nome) => setNomesEditados((atual) => ({ ...atual, [id]: nome }))}
+          />
+        )}
         {passo === 5 && (
           <EtapaRevisao
             payload={modo === "conjunto" ? montarPayloadConjunto() : modo === "anuncios" ? montarPayloadAnuncios() : montarPayload()}
