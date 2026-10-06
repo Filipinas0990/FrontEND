@@ -22,10 +22,11 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getToken, getUser, clearAuth } from "@/lib/auth";
+import { estaLogado, getUser, clearAuth } from "@/lib/auth";
 import {
   getPreviewPipeline,
   getGestores,
+  logout,
   getWhatsAppStatus,
   getOfertasPendentes,
   type PipelinePreview,
@@ -372,14 +373,15 @@ export function AppShell({ title, children, headerRight, hideHeader }: AppShellP
 
   // Client-side auth guard
   useEffect(() => {
-    if (!getToken()) {
+    if (!estaLogado()) {
       navigate({ to: "/login" });
     } else {
       setUser(getUser());
     }
   }, [navigate]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     clearAuth();
     navigate({ to: "/login" });
   };
@@ -414,7 +416,7 @@ export function AppShell({ title, children, headerRight, hideHeader }: AppShellP
     queryFn: getWhatsAppStatus,
     staleTime: 5 * 60_000,
     retry: false,
-    enabled: !!getToken(),
+    enabled: estaLogado(),
   });
 
   // Pedidos de oferta que os donos das farmácias enviaram e ainda não viraram disparo
@@ -424,7 +426,7 @@ export function AppShell({ title, children, headerRight, hideHeader }: AppShellP
     staleTime: 60_000,
     refetchInterval: 60_000,
     retry: false,
-    enabled: !!getToken(),
+    enabled: estaLogado(),
   });
 
   const totalPendentes = ofertasPendentes?.total ?? 0;

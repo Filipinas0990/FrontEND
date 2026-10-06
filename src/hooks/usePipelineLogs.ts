@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { getToken } from "@/lib/auth";
 
 // Mesma origem do front — quem alcança a API é o proxy. Ver comentário em @/lib/api.
 const BASE_URL = "";
@@ -23,8 +22,8 @@ export function usePipelineLogs(ativo: boolean) {
     setLogs([]);
     setConcluido(false);
 
-    const token = getToken() ?? "";
-    const url = `${BASE_URL}/api/pipeline/logs/stream?token=${encodeURIComponent(token)}`;
+    // Same-origin: o EventSource leva o cookie de sessão sozinho — nada de token na URL.
+    const url = `${BASE_URL}/api/pipeline/logs/stream`;
     const source = new EventSource(url);
 
     const timeoutId = setTimeout(() => {

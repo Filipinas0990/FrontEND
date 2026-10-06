@@ -71,7 +71,10 @@ function headersDaVolta(upstream: Response, streaming: boolean): Headers {
   const headers = new Headers();
   upstream.headers.forEach((valor, nome) => {
     if (HEADERS_BLOQUEADOS_NA_VOLTA.has(nome.toLowerCase())) return;
-    headers.set(nome, valor);
+    // Set-Cookie leva a sessão do login. Cada um vem em separado e não pode
+    // ser juntado nem sobrescrito: `set` deixaria passar só o último.
+    if (nome.toLowerCase() === "set-cookie") headers.append(nome, valor);
+    else headers.set(nome, valor);
   });
   if (streaming) {
     // Sem isso proxies intermediários seguram os eventos e o terminal de logs

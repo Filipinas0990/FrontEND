@@ -1,4 +1,4 @@
-import { clearAuth, getToken } from "./auth"
+import { clearAuth } from "./auth"
 
 /**
  * Vazio de propósito: todo request sai relativo, na mesma origem do front, e é
@@ -27,12 +27,12 @@ export class ApiError extends Error {
 /** Tempo limite do proxy edge da Vercel (~25 s): volta 504 em texto, sem JSON. */
 const MSG_TEMPO_LIMITE = "O servidor demorou demais para responder (tempo limite excedido)."
 
+// Sem header Authorization: a sessão vai no cookie httpOnly, que o navegador
+// manda sozinho porque o pedido é para a mesma origem (ver @/lib/auth).
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken()
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   }
-  if (token) headers["Authorization"] = `Bearer ${token}`
   if (!headers["Content-Type"] && options.method !== "GET" && options.method !== undefined) {
     headers["Content-Type"] = "application/json"
   }
@@ -73,8 +73,6 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface LoginResponse {
-  access_token: string
-  token_type: string
   id: number
   nome: string
   email: string
@@ -244,11 +242,20 @@ export async function login(email: string, password: string): Promise<LoginRespo
   })
   if (res.status === 401) throw new ApiError(401, "Email ou senha incorretos")
   if (res.status === 403) throw new ApiError(403, "Usuário inativo")
+  if (res.status === 429) {
+    const b = await res.json().catch(() => ({}))
+    throw new ApiError(429, b.detail ?? "Muitas tentativas erradas. Tente de novo mais tarde.")
+  }
   if (!res.ok) {
     const b = await res.json().catch(() => ({}))
     throw new ApiError(res.status, b.detail ?? "Erro ao fazer login")
   }
   return res.json()
+}
+
+/** Pede ao backend para apagar o cookie de sessão (httpOnly: o JS não consegue). */
+export async function logout(): Promise<void> {
+  await fetch(`${BASE_URL}/api/auth/logout`, { method: "POST" }).catch(() => undefined)
 }
 
 export function getMe(): Promise<AuthUser> {
@@ -420,10 +427,7 @@ export function getRelatorios(): Promise<Relatorio[]> {
 }
 
 async function _triggerDownload(url: string, filename: string): Promise<void> {
-  const token = getToken()
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
+  const res = await fetch(url)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new ApiError(res.status, body.detail ?? "Erro ao baixar relatório")
@@ -1266,6 +1270,11 @@ export function publicarAnunciosNoConjunto(
   return publicarEAcompanhar(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/anuncios`, payload)
 }
 
+/** Próximo número "ADnn" livre no conjunto (o maior que existe + 1). */
+export function getProximoNumeroAnuncio(conjuntoId: string, contaId: string): Promise<{ numero: number }> {
+  return req(`/api/campanhas/conjuntos/${encodeURIComponent(conjuntoId)}/proximo-anuncio?conta=${encodeURIComponent(contaId)}`)
+}
+
 /** Todos os conjuntos (ad sets) da conta, direto do Meta — lista plana. */
 export function getConjuntosDaConta(contaId: string): Promise<{ conjuntos: ConjuntoMeta[] }> {
   return req(`/api/campanhas/conjuntos?conta=${encodeURIComponent(contaId)}`)
@@ -1317,10 +1326,9 @@ export function listarCatalogoProdutos(): Promise<{ produtos: CatalogoProdutoIte
   return req("/api/catalogo/produtos")
 }
 
-/** Monta a URL da imagem de um produto (com token na query para usar em <img src>). */
+/** Monta a URL da imagem de um produto para <img src> — o cookie de sessão vai junto sozinho. */
 export function catalogoImagemUrl(id: number): string {
-  const token = getToken()
-  return `${BASE_URL}/api/catalogo/produtos/${id}/imagem${token ? `?token=${token}` : ""}`
+  return `${BASE_URL}/api/catalogo/produtos/${id}/imagem`
 }
 
 const EXT_POR_MIME: Record<string, string> = {
@@ -1347,13 +1355,10 @@ function nomeDeArquivo(nome: string): string {
  *
  * Não dá para usar <a download> na URL da imagem: ela é servida pela API (outra
  * origem), e aí o navegador ignora o `download` e só navega para o arquivo. Por
- * isso busca o blob com o token e dispara o download a partir dele.
+ * isso busca o blob (com o cookie de sessão) e dispara o download a partir dele.
  */
 export async function baixarCatalogoImagem(id: number, nome: string): Promise<void> {
-  const token = getToken()
-  const res = await fetch(`${BASE_URL}/api/catalogo/produtos/${id}/imagem`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
+  const res = await fetch(`${BASE_URL}/api/catalogo/produtos/${id}/imagem`)
   if (!res.ok) throw new ApiError(res.status, "Não foi possível baixar a imagem")
 
   const blob = await res.blob()

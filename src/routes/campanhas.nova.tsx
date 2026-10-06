@@ -20,7 +20,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, publicarAnunciosNoConjunto, buscarLocalizacoes,
+  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, publicarAnunciosNoConjunto, getProximoNumeroAnuncio, buscarLocalizacoes,
   buscarCoordenadas, subirImagemCriativo, listarPaginasDaConta,
   type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado, type LocalizacaoMeta,
   type Coordenada, type PaginaMeta,
@@ -1675,8 +1675,12 @@ function EtapaCriativos({ onChange }: { onChange: (r: CriativosResultado) => voi
 
 // ── Etapa 5: revisão — mostra o JSON detalhado que irá para a IA ──────────────
 
-function EtapaRevisao({ payload, resultado, modo }: {
+function EtapaRevisao({ payload, resultado, modo, nomesAnuncio, onNomeAnuncio, onRestaurarNome }: {
   payload: object;
+  /** Nome de cada anúncio, na mesma ordem dos itens do payload. */
+  nomesAnuncio: { nome: string; padrao: string }[];
+  onNomeAnuncio: (indice: number, nome: string) => void;
+  onRestaurarNome: (indice: number) => void;
   resultado: PublicarCampanhaResultado | NovosAnunciosResultado | null;
   modo: Modo;
 }) {
@@ -1799,6 +1803,24 @@ function EtapaRevisao({ payload, resultado, modo }: {
           </p>
           {itens.map((it, i) => (
             <div key={i} className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm">
+              {/* Nome do anúncio no Gerenciador — vem no padrão e pode ser trocado */}
+              <label className="block mb-3">
+                <span className="flex items-center justify-between text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+                  Nome do anúncio
+                  {nomesAnuncio[i] && nomesAnuncio[i].nome !== nomesAnuncio[i].padrao && (
+                    <button type="button" onClick={() => onRestaurarNome(i)} className="normal-case tracking-normal font-medium text-brand hover:underline">
+                      Voltar ao padrão
+                    </button>
+                  )}
+                </span>
+                <input
+                  value={nomesAnuncio[i]?.nome ?? ""}
+                  onChange={(e) => onNomeAnuncio(i, e.target.value)}
+                  maxLength={100}
+                  className="mt-1 w-full px-3 py-2 text-sm font-medium bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                />
+                {!nomesAnuncio[i]?.nome.trim() && <span className="block text-xs text-red-600 mt-1">Dê um nome ao anúncio.</span>}
+              </label>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="text-xs font-semibold text-zinc-700 bg-zinc-100 rounded px-2 py-0.5">
                   Anúncio {i + 1}
@@ -1890,6 +1912,35 @@ function NovaCampanhaPage() {
   /** Só pede (e valida) orçamento quando ele vai mesmo para o Meta. */
   const exigeOrcamento = modo !== "anuncios" && !ehCbo;
   const [criativosData, setCriativosData] = useState<CriativosResultado>(CRIATIVOS_DATA_VAZIO);
+
+  // ── Nome dos anúncios: "AD01 - Produto - 2/10" (padrão da agência) ──────────
+  // Só o que o gestor EDITOU fica guardado; o resto é recalculado, para o
+  // padrão acompanhar a data de início e a ordem dos criativos.
+  const [nomesEditados, setNomesEditados] = useState<Record<string, string>>({});
+  // Em "Novos anúncios" o conjunto já tem ADs: a numeração continua do maior.
+  const { data: proximoAd } = useQuery({
+    queryKey: ["proximo-anuncio", conjunto?.id],
+    queryFn: () => getProximoNumeroAnuncio(conjunto!.id, cliente!.id),
+    enabled: modo === "anuncios" && !!conjunto && !!cliente,
+    staleTime: 30_000,
+  });
+  const numeroInicial = modo === "anuncios" ? (proximoAd?.numero ?? 1) : 1;
+  /** Data em que os anúncios começam (D/M): o início do conjunto, ou hoje se já passou. */
+  const dataDosAnuncios = (() => {
+    const hoje = hojeISO();
+    const data = modo !== "anuncios" && publico.dataInicio > hoje ? publico.dataInicio : hoje;
+    const [, m, d] = data.split("-");
+    return `${Number(d)}/${Number(m)}`;
+  })();
+  function nomePadraoDoAnuncio(id: string): string {
+    const i = criativosData.selecionados.findIndex((c) => c.id === id);
+    const item = criativosData.selecionados[i];
+    const numero = String(numeroInicial + Math.max(i, 0)).padStart(2, "0");
+    return `AD${numero} - ${(item?.nome ?? "").trim()} - ${dataDosAnuncios}`;
+  }
+  function nomeDoAnuncio(id: string): string {
+    return (nomesEditados[id] ?? nomePadraoDoAnuncio(id)).slice(0, 100);
+  }
 
   const [publicando, setPublicando] = useState(false);
   // Quantas imagens já subiram — as artes vão uma por requisição e isso pode
@@ -2019,6 +2070,7 @@ function NovaCampanhaPage() {
         itens: criativosData.selecionados.map((c) => ({
           nome: c.nome, preco: c.preco, imagemHash: hashes?.get(c.id) ?? null,
           textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
+          nomeAnuncio: nomeDoAnuncio(c.id),
         })),
         copy: {
           textoPrincipal: criativosData.textoPrincipal,
@@ -2078,9 +2130,11 @@ function NovaCampanhaPage() {
         itens: criativosData.selecionados.map((c) =>
           hashes
             ? { nome: c.nome, preco: c.preco, imagemHash: hashes.get(c.id) ?? null,
-                textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao }
+                textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
+                nomeAnuncio: nomeDoAnuncio(c.id) }
             : { nome: c.nome, preco: c.preco,
-                textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao }),
+                textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
+                nomeAnuncio: nomeDoAnuncio(c.id) }),
         copy: {
           textoPrincipal: criativosData.textoPrincipal,
           titulo:         criativosData.titulo,
@@ -2178,6 +2232,15 @@ function NovaCampanhaPage() {
             payload={modo === "conjunto" ? montarPayloadConjunto() : modo === "anuncios" ? montarPayloadAnuncios() : montarPayload()}
             resultado={resultado}
             modo={modo}
+            nomesAnuncio={criativosData.selecionados.map((c) => ({ nome: nomeDoAnuncio(c.id), padrao: nomePadraoDoAnuncio(c.id) }))}
+            onNomeAnuncio={(i, nome) => {
+              const id = criativosData.selecionados[i]?.id;
+              if (id) setNomesEditados((atual) => ({ ...atual, [id]: nome }));
+            }}
+            onRestaurarNome={(i) => {
+              const id = criativosData.selecionados[i]?.id;
+              if (id) setNomesEditados(({ [id]: _, ...resto }) => resto);
+            }}
           />
         )}
       </div>
@@ -2236,7 +2299,13 @@ function NovaCampanhaPage() {
             </button>
           ) : (
             <button
-              onClick={() => setConfirmarAberto(true)}
+              onClick={() => {
+                if (criativosData.selecionados.some((c) => !nomeDoAnuncio(c.id).trim())) {
+                  toast.error("Dê um nome a todos os anúncios antes de publicar.");
+                  return;
+                }
+                setConfirmarAberto(true);
+              }}
               disabled={publicando || resultado !== null || (exigeOrcamento && !orcamentoValido(publico.orcamentoDiario))}
               title={!exigeOrcamento || orcamentoValido(publico.orcamentoDiario)
                 ? undefined
