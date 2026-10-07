@@ -1265,8 +1265,8 @@ export interface CriativosResultado {
     id: string; nome: string; preco: string | null; tipo: string; pngBase64: string | null;
     // copy padrão já expandida ({produto}/{preco}) para ESTE criativo
     textoPrincipal: string; titulo: string; descricao: string;
-    /** Todos os títulos/descrições do anúncio (o Meta testa as combinações). */
-    titulos: string[]; descricoes: string[];
+    /** Todos os textos/títulos/descrições do anúncio (o Meta testa as combinações). */
+    textos: string[]; titulos: string[]; descricoes: string[];
   }[];
   // representativo (1º criativo) — usado na revisão / copyUsada
   textoPrincipal: string;
@@ -1367,7 +1367,8 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
   }, []);
 
   // Copy padrão (modelo). {produto}/{preco} trocam por criativo — automático, sem inputs extras.
-  const [tplTexto, setTplTexto] = useState(COPY_PADRAO.textoPrincipal);
+  // Textos principais: como títulos e descrições, TODOS vão em cada anúncio (até 5).
+  const [textos, setTextos] = useState<string[]>([COPY_PADRAO.textoPrincipal]);
   const [titulos, setTitulos] = useState<string[]>(TITULOS_PADRAO);
   const [descricoes, setDescricoes] = useState<string[]>(DESCRICOES_PADRAO);
 
@@ -1378,6 +1379,7 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
   useEffect(() => {
     const titulosValidos = titulos.map((t) => t.trim()).filter(Boolean);
     const descricoesValidas = descricoes.map((d) => d.trim()).filter(Boolean);
+    const textosValidos = textos.map((t) => t.trim()).filter(Boolean);
     const selArr = criativos
       .filter((c) => selecionados.has(c.id))
       .map((c) => {
@@ -1387,7 +1389,8 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
         return {
           id: c.id, nome: c.nome, preco: c.preco ?? null, tipo: c.tipo,
           pngBase64: c.png ?? c.arquivoUrl ?? null,
-          textoPrincipal: expandirCopy(tplTexto, ctx),
+          textoPrincipal: expandirCopy(textosValidos[0] ?? "", ctx),
+          textos: textosValidos.slice(0, MAX_OPCOES_TEXTO).map((t) => expandirCopy(t, ctx)),
           titulo: titulosItem[0] ?? "",
           descricao: descricoesItem[0] ?? "",
           titulos: titulosItem,
@@ -1402,7 +1405,7 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
       descricao: primeiro?.descricao ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [criativos, selecionados, tplTexto, titulos, descricoes]);
+  }, [criativos, selecionados, textos, titulos, descricoes]);
 
   // Helpers da lista de títulos
   function setTituloAt(idx: number, valor: string) {
@@ -1683,18 +1686,47 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
           </div>
         </div>
 
-        {/* Texto Principal */}
-        <div className="mt-5">
-          <label className="block text-sm font-semibold text-zinc-700 mb-1.5">Texto Principal</label>
-          <textarea
-            value={tplTexto}
-            onChange={(e) => setTplTexto(e.target.value)}
-            maxLength={600}
-            rows={6}
-            placeholder="Ex: {produto} por apenas R$ {preco}!"
-            className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-          />
-          <p className="text-right text-[11px] text-zinc-400 mt-1">{tplTexto.length} / 600</p>
+        {/* Textos principais — todos vão em cada anúncio, como títulos e descrições */}
+        <div className="mt-5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label className="block text-sm font-semibold text-zinc-700">Textos principais</label>
+            <button
+              type="button"
+              onClick={() => setTextos((prev) => (prev.length >= MAX_OPCOES_TEXTO ? prev : [...prev, ""]))}
+              disabled={textos.length >= MAX_OPCOES_TEXTO}
+              className="text-xs font-medium text-brand hover:underline flex items-center gap-1 disabled:opacity-40 disabled:no-underline"
+            >
+              <Plus className="size-3.5" /> Adicionar texto
+            </button>
+          </div>
+          <p className="text-[11px] text-zinc-400 -mt-1">
+            Cada anúncio recebe <b>todos</b> os textos (até {MAX_OPCOES_TEXTO}) e o Meta testa qual funciona melhor.
+          </p>
+          {textos.map((t, idx) => (
+            <div key={idx} className="flex items-start gap-2">
+              <div className="flex-1">
+                <textarea
+                  value={t}
+                  onChange={(e) => setTextos((prev) => prev.map((x, i) => (i === idx ? e.target.value : x)))}
+                  maxLength={600}
+                  rows={idx === 0 ? 6 : 4}
+                  placeholder="Ex: {produto} por apenas R$ {preco}!"
+                  className="w-full text-sm text-zinc-700 bg-white border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                />
+                <p className="text-right text-[11px] text-zinc-400 mt-0.5">{t.length} / 600</p>
+              </div>
+              {textos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setTextos((prev) => prev.filter((_, i) => i !== idx))}
+                  className="mt-2 size-8 shrink-0 grid place-items-center rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 transition"
+                  title="Remover texto"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
 
       </div>
@@ -1806,7 +1838,7 @@ function EtapaRevisao({ payload, resultado, modo, nomesAnuncio, onNomeAnuncio, o
   // Extrai os criativos (com a copy já expandida) do payload para a prévia
   const itens = ((payload as {
     criativos?: {
-      itens?: Array<{ nome?: string; preco?: string; textoPrincipal?: string; titulo?: string; descricao?: string; titulos?: string[]; descricoes?: string[] }>;
+      itens?: Array<{ nome?: string; preco?: string; textoPrincipal?: string; titulo?: string; descricao?: string; textos?: string[]; titulos?: string[]; descricoes?: string[] }>;
     };
   })?.criativos?.itens) ?? [];
 
@@ -1859,7 +1891,16 @@ function EtapaRevisao({ payload, resultado, modo, nomesAnuncio, onNomeAnuncio, o
                   <span className="text-xs font-semibold text-brand bg-brand/10 rounded px-2 py-0.5">{it.preco}</span>
                 ) : null}
               </div>
-              <p className="text-sm text-zinc-700 whitespace-pre-line mt-1">{it.textoPrincipal}</p>
+              {(it.textos?.length ?? 0) > 1 ? (
+                <div className="mt-1 space-y-1.5">
+                  <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">Textos principais ({it.textos!.length})</p>
+                  {it.textos!.map((tx, k) => (
+                    <p key={k} className="text-sm text-zinc-700 whitespace-pre-line bg-zinc-50 border border-zinc-100 rounded-lg px-3 py-2">{tx}</p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-700 whitespace-pre-line mt-1">{it.textoPrincipal}</p>
+              )}
               {/* Todas as opções que vão no anúncio — o Meta combina e testa */}
               {(it.titulos?.length ?? 0) > 0 && (
                 <div className="mt-2 border-t border-zinc-100 pt-2">
@@ -2114,7 +2155,7 @@ function NovaCampanhaPage() {
         itens: criativosData.selecionados.map((c) => ({
           nome: c.nome, preco: c.preco, imagemHash: hashes?.get(c.id) ?? null,
           textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
-          titulos: c.titulos, descricoes: c.descricoes,
+          textos: c.textos, titulos: c.titulos, descricoes: c.descricoes,
           nomeAnuncio: nomeDoAnuncio(c.id),
         })),
         copy: {
@@ -2176,11 +2217,11 @@ function NovaCampanhaPage() {
           hashes
             ? { nome: c.nome, preco: c.preco, imagemHash: hashes.get(c.id) ?? null,
                 textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
-                titulos: c.titulos, descricoes: c.descricoes,
+                textos: c.textos, titulos: c.titulos, descricoes: c.descricoes,
                 nomeAnuncio: nomeDoAnuncio(c.id) }
             : { nome: c.nome, preco: c.preco,
                 textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
-                titulos: c.titulos, descricoes: c.descricoes,
+                textos: c.textos, titulos: c.titulos, descricoes: c.descricoes,
                 nomeAnuncio: nomeDoAnuncio(c.id) }),
         copy: {
           textoPrincipal: criativosData.textoPrincipal,
