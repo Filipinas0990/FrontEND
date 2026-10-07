@@ -1265,6 +1265,8 @@ export interface CriativosResultado {
     id: string; nome: string; preco: string | null; tipo: string; pngBase64: string | null;
     // copy padrão já expandida ({produto}/{preco}) para ESTE criativo
     textoPrincipal: string; titulo: string; descricao: string;
+    /** Todos os títulos/descrições do anúncio (o Meta testa as combinações). */
+    titulos: string[]; descricoes: string[];
   }[];
   // representativo (1º criativo) — usado na revisão / copyUsada
   textoPrincipal: string;
@@ -1304,7 +1306,9 @@ const COPY_PADRAO = {
     "Corra aproveitar, é por tempo limitado! Estoque sujeito à disponibilidade.",
 };
 
-// Lista de títulos padrão — cada anúncio recebe um (rotaciona pela lista).
+// Lista de títulos padrão — cada anúncio recebe TODOS (o Meta testa as combinações).
+/** Teto do Meta para "várias opções de texto": 5 títulos e 5 descrições por anúncio. */
+const MAX_OPCOES_TEXTO = 5;
 const TITULOS_PADRAO = [
   "Preços Imperdíveis 🔥",
   "Oferta Limitada ⏰",
@@ -1368,22 +1372,26 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
   const [descricoes, setDescricoes] = useState<string[]>(DESCRICOES_PADRAO);
 
   // Reporta o resultado ao parent sempre que algo muda — expande a copy por criativo.
-  // Título e descrição rotacionam pela lista: anúncio 1 → item 1, anúncio 2 → item 2, ...
+  // Cada anúncio leva TODOS os títulos e descrições (até 5): o Meta testa as
+  // combinações e entrega mais a que performa. `titulo`/`descricao` (o 1º de cada)
+  // seguem para a prévia e como reserva.
   useEffect(() => {
     const titulosValidos = titulos.map((t) => t.trim()).filter(Boolean);
     const descricoesValidas = descricoes.map((d) => d.trim()).filter(Boolean);
     const selArr = criativos
       .filter((c) => selecionados.has(c.id))
-      .map((c, i) => {
+      .map((c) => {
         const ctx: CopyCtx = { produto: c.nome, preco: c.preco ?? "" };
-        const tituloBruto = titulosValidos.length ? titulosValidos[i % titulosValidos.length] : "";
-        const descricaoBruta = descricoesValidas.length ? descricoesValidas[i % descricoesValidas.length] : "";
+        const titulosItem = titulosValidos.slice(0, MAX_OPCOES_TEXTO).map((t) => expandirCopy(t, ctx));
+        const descricoesItem = descricoesValidas.slice(0, MAX_OPCOES_TEXTO).map((d) => expandirCopy(d, ctx));
         return {
           id: c.id, nome: c.nome, preco: c.preco ?? null, tipo: c.tipo,
           pngBase64: c.png ?? c.arquivoUrl ?? null,
           textoPrincipal: expandirCopy(tplTexto, ctx),
-          titulo: expandirCopy(tituloBruto, ctx),
-          descricao: expandirCopy(descricaoBruta, ctx),
+          titulo: titulosItem[0] ?? "",
+          descricao: descricoesItem[0] ?? "",
+          titulos: titulosItem,
+          descricoes: descricoesItem,
         };
       });
     const primeiro = selArr[0];
@@ -1404,7 +1412,7 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
     setTitulos((prev) => prev.filter((_, i) => i !== idx));
   }
   function adicionarTitulo() {
-    setTitulos((prev) => [...prev, ""]);
+    setTitulos((prev) => (prev.length >= MAX_OPCOES_TEXTO ? prev : [...prev, ""]));
   }
 
   // Helpers da lista de descrições
@@ -1415,7 +1423,7 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
     setDescricoes((prev) => prev.filter((_, i) => i !== idx));
   }
   function adicionarDescricao() {
-    setDescricoes((prev) => [...prev, ""]);
+    setDescricoes((prev) => (prev.length >= MAX_OPCOES_TEXTO ? prev : [...prev, ""]));
   }
 
   function toggle(id: string) {
@@ -1591,20 +1599,21 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
           </span>
         </div>
 
-        {/* Títulos — lista de headlines (rotaciona pelos anúncios) */}
+        {/* Títulos — todos vão em cada anúncio (várias opções de texto do Meta) */}
         <div className="mt-5">
           <div className="flex items-center justify-between gap-2">
             <label className="block text-sm font-semibold text-zinc-700">Títulos</label>
             <button
               type="button"
               onClick={adicionarTitulo}
-              className="text-xs font-medium text-brand hover:underline flex items-center gap-1"
+              disabled={titulos.length >= MAX_OPCOES_TEXTO}
+              className="text-xs font-medium text-brand hover:underline flex items-center gap-1 disabled:opacity-40 disabled:no-underline"
             >
               <Plus className="size-3.5" /> Adicionar título
             </button>
           </div>
           <p className="text-[11px] text-zinc-400 mt-0.5 mb-2">
-            Cada anúncio recebe um título; a lista rotaciona pelos criativos.
+            Cada anúncio recebe <b>todos</b> os títulos (até {MAX_OPCOES_TEXTO}) e o Meta testa qual funciona melhor.
           </p>
           <div className="space-y-2">
             {titulos.map((t, i) => (
@@ -1632,20 +1641,21 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
           </div>
         </div>
 
-        {/* Descrições — mesmo estilo do título: curtas, rotacionam pelos anúncios */}
+        {/* Descrições — mesmo estilo do título: todas vão em cada anúncio */}
         <div className="mt-5">
           <div className="flex items-center justify-between gap-2">
             <label className="block text-sm font-semibold text-zinc-700">Descrições</label>
             <button
               type="button"
               onClick={adicionarDescricao}
-              className="text-xs font-medium text-brand hover:underline flex items-center gap-1"
+              disabled={descricoes.length >= MAX_OPCOES_TEXTO}
+              className="text-xs font-medium text-brand hover:underline flex items-center gap-1 disabled:opacity-40 disabled:no-underline"
             >
               <Plus className="size-3.5" /> Adicionar descrição
             </button>
           </div>
           <p className="text-[11px] text-zinc-400 mt-0.5 mb-2">
-            Cada anúncio recebe uma descrição; a lista rotaciona pelos criativos.
+            Cada anúncio recebe <b>todas</b> as descrições (até {MAX_OPCOES_TEXTO}) e o Meta testa qual funciona melhor.
           </p>
           <div className="space-y-2">
             {descricoes.map((d, i) => (
@@ -1796,7 +1806,7 @@ function EtapaRevisao({ payload, resultado, modo, nomesAnuncio, onNomeAnuncio, o
   // Extrai os criativos (com a copy já expandida) do payload para a prévia
   const itens = ((payload as {
     criativos?: {
-      itens?: Array<{ nome?: string; preco?: string; textoPrincipal?: string; titulo?: string; descricao?: string }>;
+      itens?: Array<{ nome?: string; preco?: string; textoPrincipal?: string; titulo?: string; descricao?: string; titulos?: string[]; descricoes?: string[] }>;
     };
   })?.criativos?.itens) ?? [];
 
@@ -1849,9 +1859,24 @@ function EtapaRevisao({ payload, resultado, modo, nomesAnuncio, onNomeAnuncio, o
                   <span className="text-xs font-semibold text-brand bg-brand/10 rounded px-2 py-0.5">{it.preco}</span>
                 ) : null}
               </div>
-              {it.titulo && <p className="text-sm font-bold text-zinc-900">{it.titulo}</p>}
               <p className="text-sm text-zinc-700 whitespace-pre-line mt-1">{it.textoPrincipal}</p>
-              {it.descricao && <p className="text-xs text-zinc-500 mt-2 border-t border-zinc-100 pt-2">{it.descricao}</p>}
+              {/* Todas as opções que vão no anúncio — o Meta combina e testa */}
+              {(it.titulos?.length ?? 0) > 0 && (
+                <div className="mt-2 border-t border-zinc-100 pt-2">
+                  <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">Títulos ({it.titulos!.length})</p>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {it.titulos!.map((t, k) => <span key={k} className="text-xs font-semibold text-zinc-800 bg-zinc-100 rounded px-2 py-0.5">{t}</span>)}
+                  </div>
+                </div>
+              )}
+              {(it.descricoes?.length ?? 0) > 0 && (
+                <div className="mt-2">
+                  <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">Descrições ({it.descricoes!.length})</p>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {it.descricoes!.map((d, k) => <span key={k} className="text-xs text-zinc-600 bg-zinc-50 border border-zinc-200 rounded px-2 py-0.5">{d}</span>)}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -2089,6 +2114,7 @@ function NovaCampanhaPage() {
         itens: criativosData.selecionados.map((c) => ({
           nome: c.nome, preco: c.preco, imagemHash: hashes?.get(c.id) ?? null,
           textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
+          titulos: c.titulos, descricoes: c.descricoes,
           nomeAnuncio: nomeDoAnuncio(c.id),
         })),
         copy: {
@@ -2150,9 +2176,11 @@ function NovaCampanhaPage() {
           hashes
             ? { nome: c.nome, preco: c.preco, imagemHash: hashes.get(c.id) ?? null,
                 textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
+                titulos: c.titulos, descricoes: c.descricoes,
                 nomeAnuncio: nomeDoAnuncio(c.id) }
             : { nome: c.nome, preco: c.preco,
                 textoPrincipal: c.textoPrincipal, titulo: c.titulo, descricao: c.descricao,
+                titulos: c.titulos, descricoes: c.descricoes,
                 nomeAnuncio: nomeDoAnuncio(c.id) }),
         copy: {
           textoPrincipal: criativosData.textoPrincipal,
