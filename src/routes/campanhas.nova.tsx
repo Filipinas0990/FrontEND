@@ -20,7 +20,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, publicarAnunciosNoConjunto, getProximoNumeroAnuncio, buscarLocalizacoes,
+  getContasAnuncio, publicarCampanha, getConjuntosDaConta, publicarNovosAnuncios, publicarAnunciosNoConjunto, getProximoNumeroAnuncio, getMetaStatus, buscarLocalizacoes,
   buscarCoordenadas, subirImagemCriativo, listarPaginasDaConta,
   type ContaAnuncio, type PublicarCampanhaResultado, type ConjuntoMeta, type NovosAnunciosResultado, type LocalizacaoMeta,
   type Coordenada, type PaginaMeta,
@@ -1926,6 +1926,32 @@ function EtapaRevisao({ payload, resultado, modo, nomesAnuncio, onNomeAnuncio, o
   );
 }
 
+/**
+ * Com qual Facebook a campanha vai sair: o do gestor (se conectou) ou o acesso
+ * geral da agência. Fica no topo da etapa 1 porque decide também quais contas
+ * aparecem na lista logo abaixo.
+ */
+function AvisoContaFacebook() {
+  const { data: meta } = useQuery({ queryKey: ["meta-status"], queryFn: getMetaStatus, staleTime: 60_000 });
+  if (!meta) return null;
+  if (meta.conectado) {
+    const fim = (meta.dias_restantes ?? 99) <= 7;
+    return (
+      <p className={`mb-5 text-xs rounded-lg px-3 py-2 border ${fim ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-emerald-50 border-emerald-200 text-emerald-900"}`}>
+        Publicando com o seu Facebook: <b>{meta.nome}</b>.
+        {fim && <> A conexão vence em {meta.dias_restantes} dia(s) — <a href="/configuracoes" className="font-semibold underline">reconecte</a>.</>}
+      </p>
+    );
+  }
+  return (
+    <p className="mb-5 text-xs rounded-lg px-3 py-2 border bg-zinc-50 border-zinc-200 text-zinc-700">
+      {meta.expirado ? "Sua conexão com o Facebook expirou. " : ""}
+      Publicando com o <b>acesso geral da agência</b>.{" "}
+      <a href="/configuracoes" className="font-semibold text-brand hover:underline">Conectar o meu Facebook</a>
+    </p>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 // Nome sugerido a partir da conta ("BM02 - Fulano" → "Fulano — Ofertas")
@@ -2297,6 +2323,7 @@ function NovaCampanhaPage() {
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6 md:p-8 mb-6">
         {passo === 1 && (
           <>
+            <AvisoContaFacebook />
             <EtapaCliente
               selecionado={cliente?.id ?? null}
               onSelect={selecionarConta}

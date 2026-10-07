@@ -572,6 +572,38 @@ export function desconectarGoogleCalendar(): Promise<{ mensagem: string }> {
   return req("/api/auth/google", { method: "DELETE" })
 }
 
+// ── Facebook (Meta Ads) do gestor ────────────────────────────────────────────
+// Conectado, o gestor publica e lista contas com o próprio Facebook; sem
+// conexão (ou vencida), o servidor usa o acesso geral da agência.
+
+export interface MetaStatus {
+  configurado: boolean
+  conectado: boolean
+  expirado: boolean
+  nome: string | null
+  expira_em: string | null
+  dias_restantes: number | null
+}
+
+export function getMetaStatus(): Promise<MetaStatus> {
+  return req("/api/auth/meta/status")
+}
+
+export async function iniciarOAuthMeta(): Promise<void> {
+  const res = await req<{ url: string }>("/api/auth/meta/url")
+  if (!res?.url) throw new Error("URL de autenticação não retornada pelo servidor.")
+  window.location.href = res.url
+}
+
+/** Alternativa ao botão: salva um token que o gestor gerou no Facebook (validado no servidor). */
+export function salvarTokenMeta(token: string): Promise<{ nome: string; expira_em: string | null }> {
+  return req("/api/auth/meta/token", { method: "POST", body: JSON.stringify({ token }) })
+}
+
+export function desconectarMeta(): Promise<{ mensagem: string }> {
+  return req("/api/auth/meta", { method: "DELETE" })
+}
+
 // ── Pipeline ───────────────────────────────────────────────────────────────
 
 export interface PipelinePreview {
