@@ -23,6 +23,7 @@ import { Route as HorariosRouteImport } from './routes/horarios'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as NovidadesRouteImport } from './routes/novidades'
 import { Route as OfertasClientesRouteImport } from './routes/ofertas-clientes'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as RankingGestoresRouteImport } from './routes/ranking-gestores'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
@@ -106,6 +107,11 @@ const NovidadesRoute = NovidadesRouteImport.update({
 const OfertasClientesRoute = OfertasClientesRouteImport.update({
   id: '/ofertas-clientes',
   path: '/ofertas-clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RankingRoute = RankingRouteImport.update({
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/novidades': typeof NovidadesRoute
   '/ofertas-clientes': typeof OfertasClientesRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/relatorios': typeof RelatoriosRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
+    | '/privacidade'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
+    | '/privacidade'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -341,6 +352,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/novidades'
     | '/ofertas-clientes'
+    | '/privacidade'
     | '/ranking'
     | '/ranking-gestores'
     | '/relatorios'
@@ -372,6 +384,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   NovidadesRoute: typeof NovidadesRoute
   OfertasClientesRoute: typeof OfertasClientesRoute
+  PrivacidadeRoute: typeof PrivacidadeRoute
   RankingRoute: typeof RankingRoute
   RankingGestoresRoute: typeof RankingGestoresRoute
   RelatoriosRoute: typeof RelatoriosRoute
@@ -479,6 +492,13 @@ declare module '@tanstack/react-router' {
       path: '/ofertas-clientes'
       fullPath: '/ofertas-clientes'
       preLoaderRoute: typeof OfertasClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ranking': {
@@ -639,6 +659,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   NovidadesRoute: NovidadesRoute,
   OfertasClientesRoute: OfertasClientesRoute,
+  PrivacidadeRoute: PrivacidadeRoute,
   RankingRoute: RankingRoute,
   RankingGestoresRoute: RankingGestoresRoute,
   RelatoriosRoute: RelatoriosRoute,
