@@ -1299,12 +1299,20 @@ async function lerCriativosPuxados(): Promise<CriativoWizard[]> {
 // Marcadores aceitos (case-insensitive): {produto}  {preco} / {preço}
 const TOKENS_COPY = ["{produto}", "{preco}"] as const;
 
-const COPY_PADRAO = {
-  textoPrincipal:
-    "🌟 PROMOÇÃO IMPERDÍVEL 🌟\n\n" +
+/**
+ * Textos principais padrão — já vêm os 5 (o máximo do Meta), como os títulos e
+ * as descrições: cada anúncio leva todos e o Meta testa qual funciona melhor.
+ * {produto} e {preco} trocam sozinhos em cada criativo.
+ */
+const TEXTOS_PADRAO = [
+  "🌟 PROMOÇÃO IMPERDÍVEL 🌟\n\n" +
     "🛒 {produto}: R$ {preco}\n\n" +
     "Corra aproveitar, é por tempo limitado! Estoque sujeito à disponibilidade.",
-};
+  "💊 {produto} por apenas R$ {preco}!\n\nPeça agora pelo WhatsApp e receba rapidinho. 📲",
+  "🔥 Oferta da semana: {produto} saindo a R$ {preco}.\n\nGaranta o seu antes que acabe!",
+  "✅ Cuide de você pagando menos: {produto} por R$ {preco}.\n\nChama no WhatsApp! 💬",
+  "⏰ Últimas unidades! {produto} a R$ {preco}.\n\nFale com a gente e reserve o seu.",
+];
 
 // Lista de títulos padrão — cada anúncio recebe TODOS (o Meta testa as combinações).
 /** Teto do Meta para "várias opções de texto": 5 títulos e 5 descrições por anúncio. */
@@ -1368,7 +1376,7 @@ function EtapaCriativos({ onChange, nomeDoAnuncio, onNomeAnuncio }: {
 
   // Copy padrão (modelo). {produto}/{preco} trocam por criativo — automático, sem inputs extras.
   // Textos principais: como títulos e descrições, TODOS vão em cada anúncio (até 5).
-  const [textos, setTextos] = useState<string[]>([COPY_PADRAO.textoPrincipal]);
+  const [textos, setTextos] = useState<string[]>(TEXTOS_PADRAO);
   const [titulos, setTitulos] = useState<string[]>(TITULOS_PADRAO);
   const [descricoes, setDescricoes] = useState<string[]>(DESCRICOES_PADRAO);
 
