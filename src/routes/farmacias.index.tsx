@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings, Phone, MapPin, User, Rocket, Eye, EyeOff, CheckCircle2, Megaphone } from "lucide-react";
+import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings, Phone, MapPin, User, Rocket, CheckCircle2, Megaphone } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -21,7 +21,6 @@ import {
   type Gestor,
 } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
-import { usePipelineContext } from "@/contexts/PipelineContext";
 import {
   Dialog,
   DialogContent,
@@ -84,9 +83,6 @@ interface FarmaciaForm {
   responsavel: string;
   cidade: string;
   tem_chatbot: boolean;
-  url_base: string;
-  email: string;
-  senha: string;
   gestor_id: string;
   meta_receita: string;
   meta_leads_google: string;
@@ -116,9 +112,6 @@ function FarmaciaDialog({
     responsavel: editing?.responsavel ?? "",
     cidade: editing?.cidade ?? "",
     tem_chatbot: editing?.tem_chatbot ?? true,
-    url_base: "",
-    email: "",
-    senha: "",
     gestor_id: editing?.gestor_id ? String(editing.gestor_id) : "",
     meta_receita: editing?.meta_receita != null ? String(editing.meta_receita) : "",
     meta_leads_google: editing?.meta_leads_google != null ? String(editing.meta_leads_google) : "",
@@ -126,8 +119,6 @@ function FarmaciaDialog({
   });
   const [form, setForm] = useState<FarmaciaForm>(emptyForm);
   const [confirmPending, setConfirmPending] = useState<FarmaciaForm | null>(null);
-  const [showSenha, setShowSenha] = useState(false);
-
   useEffect(() => { setForm(emptyForm()); }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (f: keyof FarmaciaForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -185,7 +176,7 @@ function FarmaciaDialog({
             )}
             {form.fase === "entrada" && !editing && (
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 ring-1 ring-amber-200">
-                Cliente ainda sem credenciais da plataforma. Será ativado depois com URL + login.
+                Cliente ainda em implantação. Ative quando começar a ser acompanhado no painel.
               </p>
             )}
 
@@ -243,35 +234,6 @@ function FarmaciaDialog({
                 Tem PharmaChatBot
               </label>
             </div>
-
-            {/* Credenciais — só quando ativo E tem_chatbot */}
-            {form.fase === "ativo" && !editing && form.tem_chatbot && (
-              <div className="space-y-3 pt-2 border-t border-zinc-100">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Credenciais da Plataforma</p>
-                <FormField label="URL Base *">
-                  <input required value={form.url_base} onChange={set("url_base")} className="form-input" placeholder="https://app13.pharmachatbot.com.br/..." />
-                </FormField>
-                <FormField label="E-mail *">
-                  <input required type="email" value={form.email} onChange={set("email")} className="form-input" placeholder="login@farmacia.com" />
-                </FormField>
-                <FormField label="Senha *">
-                  <div className="relative">
-                    <input
-                      required
-                      type={showSenha ? "text" : "password"}
-                      value={form.senha}
-                      onChange={set("senha")}
-                      className="form-input pr-10"
-                      placeholder="••••••••"
-                    />
-                    <button type="button" onClick={() => setShowSenha((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700">
-                      {showSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
-                  </div>
-                </FormField>
-              </div>
-            )}
 
             {/* Metas — só para clientes ativos */}
             {form.fase === "ativo" && (
@@ -353,12 +315,6 @@ function FarmaciaDialog({
               value={confirmPending?.meta_leads_meta ? `${Number(confirmPending.meta_leads_meta)} leads/semana` : "Sem meta"}
               highlight={!!confirmPending?.meta_leads_meta}
             />
-            {!editing && (
-              <>
-                <Row label="URL" value={confirmPending?.url_base ?? "—"} mono />
-                <Row label="E-mail" value={confirmPending?.email ?? "—"} mono />
-              </>
-            )}
           </div>
 
           <AlertDialogFooter>
@@ -433,11 +389,10 @@ function ModalAtivarFarmacia({
   onSaved: () => void;
 }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ url_base: "", email: "", senha: "", gestor_id: "" });
-  const [showSenha, setShowSenha] = useState(false);
+  const [form, setForm] = useState({ gestor_id: "" });
 
   useEffect(() => {
-    if (farmacia) setForm({ url_base: "", email: "", senha: "", gestor_id: farmacia.gestor_id ? String(farmacia.gestor_id) : "" });
+    if (farmacia) setForm({ gestor_id: farmacia.gestor_id ? String(farmacia.gestor_id) : "" });
   }, [farmacia]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -446,9 +401,6 @@ function ModalAtivarFarmacia({
   const mut = useMutation({
     mutationFn: () =>
       ativarFarmacia(farmacia!.id, {
-        url_base: form.url_base || undefined,
-        email: form.email || undefined,
-        senha: form.senha || undefined,
         gestor_id: form.gestor_id ? Number(form.gestor_id) : undefined,
       }),
     onSuccess: () => {
@@ -470,39 +422,6 @@ function ModalAtivarFarmacia({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          <div className="p-3 bg-amber-50 rounded-lg ring-1 ring-amber-200 text-xs text-amber-800">
-            Após a ativação, o cliente entra no próximo ciclo de coleta automaticamente.
-          </div>
-          {farmacia?.tem_chatbot ? (
-            <>
-              <FormField label="URL da Plataforma *">
-                <input required value={form.url_base} onChange={set("url_base")} className="form-input" placeholder="https://app13.pharmachatbot.com.br/..." />
-              </FormField>
-              <FormField label="E-mail da Plataforma *">
-                <input required type="email" value={form.email} onChange={set("email")} className="form-input" placeholder="login@farmacia.com" />
-              </FormField>
-              <FormField label="Senha da Plataforma *">
-                <div className="relative">
-                  <input
-                    required
-                    type={showSenha ? "text" : "password"}
-                    value={form.senha}
-                    onChange={set("senha")}
-                    className="form-input pr-10"
-                    placeholder="••••••••"
-                  />
-                  <button type="button" onClick={() => setShowSenha((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700">
-                    {showSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
-                </div>
-              </FormField>
-            </>
-          ) : (
-            <div className="p-3 bg-zinc-50 rounded-lg ring-1 ring-zinc-200 text-xs text-zinc-600">
-              Este cliente não usa PharmaChatBot. Nenhuma credencial necessária.
-            </div>
-          )}
           <FormField label="Atribuir Gestor">
             <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
               <option value="">Sem gestor</option>
@@ -517,7 +436,7 @@ function ModalAtivarFarmacia({
           <button
             type="button"
             onClick={() => mut.mutate()}
-            disabled={mut.isPending || (farmacia?.tem_chatbot === true && (!form.url_base || !form.email || !form.senha))}
+            disabled={mut.isPending}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60"
           >
             {mut.isPending ? <RefreshCw className="size-3.5 animate-spin" /> : <Rocket className="size-3.5" />}
@@ -536,8 +455,6 @@ function FarmaciasPage() {
   const qc = useQueryClient();
   const admin = isAdmin();
   const { period, setPeriod } = usePeriod();
-  const { ultimoResultado } = usePipelineContext();
-  const pipelineErros = ultimoResultado?.farmaciasComErro ?? [];
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"todas" | "Ativa" | "Atencao" | "Alerta">("todas");
@@ -611,9 +528,6 @@ function FarmaciasPage() {
           responsavel: form.responsavel || undefined,
           cidade: form.cidade || undefined,
           tem_chatbot: form.tem_chatbot,
-          url_base: form.fase === "ativo" && form.tem_chatbot ? form.url_base : undefined,
-          email: form.fase === "ativo" && form.tem_chatbot ? form.email : undefined,
-          senha: form.fase === "ativo" && form.tem_chatbot ? form.senha : undefined,
           gestor_id: gestorId,
         });
         targetId = result.id;
@@ -755,7 +669,6 @@ function FarmaciasPage() {
             const isEntrada = p.fase === "entrada";
             const semDados = !isEntrada && (p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0));
             const naoAtingiuMeta = !isEntrada && !semDados && p.atingiu_meta === false;
-            const errosPipeline = pipelineErros.filter((e) => e.nome === p.nome);
             return (
               <div
                 key={p.id}
@@ -794,20 +707,6 @@ function FarmaciasPage() {
                         ? <p className="text-[10px] text-zinc-400 mt-0.5 italic">Aguardando dados</p>
                         : <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
                     }
-                    {/* Badge de erro do pipeline */}
-                    {!isEntrada && errosPipeline.length > 0 && (
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
-                        {errosPipeline.map((e) => (
-                          <span
-                            key={e.periodo}
-                            title={e.erro}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 cursor-help"
-                          >
-                            ⚠ Sem dados {e.periodo}d
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                   {!isEntrada && (
                     <div className="flex flex-col items-end gap-1 shrink-0">

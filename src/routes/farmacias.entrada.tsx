@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   Search, Plus, Pencil, Trash2, RefreshCw, Phone, MapPin,
-  User, Rocket, Eye, EyeOff, Clock,
+  User, Rocket, Clock,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,11 +39,10 @@ function ModalAtivar({
   onSaved: () => void;
 }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ url_base: "", email: "", senha: "", gestor_id: "" });
-  const [showSenha, setShowSenha] = useState(false);
+  const [form, setForm] = useState({ gestor_id: "" });
 
   useEffect(() => {
-    if (farmacia) setForm({ url_base: "", email: "", senha: "", gestor_id: farmacia.gestor_id ? String(farmacia.gestor_id) : "" });
+    if (farmacia) setForm({ gestor_id: farmacia.gestor_id ? String(farmacia.gestor_id) : "" });
   }, [farmacia]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -52,9 +51,6 @@ function ModalAtivar({
   const mut = useMutation({
     mutationFn: () =>
       ativarFarmacia(farmacia!.id, {
-        url_base: form.url_base || undefined,
-        email: form.email || undefined,
-        senha: form.senha || undefined,
         gestor_id: form.gestor_id ? Number(form.gestor_id) : undefined,
       }),
     onSuccess: () => {
@@ -77,44 +73,6 @@ function ModalAtivar({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          <div className="p-3 bg-amber-50 rounded-lg ring-1 ring-amber-200 text-xs text-amber-800">
-            Após a ativação, o cliente entra no próximo ciclo de coleta automaticamente.
-          </div>
-
-          {farmacia?.tem_chatbot ? (
-            <>
-              <div>
-                <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">URL da Plataforma *</label>
-                <input required value={form.url_base} onChange={set("url_base")} className="mt-1 form-input w-full" placeholder="https://app13.pharmachatbot.com.br/..." />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">E-mail *</label>
-                <input required type="email" value={form.email} onChange={set("email")} className="mt-1 form-input w-full" placeholder="login@farmacia.com" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Senha *</label>
-                <div className="relative mt-1">
-                  <input
-                    required
-                    type={showSenha ? "text" : "password"}
-                    value={form.senha}
-                    onChange={set("senha")}
-                    className="form-input w-full pr-10"
-                    placeholder="••••••••"
-                  />
-                  <button type="button" onClick={() => setShowSenha((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700">
-                    {showSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="p-3 bg-zinc-50 rounded-lg ring-1 ring-zinc-200 text-xs text-zinc-600">
-              Este cliente não usa PharmaChatBot. Nenhuma credencial necessária.
-            </div>
-          )}
-
           <div>
             <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Atribuir Gestor</label>
             <select value={form.gestor_id} onChange={set("gestor_id")} className="mt-1 form-input w-full">
@@ -130,7 +88,7 @@ function ModalAtivar({
           <button
             type="button"
             onClick={() => mut.mutate()}
-            disabled={mut.isPending || (farmacia?.tem_chatbot === true && (!form.url_base || !form.email || !form.senha))}
+            disabled={mut.isPending}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-amber-500 text-white rounded-md hover:opacity-90 disabled:opacity-60"
           >
             {mut.isPending ? <RefreshCw className="size-3.5 animate-spin" /> : <Rocket className="size-3.5" />}
@@ -292,7 +250,7 @@ function ModalNovo({
         </DialogHeader>
         <div className="space-y-3 py-1">
           <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 ring-1 ring-amber-200">
-            Cliente ainda sem credenciais. Será ativado depois com URL + login.
+            Cliente ainda em implantação. Ative quando começar a ser acompanhado no painel.
           </p>
           <div>
             <label className="text-xs font-semibold text-zinc-700 uppercase tracking-wider">Razão social *</label>
@@ -421,7 +379,7 @@ function EntradaPage() {
       <div className="bg-amber-50 rounded-xl ring-1 ring-amber-200 px-4 py-3 flex items-center gap-3">
         <Clock className="size-4 text-amber-500 shrink-0" />
         <p className="text-sm text-amber-800">
-          Clientes cadastrados mas ainda sem credenciais da plataforma.
+          Clientes cadastrados que ainda não são acompanhados no painel.
           Ative-os assim que tiver as informações de acesso.
         </p>
       </div>

@@ -201,36 +201,6 @@ export interface Gestor {
   farmacias: number
 }
 
-export interface Relatorio {
-  id: number
-  label: string
-  periodo_inicio: string
-  periodo_fim: string
-  data_geracao: string
-  farmacias: string
-  status: "Concluido" | "Parcial" | "Erro"
-}
-
-export interface FarmaciaErro {
-  nome:    string
-  periodo: 7 | 15 | 30
-  erro:    string
-}
-
-export interface UltimoResultado {
-  executado_em:      string
-  farmaciasTotais:   number
-  totalSucessos:     number
-  totalErros:        number
-  farmaciasComErro:  FarmaciaErro[]
-}
-
-export interface PipelineStatus {
-  pipeline_rodando:  boolean
-  timestamp:         string
-  ultimo_resultado:  UltimoResultado | null
-}
-
 // ── Auth ───────────────────────────────────────────────────────────────────
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
@@ -325,9 +295,6 @@ export function createFarmacia(data: {
   responsavel?: string
   cidade?: string
   tem_chatbot?: boolean
-  url_base?: string
-  email?: string
-  senha?: string
   gestor_id?: number
 }): Promise<{ id: number; nome: string; fase: string; gestor_id: number | null }> {
   return req("/api/farmacias", { method: "POST", body: JSON.stringify(data) })
@@ -344,9 +311,6 @@ export function updateFarmacia(
     cidade: string | null
     gestor_id: number | null
     ativa: boolean
-    url_base: string
-    email: string
-    senha: string
   }>,
 ): Promise<{ id: number; nome: string; ativa: boolean }> {
   return req(`/api/farmacias/${id}`, { method: "PUT", body: JSON.stringify(data) })
@@ -354,7 +318,7 @@ export function updateFarmacia(
 
 export function ativarFarmacia(
   id: number,
-  data: { url_base?: string; email?: string; senha?: string; gestor_id?: number },
+  data: { gestor_id?: number },
 ): Promise<{ id: number; nome: string; fase: "ativo"; gestor_id: number | null; mensagem: string }> {
   return req(`/api/farmacias/${id}/ativar`, { method: "PATCH", body: JSON.stringify(data) })
 }
@@ -418,42 +382,6 @@ export function updateGestor(
 
 export function deleteGestor(id: number): Promise<{ mensagem: string }> {
   return req(`/api/gestores/${id}`, { method: "DELETE" })
-}
-
-// ── Relatórios ─────────────────────────────────────────────────────────────
-
-export function getRelatorios(): Promise<Relatorio[]> {
-  return req("/api/relatorios")
-}
-
-async function _triggerDownload(url: string, filename: string): Promise<void> {
-  const res = await fetch(url)
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, body.detail ?? "Erro ao baixar relatório")
-  }
-  const blob = await res.blob()
-  const a = document.createElement("a")
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(a.href)
-}
-
-export function downloadRelatorio(periodoInicio: string): Promise<void> {
-  return _triggerDownload(
-    `${BASE_URL}/api/relatorios/${periodoInicio}/xlsx`,
-    `relatorio_${periodoInicio}.xlsx`,
-  )
-}
-
-export function downloadRelatorioCSV(periodoInicio: string): Promise<void> {
-  return _triggerDownload(
-    `${BASE_URL}/api/relatorios/${periodoInicio}/csv`,
-    `relatorio_${periodoInicio}.csv`,
-  )
 }
 
 // ── Reuniões ───────────────────────────────────────────────────────────────
@@ -602,40 +530,6 @@ export function salvarTokenMeta(token: string): Promise<{ nome: string; expira_e
 
 export function desconectarMeta(): Promise<{ mensagem: string }> {
   return req("/api/auth/meta", { method: "DELETE" })
-}
-
-// ── Pipeline ───────────────────────────────────────────────────────────────
-
-export interface PipelinePreview {
-  farmaciasTotais: number
-  nomes: string[]
-  periodos: number[]
-  estimativa_segundos?: number
-}
-
-export function getStatus(): Promise<PipelineStatus> {
-  return fetch(`${BASE_URL}/api/status`).then((r) => r.json())
-}
-
-export function getPreviewPipeline(
-  periodos?: number[],
-  gestor_id?: number,
-): Promise<PipelinePreview> {
-  const params = new URLSearchParams()
-  if (periodos?.length) params.set("periodos", periodos.join(","))
-  if (gestor_id != null) params.set("gestor_id", String(gestor_id))
-  const qs = params.toString()
-  return req(`/api/rodar-agora/preview${qs ? `?${qs}` : ""}`)
-}
-
-export function rodarAgora(opts?: {
-  periodos?: number[]
-  gestor_id?: number
-}): Promise<{ status: string; mensagem: string }> {
-  return req("/api/rodar-agora", {
-    method: "POST",
-    ...(opts ? { body: JSON.stringify(opts) } : {}),
-  })
 }
 
 // ── Agenda / Conflitos ─────────────────────────────────────────────────────

@@ -407,7 +407,7 @@ function FarmaciaDetailPage() {
               />
             )}
             <p className="text-[10px] text-zinc-400 pt-2 border-t border-zinc-100">
-              ⚠️ Os dados são da última coleta da semana. A meta é avaliada ao rodar a automação.
+              ⚠️ Os dados são da última coleta registrada no período.
             </p>
           </div>
         </section>

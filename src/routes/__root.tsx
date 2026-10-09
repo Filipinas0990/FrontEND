@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { PeriodProvider } from "@/contexts/PeriodContext";
-import { PipelineProvider } from "@/contexts/PipelineContext";
 
 function NotFoundComponent() {
   return (
@@ -77,10 +76,8 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <PeriodProvider>
-        <PipelineProvider>
-          <Outlet />
-          <Toaster richColors position="top-right" />
-        </PipelineProvider>
+        <Outlet />
+        <Toaster richColors position="top-right" />
       </PeriodProvider>
     </QueryClientProvider>
   );
