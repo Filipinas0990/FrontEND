@@ -4,6 +4,7 @@ import { Eye, EyeOff, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { login } from "@/lib/api";
 import { saveAuth } from "@/lib/auth";
+import loginBg from "@/assets/login-bg.png";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -42,24 +43,10 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-neutral-50 to-sky-50 p-6 font-sans relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {["💊", "🧪", "💉", "🩺", "💊", "🧬", "💊"].map((e, i) => (
-          <div
-            key={i}
-            className="absolute text-4xl opacity-20 animate-bounce"
-            style={{
-              left: `${(i * 13 + 5) % 95}%`,
-              top: `${(i * 23 + 10) % 80}%`,
-              animationDelay: `${i * 0.3}s`,
-              animationDuration: `${3 + (i % 3)}s`,
-            }}
-          >
-            {e}
-          </div>
-        ))}
-      </div>
-
+    <div
+      className="min-h-screen flex items-center justify-center p-6 font-sans relative overflow-hidden bg-cover bg-center"
+      style={{ backgroundImage: `url(${loginBg})` }}
+    >
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl ring-1 ring-black/5 p-8 relative z-10">
         <div className="flex justify-center mb-6">
           <div className="size-14 bg-brand rounded-2xl grid place-items-center text-white text-2xl rotate-3 hover:rotate-0 transition-transform">
