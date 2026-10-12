@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ReunioesRouteImport } from './routes/reunioes'
 import { Route as RankingGestoresRouteImport } from './routes/ranking-gestores'
 import { Route as RankingRouteImport } from './routes/ranking'
@@ -38,11 +37,6 @@ import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
 import { Route as CampanhasNovaRouteImport } from './routes/campanhas.nova'
 import { Route as AcoesIdRouteImport } from './routes/acoes.$id'
 
-const SetupRoute = SetupRouteImport.update({
-  id: '/setup',
-  path: '/setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReunioesRoute = ReunioesRouteImport.update({
   id: '/reunioes',
   path: '/reunioes',
@@ -198,7 +192,6 @@ export interface FileRoutesByFullPath {
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/reunioes': typeof ReunioesRouteWithChildren
-  '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
@@ -225,7 +218,6 @@ export interface FileRoutesByTo {
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
-  '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
@@ -256,7 +248,6 @@ export interface FileRoutesById {
   '/ranking': typeof RankingRoute
   '/ranking-gestores': typeof RankingGestoresRoute
   '/reunioes': typeof ReunioesRouteWithChildren
-  '/setup': typeof SetupRoute
   '/acoes/$id': typeof AcoesIdRoute
   '/campanhas/nova': typeof CampanhasNovaRoute
   '/farmacias/$id': typeof FarmaciasIdRoute
@@ -288,7 +279,6 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/ranking-gestores'
     | '/reunioes'
-    | '/setup'
     | '/acoes/$id'
     | '/campanhas/nova'
     | '/farmacias/$id'
@@ -315,7 +305,6 @@ export interface FileRouteTypes {
     | '/privacidade'
     | '/ranking'
     | '/ranking-gestores'
-    | '/setup'
     | '/acoes/$id'
     | '/campanhas/nova'
     | '/farmacias/$id'
@@ -345,7 +334,6 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/ranking-gestores'
     | '/reunioes'
-    | '/setup'
     | '/acoes/$id'
     | '/campanhas/nova'
     | '/farmacias/$id'
@@ -376,20 +364,12 @@ export interface RootRouteChildren {
   RankingRoute: typeof RankingRoute
   RankingGestoresRoute: typeof RankingGestoresRoute
   ReunioesRoute: typeof ReunioesRouteWithChildren
-  SetupRoute: typeof SetupRoute
   CampanhasNovaRoute: typeof CampanhasNovaRoute
   OfertasTokenRoute: typeof OfertasTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/setup': {
-      id: '/setup'
-      path: '/setup'
-      fullPath: '/setup'
-      preLoaderRoute: typeof SetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/reunioes': {
       id: '/reunioes'
       path: '/reunioes'
@@ -643,7 +623,6 @@ const rootRouteChildren: RootRouteChildren = {
   RankingRoute: RankingRoute,
   RankingGestoresRoute: RankingGestoresRoute,
   ReunioesRoute: ReunioesRouteWithChildren,
-  SetupRoute: SetupRoute,
   CampanhasNovaRoute: CampanhasNovaRoute,
   OfertasTokenRoute: OfertasTokenRoute,
 }

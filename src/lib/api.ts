@@ -232,24 +232,6 @@ export function getMe(): Promise<AuthUser> {
   return req("/api/auth/me")
 }
 
-export async function criarSuperAdmin(data: {
-  nome: string
-  email: string
-  senha: string
-  admin_secret: string
-}): Promise<AuthUser> {
-  const res = await fetch(`${BASE_URL}/api/auth/criar-super-admin`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) {
-    const b = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, b.detail ?? "Erro ao criar admin")
-  }
-  return res.json()
-}
-
 // ── Painel ─────────────────────────────────────────────────────────────────
 
 export function getPainel(gestorId?: number, dias?: 7 | 15 | 30): Promise<PainelData> {

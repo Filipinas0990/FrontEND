@@ -104,8 +104,7 @@ function LoginPage() {
             {loading ? "Entrando..." : "Mergulhar no fundo 🤿"}
           </button>
 
-          <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-2">
-            <a href="/setup" className="hover:text-brand">Primeiro acesso?</a>
+          <div className="flex items-center justify-end text-[11px] text-zinc-500 pt-2">
             <span>v2.0 — feito com 💊</span>
           </div>
         </form>
