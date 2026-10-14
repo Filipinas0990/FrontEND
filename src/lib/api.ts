@@ -1565,7 +1565,7 @@ export function getMeusGrupos(instance?: string, refresh = false): Promise<Lista
   return req(`/api/disparos/grupos${q ? `?${q}` : ""}`)
 }
 
-/** Farmácia que já recebeu disparo num grupo — o "dono" daquele grupo. */
+/** Farmácia com campanha ainda rodando num grupo — o "dono" daquele grupo agora. */
 export interface DonoDeGrupo {
   jid: string
   farmacia_id: number
@@ -1574,7 +1574,8 @@ export interface DonoDeGrupo {
 }
 
 /**
- * A quem cada grupo já pertenceu, pelo histórico de disparos do gestor.
+ * Quem está com campanha rodando em cada grupo (agendada ou enviando, término
+ * não vencido). Campanha encerrada libera o grupo.
  *
  * Existe por causa do incidente de 29/08: farmácia sem nome de fachada não
  * casa por nome com o grupo dela, a lista abre inteira e dá para marcar o

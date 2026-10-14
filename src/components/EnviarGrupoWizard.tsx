@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   conectarMeuWhatsapp, getMeuWhatsappStatus, getMeusGrupos, criarDisparo,
   getConexoesDisparo, getHorariosDisparo, type HorarioDisparo,
-  getCarteiraOfertas, catalogoImagemUrl,
+  getCarteiraOfertas, catalogoImagemUrl, getDonosDeGrupos, type DonoDeGrupo,
   type GrupoWhatsApp, type RepetirDisparo, type InstanciaStatus,
   type ClienteCarteira, type MidiaDisparo, type ConexaoDisparo,
 } from "@/lib/api";
@@ -173,6 +173,12 @@ export function EnviarGrupoWizard({
   const [enviando, setEnviando] = useState(false);
 
   // Conexões disponíveis para o disparo (a do gestor + as globais) e a escolhida.
+  // Grupo escolhido com campanha de OUTRO cliente rodando agora. A API recusa
+  // (409) sem a ciência do gestor — antes o wizard nem perguntava, e o gestor
+  // ficava sem saída. Mesma trava do modal de agendamento (routes/grupos.tsx).
+  const [donos, setDonos] = useState<DonoDeGrupo[]>([]);
+  const [cienteEstranhos, setCienteEstranhos] = useState(false);
+
   const [conexoes, setConexoes] = useState<ConexaoDisparo[]>([]);
   const [conexaoSel, setConexaoSel] = useState<string | null>(null);
   const [carregandoConexoes, setCarregandoConexoes] = useState(true);
@@ -530,6 +536,7 @@ export function EnviarGrupoWizard({
         // quando o gestor está montando de novo em cima dela.
         solicitacao_id: clienteSel?.solicitacao?.id ?? clienteSel?.ultima_solicitacao?.id ?? null,
         instance: conexaoSel,
+        confirmar_grupo_de_outro_cliente: cienteEstranhos,
       });
 
       toast.success(
@@ -544,6 +551,33 @@ export function EnviarGrupoWizard({
       setEnviando(false);
     }
   }
+
+  // Consulta na Revisão, com os grupos já fechados: é ali que o gestor confirma.
+  useEffect(() => {
+    if (etapa !== 6) return;
+    const jids = [...selecionados].sort();
+    setCienteEstranhos(false);
+    if (jids.length === 0) { setDonos([]); return; }
+    let vivo = true;
+    getDonosDeGrupos(jids)
+      .then((d) => { if (vivo) setDonos(d); })
+      .catch(() => { if (vivo) setDonos([]); });   // a API ainda trava, se for o caso
+    return () => { vivo = false; };
+  }, [etapa, selecionados]);
+
+  const estranhos = useMemo(() => {
+    const porJid = new Map<string, Set<string>>();
+    for (const d of donos) {
+      if (d.farmacia_id === clienteSel?.farmacia_id) continue;   // é do próprio cliente
+      if (!porJid.has(d.jid)) porJid.set(d.jid, new Set());
+      porJid.get(d.jid)!.add(d.farmacia);
+    }
+    return grupos
+      .filter((g) => selecionados.has(g.jid) && porJid.has(g.jid))
+      .map((g) => ({ jid: g.jid, nome: g.nome, donos: [...porJid.get(g.jid)!] }));
+  }, [donos, grupos, selecionados, clienteSel?.farmacia_id]);
+
+  const bloqueadoEstranhos = estranhos.length > 0 && !cienteEstranhos;
 
   // ── Horários pré-definidos (mesma mecânica do disparo normal) ───────────────
 
@@ -1423,6 +1457,38 @@ export function EnviarGrupoWizard({
                     ))}
                   </div>
                 </div>
+
+                {estranhos.length > 0 && (
+                  <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3">
+                    <p className="text-sm font-bold text-red-800 flex items-center gap-1.5">
+                      <AlertCircle className="size-4 shrink-0" />
+                      Grupo com campanha de outro cliente rodando
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {estranhos.map((e) => (
+                        <li key={e.jid} className="text-sm text-red-800">
+                          <span className="font-medium">{e.nome}</span>
+                          <span className="block text-[12px] text-red-700">
+                            tem campanha ativa de {e.donos.join(", ")} — e agora vai
+                            receber também a oferta deste cliente.
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <label className="mt-3 flex items-start gap-2 text-[12px] text-red-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={cienteEstranhos}
+                        onChange={(e) => setCienteEstranhos(e.target.checked)}
+                        className="mt-0.5 size-4 accent-red-600 shrink-0"
+                      />
+                      <span>
+                        Confirmo que é para postar mesmo assim. Se foi engano, volte ao
+                        passo dos grupos e troque.
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-2">
@@ -1474,7 +1540,8 @@ export function EnviarGrupoWizard({
 
           <button
             onClick={avancar}
-            disabled={enviando || (etapa === 6 && (gerando || midias.length === 0))}
+            disabled={enviando || (etapa === 6 && (gerando || midias.length === 0 || bloqueadoEstranhos))}
+            title={etapa === 6 && bloqueadoEstranhos ? "Confirme a ciência sobre o grupo de outro cliente" : undefined}
             className="bg-brand hover:bg-brand/90 disabled:opacity-60 text-white font-semibold px-5 py-2 rounded-lg flex items-center gap-2 transition shadow-sm"
           >
             {enviando ? (

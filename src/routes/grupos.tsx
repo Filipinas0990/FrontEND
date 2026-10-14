@@ -2217,8 +2217,8 @@ function ModalAgendamento({
             </p>
           </div>
 
-          {/* Grupo que já foi de outro cliente. Não é palpite de nome: é o
-              histórico de disparos deste gestor. */}
+          {/* Grupo com campanha de outro cliente ainda rodando. Encerrada não
+              conta (ver DisparoRepository.donosDeGrupos). */}
           {estranhos.length > 0 && (
             <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3">
               <p className="text-sm font-bold text-red-800 flex items-center gap-1.5">
@@ -2230,7 +2230,7 @@ function ModalAgendamento({
                   <li key={e.nome} className="text-sm text-red-800">
                     <span className="font-medium">{e.nome}</span>
                     <span className="block text-[12px] text-red-700">
-                      já recebeu disparo de {e.donos.join(", ")} — e agora vai
+                      tem campanha rodando de {e.donos.join(", ")} — e agora vai
                       receber uma oferta de {nomeVisivel(farmacia)}.
                     </span>
                   </li>
