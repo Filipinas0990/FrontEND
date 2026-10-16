@@ -9,112 +9,39 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ReunioesRouteImport } from './routes/reunioes'
-import { Route as RankingGestoresRouteImport } from './routes/ranking-gestores'
-import { Route as RankingRouteImport } from './routes/ranking'
-import { Route as PrivacidadeRouteImport } from './routes/privacidade'
-import { Route as OfertasClientesRouteImport } from './routes/ofertas-clientes'
-import { Route as NovidadesRouteImport } from './routes/novidades'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as HorariosRouteImport } from './routes/horarios'
-import { Route as GruposRouteImport } from './routes/grupos'
-import { Route as GestoresRouteImport } from './routes/gestores'
-import { Route as FarmaciasRouteImport } from './routes/farmacias'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as ConexoesRouteImport } from './routes/conexoes'
-import { Route as CategoriasRouteImport } from './routes/categorias'
-import { Route as BancoImagensRouteImport } from './routes/banco-imagens'
-import { Route as AnunciosRouteImport } from './routes/anuncios'
-import { Route as AcoesRouteImport } from './routes/acoes'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ReunioesIndexRouteImport } from './routes/reunioes.index'
-import { Route as FarmaciasIndexRouteImport } from './routes/farmacias.index'
+import { Route as AcoesRouteImport } from './routes/acoes'
+import { Route as AnunciosRouteImport } from './routes/anuncios'
+import { Route as BancoImagensRouteImport } from './routes/banco-imagens'
+import { Route as CategoriasRouteImport } from './routes/categorias'
+import { Route as ConexoesRouteImport } from './routes/conexoes'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as FarmaciasRouteImport } from './routes/farmacias'
+import { Route as GestoresRouteImport } from './routes/gestores'
+import { Route as GruposRouteImport } from './routes/grupos'
+import { Route as HorariosRouteImport } from './routes/horarios'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as NovidadesRouteImport } from './routes/novidades'
+import { Route as OfertasClientesRouteImport } from './routes/ofertas-clientes'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as RankingGestoresRouteImport } from './routes/ranking-gestores'
+import { Route as ReunioesRouteImport } from './routes/reunioes'
 import { Route as AcoesIndexRouteImport } from './routes/acoes.index'
-import { Route as ReunioesGerenciadorRouteImport } from './routes/reunioes.gerenciador'
-import { Route as OfertasTokenRouteImport } from './routes/ofertas.$token'
-import { Route as FarmaciasEntradaRouteImport } from './routes/farmacias.entrada'
-import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
-import { Route as CampanhasNovaRouteImport } from './routes/campanhas.nova'
 import { Route as AcoesIdRouteImport } from './routes/acoes.$id'
+import { Route as BancoImagensIndexRouteImport } from './routes/banco-imagens.index'
+import { Route as CampanhasNovaRouteImport } from './routes/campanhas.nova'
+import { Route as FarmaciasIndexRouteImport } from './routes/farmacias.index'
+import { Route as FarmaciasIdRouteImport } from './routes/farmacias.$id'
+import { Route as FarmaciasEntradaRouteImport } from './routes/farmacias.entrada'
+import { Route as OfertasTokenRouteImport } from './routes/ofertas.$token'
+import { Route as ReunioesIndexRouteImport } from './routes/reunioes.index'
+import { Route as ReunioesGerenciadorRouteImport } from './routes/reunioes.gerenciador'
+import { Route as BancoImagensEditarIdRouteImport } from './routes/banco-imagens.editar.$id'
 
-const ReunioesRoute = ReunioesRouteImport.update({
-  id: '/reunioes',
-  path: '/reunioes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RankingGestoresRoute = RankingGestoresRouteImport.update({
-  id: '/ranking-gestores',
-  path: '/ranking-gestores',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RankingRoute = RankingRouteImport.update({
-  id: '/ranking',
-  path: '/ranking',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacidadeRoute = PrivacidadeRouteImport.update({
-  id: '/privacidade',
-  path: '/privacidade',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OfertasClientesRoute = OfertasClientesRouteImport.update({
-  id: '/ofertas-clientes',
-  path: '/ofertas-clientes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NovidadesRoute = NovidadesRouteImport.update({
-  id: '/novidades',
-  path: '/novidades',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HorariosRoute = HorariosRouteImport.update({
-  id: '/horarios',
-  path: '/horarios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GruposRoute = GruposRouteImport.update({
-  id: '/grupos',
-  path: '/grupos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GestoresRoute = GestoresRouteImport.update({
-  id: '/gestores',
-  path: '/gestores',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FarmaciasRoute = FarmaciasRouteImport.update({
-  id: '/farmacias',
-  path: '/farmacias',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConexoesRoute = ConexoesRouteImport.update({
-  id: '/conexoes',
-  path: '/conexoes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CategoriasRoute = CategoriasRouteImport.update({
-  id: '/categorias',
-  path: '/categorias',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BancoImagensRoute = BancoImagensRouteImport.update({
-  id: '/banco-imagens',
-  path: '/banco-imagens',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AnunciosRoute = AnunciosRouteImport.update({
-  id: '/anuncios',
-  path: '/anuncios',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcoesRoute = AcoesRouteImport.update({
@@ -122,39 +49,109 @@ const AcoesRoute = AcoesRouteImport.update({
   path: '/acoes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AnunciosRoute = AnunciosRouteImport.update({
+  id: '/anuncios',
+  path: '/anuncios',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReunioesIndexRoute = ReunioesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ReunioesRoute,
+const BancoImagensRoute = BancoImagensRouteImport.update({
+  id: '/banco-imagens',
+  path: '/banco-imagens',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const FarmaciasIndexRoute = FarmaciasIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => FarmaciasRoute,
+const CategoriasRoute = CategoriasRouteImport.update({
+  id: '/categorias',
+  path: '/categorias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConexoesRoute = ConexoesRouteImport.update({
+  id: '/conexoes',
+  path: '/conexoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FarmaciasRoute = FarmaciasRouteImport.update({
+  id: '/farmacias',
+  path: '/farmacias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestoresRoute = GestoresRouteImport.update({
+  id: '/gestores',
+  path: '/gestores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GruposRoute = GruposRouteImport.update({
+  id: '/grupos',
+  path: '/grupos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HorariosRoute = HorariosRouteImport.update({
+  id: '/horarios',
+  path: '/horarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NovidadesRoute = NovidadesRouteImport.update({
+  id: '/novidades',
+  path: '/novidades',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OfertasClientesRoute = OfertasClientesRouteImport.update({
+  id: '/ofertas-clientes',
+  path: '/ofertas-clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RankingRoute = RankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RankingGestoresRoute = RankingGestoresRouteImport.update({
+  id: '/ranking-gestores',
+  path: '/ranking-gestores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReunioesRoute = ReunioesRouteImport.update({
+  id: '/reunioes',
+  path: '/reunioes',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AcoesIndexRoute = AcoesIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AcoesRoute,
 } as any)
-const ReunioesGerenciadorRoute = ReunioesGerenciadorRouteImport.update({
-  id: '/gerenciador',
-  path: '/gerenciador',
-  getParentRoute: () => ReunioesRoute,
+const AcoesIdRoute = AcoesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AcoesRoute,
 } as any)
-const OfertasTokenRoute = OfertasTokenRouteImport.update({
-  id: '/ofertas/$token',
-  path: '/ofertas/$token',
+const BancoImagensIndexRoute = BancoImagensIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BancoImagensRoute,
+} as any)
+const CampanhasNovaRoute = CampanhasNovaRouteImport.update({
+  id: '/campanhas/nova',
+  path: '/campanhas/nova',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FarmaciasEntradaRoute = FarmaciasEntradaRouteImport.update({
-  id: '/entrada',
-  path: '/entrada',
+const FarmaciasIndexRoute = FarmaciasIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => FarmaciasRoute,
 } as any)
 const FarmaciasIdRoute = FarmaciasIdRouteImport.update({
@@ -162,22 +159,37 @@ const FarmaciasIdRoute = FarmaciasIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => FarmaciasRoute,
 } as any)
-const CampanhasNovaRoute = CampanhasNovaRouteImport.update({
-  id: '/campanhas/nova',
-  path: '/campanhas/nova',
+const FarmaciasEntradaRoute = FarmaciasEntradaRouteImport.update({
+  id: '/entrada',
+  path: '/entrada',
+  getParentRoute: () => FarmaciasRoute,
+} as any)
+const OfertasTokenRoute = OfertasTokenRouteImport.update({
+  id: '/ofertas/$token',
+  path: '/ofertas/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AcoesIdRoute = AcoesIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AcoesRoute,
+const ReunioesIndexRoute = ReunioesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ReunioesRoute,
+} as any)
+const ReunioesGerenciadorRoute = ReunioesGerenciadorRouteImport.update({
+  id: '/gerenciador',
+  path: '/gerenciador',
+  getParentRoute: () => ReunioesRoute,
+} as any)
+const BancoImagensEditarIdRoute = BancoImagensEditarIdRouteImport.update({
+  id: '/editar/$id',
+  path: '/editar/$id',
+  getParentRoute: () => BancoImagensRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acoes': typeof AcoesRouteWithChildren
   '/anuncios': typeof AnunciosRoute
-  '/banco-imagens': typeof BancoImagensRoute
+  '/banco-imagens': typeof BancoImagensRouteWithChildren
   '/categorias': typeof CategoriasRoute
   '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
@@ -199,13 +211,14 @@ export interface FileRoutesByFullPath {
   '/ofertas/$token': typeof OfertasTokenRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes/': typeof AcoesIndexRoute
+  '/banco-imagens/': typeof BancoImagensIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
   '/reunioes/': typeof ReunioesIndexRoute
+  '/banco-imagens/editar/$id': typeof BancoImagensEditarIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anuncios': typeof AnunciosRoute
-  '/banco-imagens': typeof BancoImagensRoute
   '/categorias': typeof CategoriasRoute
   '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
@@ -225,15 +238,17 @@ export interface FileRoutesByTo {
   '/ofertas/$token': typeof OfertasTokenRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes': typeof AcoesIndexRoute
+  '/banco-imagens': typeof BancoImagensIndexRoute
   '/farmacias': typeof FarmaciasIndexRoute
   '/reunioes': typeof ReunioesIndexRoute
+  '/banco-imagens/editar/$id': typeof BancoImagensEditarIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/acoes': typeof AcoesRouteWithChildren
   '/anuncios': typeof AnunciosRoute
-  '/banco-imagens': typeof BancoImagensRoute
+  '/banco-imagens': typeof BancoImagensRouteWithChildren
   '/categorias': typeof CategoriasRoute
   '/conexoes': typeof ConexoesRoute
   '/configuracoes': typeof ConfiguracoesRoute
@@ -255,8 +270,10 @@ export interface FileRoutesById {
   '/ofertas/$token': typeof OfertasTokenRoute
   '/reunioes/gerenciador': typeof ReunioesGerenciadorRoute
   '/acoes/': typeof AcoesIndexRoute
+  '/banco-imagens/': typeof BancoImagensIndexRoute
   '/farmacias/': typeof FarmaciasIndexRoute
   '/reunioes/': typeof ReunioesIndexRoute
+  '/banco-imagens/editar/$id': typeof BancoImagensEditarIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -286,13 +303,14 @@ export interface FileRouteTypes {
     | '/ofertas/$token'
     | '/reunioes/gerenciador'
     | '/acoes/'
+    | '/banco-imagens/'
     | '/farmacias/'
     | '/reunioes/'
+    | '/banco-imagens/editar/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/anuncios'
-    | '/banco-imagens'
     | '/categorias'
     | '/conexoes'
     | '/configuracoes'
@@ -312,8 +330,10 @@ export interface FileRouteTypes {
     | '/ofertas/$token'
     | '/reunioes/gerenciador'
     | '/acoes'
+    | '/banco-imagens'
     | '/farmacias'
     | '/reunioes'
+    | '/banco-imagens/editar/$id'
   id:
     | '__root__'
     | '/'
@@ -341,15 +361,17 @@ export interface FileRouteTypes {
     | '/ofertas/$token'
     | '/reunioes/gerenciador'
     | '/acoes/'
+    | '/banco-imagens/'
     | '/farmacias/'
     | '/reunioes/'
+    | '/banco-imagens/editar/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcoesRoute: typeof AcoesRouteWithChildren
   AnunciosRoute: typeof AnunciosRoute
-  BancoImagensRoute: typeof BancoImagensRoute
+  BancoImagensRoute: typeof BancoImagensRouteWithChildren
   CategoriasRoute: typeof CategoriasRoute
   ConexoesRoute: typeof ConexoesRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
@@ -370,116 +392,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/reunioes': {
-      id: '/reunioes'
-      path: '/reunioes'
-      fullPath: '/reunioes'
-      preLoaderRoute: typeof ReunioesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ranking-gestores': {
-      id: '/ranking-gestores'
-      path: '/ranking-gestores'
-      fullPath: '/ranking-gestores'
-      preLoaderRoute: typeof RankingGestoresRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ranking': {
-      id: '/ranking'
-      path: '/ranking'
-      fullPath: '/ranking'
-      preLoaderRoute: typeof RankingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacidade': {
-      id: '/privacidade'
-      path: '/privacidade'
-      fullPath: '/privacidade'
-      preLoaderRoute: typeof PrivacidadeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ofertas-clientes': {
-      id: '/ofertas-clientes'
-      path: '/ofertas-clientes'
-      fullPath: '/ofertas-clientes'
-      preLoaderRoute: typeof OfertasClientesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/novidades': {
-      id: '/novidades'
-      path: '/novidades'
-      fullPath: '/novidades'
-      preLoaderRoute: typeof NovidadesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/horarios': {
-      id: '/horarios'
-      path: '/horarios'
-      fullPath: '/horarios'
-      preLoaderRoute: typeof HorariosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/grupos': {
-      id: '/grupos'
-      path: '/grupos'
-      fullPath: '/grupos'
-      preLoaderRoute: typeof GruposRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gestores': {
-      id: '/gestores'
-      path: '/gestores'
-      fullPath: '/gestores'
-      preLoaderRoute: typeof GestoresRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/farmacias': {
-      id: '/farmacias'
-      path: '/farmacias'
-      fullPath: '/farmacias'
-      preLoaderRoute: typeof FarmaciasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracoes': {
-      id: '/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/conexoes': {
-      id: '/conexoes'
-      path: '/conexoes'
-      fullPath: '/conexoes'
-      preLoaderRoute: typeof ConexoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/categorias': {
-      id: '/categorias'
-      path: '/categorias'
-      fullPath: '/categorias'
-      preLoaderRoute: typeof CategoriasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/banco-imagens': {
-      id: '/banco-imagens'
-      path: '/banco-imagens'
-      fullPath: '/banco-imagens'
-      preLoaderRoute: typeof BancoImagensRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/anuncios': {
-      id: '/anuncios'
-      path: '/anuncios'
-      fullPath: '/anuncios'
-      preLoaderRoute: typeof AnunciosRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/acoes': {
@@ -489,26 +406,117 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcoesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/anuncios': {
+      id: '/anuncios'
+      path: '/anuncios'
+      fullPath: '/anuncios'
+      preLoaderRoute: typeof AnunciosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reunioes/': {
-      id: '/reunioes/'
-      path: '/'
-      fullPath: '/reunioes/'
-      preLoaderRoute: typeof ReunioesIndexRouteImport
-      parentRoute: typeof ReunioesRoute
+    '/banco-imagens': {
+      id: '/banco-imagens'
+      path: '/banco-imagens'
+      fullPath: '/banco-imagens'
+      preLoaderRoute: typeof BancoImagensRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/farmacias/': {
-      id: '/farmacias/'
-      path: '/'
-      fullPath: '/farmacias/'
-      preLoaderRoute: typeof FarmaciasIndexRouteImport
-      parentRoute: typeof FarmaciasRoute
+    '/categorias': {
+      id: '/categorias'
+      path: '/categorias'
+      fullPath: '/categorias'
+      preLoaderRoute: typeof CategoriasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conexoes': {
+      id: '/conexoes'
+      path: '/conexoes'
+      fullPath: '/conexoes'
+      preLoaderRoute: typeof ConexoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/farmacias': {
+      id: '/farmacias'
+      path: '/farmacias'
+      fullPath: '/farmacias'
+      preLoaderRoute: typeof FarmaciasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestores': {
+      id: '/gestores'
+      path: '/gestores'
+      fullPath: '/gestores'
+      preLoaderRoute: typeof GestoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/grupos': {
+      id: '/grupos'
+      path: '/grupos'
+      fullPath: '/grupos'
+      preLoaderRoute: typeof GruposRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/horarios': {
+      id: '/horarios'
+      path: '/horarios'
+      fullPath: '/horarios'
+      preLoaderRoute: typeof HorariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/novidades': {
+      id: '/novidades'
+      path: '/novidades'
+      fullPath: '/novidades'
+      preLoaderRoute: typeof NovidadesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ofertas-clientes': {
+      id: '/ofertas-clientes'
+      path: '/ofertas-clientes'
+      fullPath: '/ofertas-clientes'
+      preLoaderRoute: typeof OfertasClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ranking': {
+      id: '/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof RankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ranking-gestores': {
+      id: '/ranking-gestores'
+      path: '/ranking-gestores'
+      fullPath: '/ranking-gestores'
+      preLoaderRoute: typeof RankingGestoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reunioes': {
+      id: '/reunioes'
+      path: '/reunioes'
+      fullPath: '/reunioes'
+      preLoaderRoute: typeof ReunioesRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/acoes/': {
       id: '/acoes/'
@@ -517,25 +525,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcoesIndexRouteImport
       parentRoute: typeof AcoesRoute
     }
-    '/reunioes/gerenciador': {
-      id: '/reunioes/gerenciador'
-      path: '/gerenciador'
-      fullPath: '/reunioes/gerenciador'
-      preLoaderRoute: typeof ReunioesGerenciadorRouteImport
-      parentRoute: typeof ReunioesRoute
+    '/acoes/$id': {
+      id: '/acoes/$id'
+      path: '/$id'
+      fullPath: '/acoes/$id'
+      preLoaderRoute: typeof AcoesIdRouteImport
+      parentRoute: typeof AcoesRoute
     }
-    '/ofertas/$token': {
-      id: '/ofertas/$token'
-      path: '/ofertas/$token'
-      fullPath: '/ofertas/$token'
-      preLoaderRoute: typeof OfertasTokenRouteImport
+    '/banco-imagens/': {
+      id: '/banco-imagens/'
+      path: '/'
+      fullPath: '/banco-imagens/'
+      preLoaderRoute: typeof BancoImagensIndexRouteImport
+      parentRoute: typeof BancoImagensRoute
+    }
+    '/campanhas/nova': {
+      id: '/campanhas/nova'
+      path: '/campanhas/nova'
+      fullPath: '/campanhas/nova'
+      preLoaderRoute: typeof CampanhasNovaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/farmacias/entrada': {
-      id: '/farmacias/entrada'
-      path: '/entrada'
-      fullPath: '/farmacias/entrada'
-      preLoaderRoute: typeof FarmaciasEntradaRouteImport
+    '/farmacias/': {
+      id: '/farmacias/'
+      path: '/'
+      fullPath: '/farmacias/'
+      preLoaderRoute: typeof FarmaciasIndexRouteImport
       parentRoute: typeof FarmaciasRoute
     }
     '/farmacias/$id': {
@@ -545,19 +560,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FarmaciasIdRouteImport
       parentRoute: typeof FarmaciasRoute
     }
-    '/campanhas/nova': {
-      id: '/campanhas/nova'
-      path: '/campanhas/nova'
-      fullPath: '/campanhas/nova'
-      preLoaderRoute: typeof CampanhasNovaRouteImport
+    '/farmacias/entrada': {
+      id: '/farmacias/entrada'
+      path: '/entrada'
+      fullPath: '/farmacias/entrada'
+      preLoaderRoute: typeof FarmaciasEntradaRouteImport
+      parentRoute: typeof FarmaciasRoute
+    }
+    '/ofertas/$token': {
+      id: '/ofertas/$token'
+      path: '/ofertas/$token'
+      fullPath: '/ofertas/$token'
+      preLoaderRoute: typeof OfertasTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/acoes/$id': {
-      id: '/acoes/$id'
-      path: '/$id'
-      fullPath: '/acoes/$id'
-      preLoaderRoute: typeof AcoesIdRouteImport
-      parentRoute: typeof AcoesRoute
+    '/reunioes/': {
+      id: '/reunioes/'
+      path: '/'
+      fullPath: '/reunioes/'
+      preLoaderRoute: typeof ReunioesIndexRouteImport
+      parentRoute: typeof ReunioesRoute
+    }
+    '/reunioes/gerenciador': {
+      id: '/reunioes/gerenciador'
+      path: '/gerenciador'
+      fullPath: '/reunioes/gerenciador'
+      preLoaderRoute: typeof ReunioesGerenciadorRouteImport
+      parentRoute: typeof ReunioesRoute
+    }
+    '/banco-imagens/editar/$id': {
+      id: '/banco-imagens/editar/$id'
+      path: '/editar/$id'
+      fullPath: '/banco-imagens/editar/$id'
+      preLoaderRoute: typeof BancoImagensEditarIdRouteImport
+      parentRoute: typeof BancoImagensRoute
     }
   }
 }
@@ -573,6 +609,20 @@ const AcoesRouteChildren: AcoesRouteChildren = {
 }
 
 const AcoesRouteWithChildren = AcoesRoute._addFileChildren(AcoesRouteChildren)
+
+interface BancoImagensRouteChildren {
+  BancoImagensIndexRoute: typeof BancoImagensIndexRoute
+  BancoImagensEditarIdRoute: typeof BancoImagensEditarIdRoute
+}
+
+const BancoImagensRouteChildren: BancoImagensRouteChildren = {
+  BancoImagensIndexRoute: BancoImagensIndexRoute,
+  BancoImagensEditarIdRoute: BancoImagensEditarIdRoute,
+}
+
+const BancoImagensRouteWithChildren = BancoImagensRoute._addFileChildren(
+  BancoImagensRouteChildren,
+)
 
 interface FarmaciasRouteChildren {
   FarmaciasIdRoute: typeof FarmaciasIdRoute
@@ -608,7 +658,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcoesRoute: AcoesRouteWithChildren,
   AnunciosRoute: AnunciosRoute,
-  BancoImagensRoute: BancoImagensRoute,
+  BancoImagensRoute: BancoImagensRouteWithChildren,
   CategoriasRoute: CategoriasRoute,
   ConexoesRoute: ConexoesRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,

@@ -1227,6 +1227,8 @@ export interface CatalogoProdutoItem {
   /** Categoria digitada pelo gestor. Null = ninguém classificou ainda. */
   categoria: string | null
   criadoEm: string | null
+  /** Muda quando a imagem é editada — vai na URL da imagem para furar o cache. */
+  atualizadoEm?: string | null
 }
 
 /** Lista os produtos do catálogo (sem imagem). */
@@ -1234,9 +1236,15 @@ export function listarCatalogoProdutos(): Promise<{ produtos: CatalogoProdutoIte
   return req("/api/catalogo/produtos")
 }
 
-/** Monta a URL da imagem de um produto para <img src> — o cookie de sessão vai junto sozinho. */
-export function catalogoImagemUrl(id: number): string {
-  return `${BASE_URL}/api/catalogo/produtos/${id}/imagem`
+/**
+ * Monta a URL da imagem de um produto para <img src> — o cookie de sessão vai
+ * junto sozinho. `versao` (o atualizadoEm do produto) muda a URL quando a
+ * imagem é editada: a resposta fica 1 h em cache e, sem isso, a foto antiga
+ * continuaria aparecendo depois de salvar no editor.
+ */
+export function catalogoImagemUrl(id: number, versao?: string | null): string {
+  const base = `${BASE_URL}/api/catalogo/produtos/${id}/imagem`
+  return versao ? `${base}?v=${encodeURIComponent(versao)}` : base
 }
 
 const EXT_POR_MIME: Record<string, string> = {
@@ -1259,15 +1267,27 @@ function nomeDeArquivo(nome: string): string {
 }
 
 /**
- * Baixa a imagem de um produto.
- *
- * Não dá para usar <a download> na URL da imagem: ela é servida pela API (outra
- * origem), e aí o navegador ignora o `download` e só navega para o arquivo. Por
- * isso busca o blob (com o cookie de sessão) e dispara o download a partir dele.
+ * Senha do Banco de Imagens no cabeçalho que o backend confere. Codificada
+ * porque cabeçalho HTTP não aceita acento — `fetch` estoura com "ç" cru.
  */
-export async function baixarCatalogoImagem(id: number, nome: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/catalogo/produtos/${id}/imagem`)
-  if (!res.ok) throw new ApiError(res.status, "Não foi possível baixar a imagem")
+function headerSenhaBanco(senha: string): Record<string, string> {
+  return { "X-Senha-Banco": encodeURIComponent(senha) }
+}
+
+/**
+ * Baixa a imagem de um produto (só admin, com a senha do banco).
+ *
+ * Busca o blob com fetch e dispara o download a partir dele: <a download>
+ * direto na URL não mandaria o cabeçalho da senha.
+ */
+export async function baixarCatalogoImagem(id: number, nome: string, senha: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/catalogo/produtos/${id}/download`, {
+    headers: headerSenhaBanco(senha),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new ApiError(res.status, body?.detail ?? "Não foi possível baixar a imagem")
+  }
 
   const blob = await res.blob()
   const ext = EXT_POR_MIME[blob.type] ?? "jpg"
@@ -1287,8 +1307,12 @@ export function cadastrarCatalogoProduto(data: {
   mime?: string
   /** Categoria (texto livre). Omitir preserva a de um produto já existente. */
   categoria?: string | null
-}): Promise<{ ok: boolean }> {
-  return req("/api/catalogo/produtos", { method: "POST", body: JSON.stringify(data) })
+}, senha: string): Promise<{ ok: boolean }> {
+  return req("/api/catalogo/produtos", {
+    method: "POST",
+    headers: headerSenhaBanco(senha),
+    body: JSON.stringify(data),
+  })
 }
 
 export interface CategoriaCadastrada {
@@ -1349,21 +1373,54 @@ export function excluirCategoria(id: number): Promise<{ ok: true; produtos: numb
 export function setCatalogoProdutosCategoria(
   ids: number[],
   categoria: string | null,
+  senha: string,
 ): Promise<{ ok: boolean; total: number }> {
   return req("/api/catalogo/produtos/categoria", {
     method: "PATCH",
+    headers: headerSenhaBanco(senha),
     body: JSON.stringify({ ids, categoria }),
   })
 }
 
 /** Liga/desliga um produto do catálogo (desligado não entra nos criativos). */
-export function setCatalogoProdutoAtivo(id: number, ativo: boolean): Promise<{ ok: boolean; ativo: boolean }> {
-  return req(`/api/catalogo/produtos/${id}`, { method: "PATCH", body: JSON.stringify({ ativo }) })
+export function setCatalogoProdutoAtivo(
+  id: number,
+  ativo: boolean,
+  senha: string,
+): Promise<{ ok: boolean; ativo: boolean }> {
+  return editarCatalogoProduto(id, { ativo }, senha) as Promise<{ ok: boolean; ativo: boolean }>
+}
+
+/** Edita nome, categoria e/ou status de um produto. Campo omitido fica como está. */
+export function editarCatalogoProduto(
+  id: number,
+  campos: { nome?: string; categoria?: string | null; ativo?: boolean },
+  senha: string,
+): Promise<{ ok: boolean }> {
+  return req(`/api/catalogo/produtos/${id}`, {
+    method: "PATCH",
+    headers: headerSenhaBanco(senha),
+    body: JSON.stringify(campos),
+  })
+}
+
+/** Substitui a imagem de um produto (saída do editor de imagem). */
+export function trocarImagemCatalogoProduto(
+  id: number,
+  imagem_b64: string,
+  mime: "image/png" | "image/jpeg" | "image/webp",
+  senha: string,
+): Promise<{ ok: boolean }> {
+  return req(`/api/catalogo/produtos/${id}/imagem`, {
+    method: "PUT",
+    headers: headerSenhaBanco(senha),
+    body: JSON.stringify({ imagem_b64, mime }),
+  })
 }
 
 /** Remove um produto do catálogo. */
-export function deletarCatalogoProduto(id: number): Promise<{ ok: boolean }> {
-  return req(`/api/catalogo/produtos/${id}`, { method: "DELETE" })
+export function deletarCatalogoProduto(id: number, senha: string): Promise<{ ok: boolean }> {
+  return req(`/api/catalogo/produtos/${id}`, { method: "DELETE", headers: headerSenhaBanco(senha) })
 }
 
 // ── Disparo em Grupos de Ofertas (WhatsApp via Evolution) ─────────────────────

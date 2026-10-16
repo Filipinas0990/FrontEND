@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Loader2, Trash2, X } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronLeft, ChevronRight, Download, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { baixarCatalogoImagem, catalogoImagemUrl, type CatalogoProdutoItem } from "@/lib/api";
+import { catalogoImagemUrl, type CatalogoProdutoItem } from "@/lib/api";
 import { rotuloCategoria } from "@/lib/categorias";
 
 function fmtDataHora(iso: string | null): string {
@@ -24,6 +23,10 @@ interface Props {
   onAnterior?: () => void;
   onProximo?: () => void;
   onToggleAtivo: (ativo: boolean) => void;
+  /** Download pede a senha do banco — quem chama cuida disso. */
+  onBaixar: () => void;
+  baixando: boolean;
+  onEditar: () => void;
   onExcluir: () => void;
   onClose: () => void;
 }
@@ -33,11 +36,13 @@ export function ImagemPreviewModal({
   onAnterior,
   onProximo,
   onToggleAtivo,
+  onBaixar,
+  baixando,
+  onEditar,
   onExcluir,
   onClose,
 }: Props) {
   const [dim, setDim] = useState<{ w: number; h: number } | null>(null);
-  const [baixando, setBaixando] = useState(false);
 
   // Dimensão é por imagem: trocando de produto com as setas, zera antes de ler
   // a nova — senão o painel mostra o tamanho da foto anterior por um instante.
@@ -55,17 +60,6 @@ export function ImagemPreviewModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, onAnterior, onProximo]);
 
-  async function baixar() {
-    setBaixando(true);
-    try {
-      await baixarCatalogoImagem(produto.id, produto.nome);
-    } catch {
-      toast.error("Não foi possível baixar a imagem.");
-    } finally {
-      setBaixando(false);
-    }
-  }
-
   return (
     <div
       className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
@@ -81,7 +75,7 @@ export function ImagemPreviewModal({
         {/* Foto ampliada — fundo escuro para a embalagem não sumir no branco */}
         <div className="relative flex-1 bg-zinc-900 grid place-items-center min-h-[240px] md:min-h-[420px]">
           <img
-            src={catalogoImagemUrl(produto.id)}
+            src={catalogoImagemUrl(produto.id, produto.atualizadoEm)}
             alt={produto.nome}
             onLoad={(e) =>
               setDim({
@@ -175,7 +169,14 @@ export function ImagemPreviewModal({
 
           <div className="mt-auto px-5 py-4 border-t border-zinc-100 flex items-center gap-2">
             <button
-              onClick={baixar}
+              onClick={onEditar}
+              className="h-9 px-3 rounded-lg ring-1 ring-zinc-200 text-zinc-700 text-xs font-semibold inline-flex items-center justify-center gap-2 hover:bg-zinc-50 transition"
+            >
+              <Pencil className="size-4" />
+              Editar
+            </button>
+            <button
+              onClick={onBaixar}
               disabled={baixando}
               className="flex-1 h-9 rounded-lg bg-zinc-900 text-white text-xs font-semibold inline-flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-60 transition"
             >

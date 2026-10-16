@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, UploadCloud, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
-import { cadastrarCatalogoProduto, getCategoriasCatalogo } from "@/lib/api";
+import { ApiError, cadastrarCatalogoProduto, getCategoriasCatalogo } from "@/lib/api";
 import { CampoCategoria } from "@/components/CampoCategoria";
 import { mesclarCategorias } from "@/lib/categorias";
 
@@ -30,7 +30,14 @@ interface ArquivoPendente {
 
 // ── Modal (somente upload — a listagem fica na tela /banco-imagens) ─────────────
 
-export function BancoImagensModal({ onClose }: { onClose: () => void }) {
+export function BancoImagensModal({
+  onClose,
+  pedirSenha,
+}: {
+  onClose: () => void;
+  /** Senha do banco — perguntada uma vez por lote, não por imagem. */
+  pedirSenha: (acao: string) => Promise<string | null>;
+}) {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendentes, setPendentes] = useState<ArquivoPendente[]>([]);
@@ -101,6 +108,8 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
       toast.error("Todos os produtos precisam de um nome.");
       return;
     }
+    const senha = await pedirSenha(`Salvar ${pendentes.length} imagem(ns) no banco`);
+    if (!senha) return;
     setEnviando(true);
     let ok = 0;
     for (const p of pendentes) {
@@ -112,9 +121,16 @@ export function BancoImagensModal({ onClose }: { onClose: () => void }) {
           // Campo em branco nem vai no corpo: reenviar a foto de um produto
           // já classificado não pode apagar a categoria dele.
           ...(categoria.trim() ? { categoria: categoria.trim() } : {}),
-        });
+        }, senha);
         ok++;
-      } catch {
+      } catch (err) {
+        // Senha errada (403) ou travada (429) vale para o lote todo: para aqui
+        // e mantém a lista, para tentar de novo sem selecionar tudo outra vez.
+        if (err instanceof ApiError && (err.status === 403 || err.status === 429)) {
+          toast.error(err.message);
+          setEnviando(false);
+          return;
+        }
         toast.error(`Falha ao salvar "${p.nome}".`);
       }
     }

@@ -71,7 +71,7 @@ function ConfigPage() {
 
   const metaAtencao = !!meta && (meta.expirado || (meta.conectado && (meta.dias_restantes ?? 99) <= 7));
 
-  // Ativos: Conexões, Gestores (só admin), Banco de Imagens, Horários de
+  // Ativos: Conexões, Gestores e Banco de Imagens (só admin), Horários de
   // Disparo e Categorias. O resto é futuro (cadeado).
   const cards: CardItem[] = [
     { icon: Waypoints, label: "Conexões", to: "/conexoes" },
@@ -82,7 +82,10 @@ function ConfigPage() {
     isAdmin
       ? { icon: Users, label: "Gestores", to: "/gestores" }
       : { icon: Users, label: "Gestores", locked: true },
-    { icon: Images, label: "Banco de Imagens", to: "/banco-imagens" },
+    // Banco de Imagens é só do admin (e cada ação ainda pede a senha do banco).
+    isAdmin
+      ? { icon: Images, label: "Banco de Imagens", to: "/banco-imagens" }
+      : { icon: Images, label: "Banco de Imagens", locked: true },
     { icon: Clock, label: "Horários de Disparo", to: "/horarios" },
     { icon: Tags, label: "Categorias", to: "/categorias" },
     { icon: Puzzle, label: "Integrações de API", locked: true },
