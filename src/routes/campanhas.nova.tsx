@@ -954,15 +954,24 @@ function EtapaPublico({ valor, onChange, dono }: { valor: Publico; onChange: (p:
   return (
     <div className="space-y-8">
       {/* ── 1) Localização ───────────────────────────────────────────────── */}
-      <BlocoNumerado n={1} titulo="Onde estão seus clientes?" desc="Segmente por cidade e raio, ou deixe em branco para o Brasil inteiro.">
-        <CampoLocalizacao
-          valor={valor.localizacao}
-          raioKm={valor.raioKm}
-          onSelecionar={(l) => set({ localizacao: l })}
-          onLimpar={() => set({ localizacao: null })}
-          onRaioChange={(km) => set({ raioKm: km })}
-        />
-      </BlocoNumerado>
+      {dono.tipo === "conjunto-novo" ? (
+        <BlocoNumerado n={1} titulo="Onde estão seus clientes?" desc="Segmente por cidade e raio, ou deixe em branco para o Brasil inteiro.">
+          <CampoLocalizacao
+            valor={valor.localizacao}
+            raioKm={valor.raioKm}
+            onSelecionar={(l) => set({ localizacao: l })}
+            onLimpar={() => set({ localizacao: null })}
+            onRaioChange={(km) => set({ raioKm: km })}
+          />
+        </BlocoNumerado>
+      ) : (
+        // Novo conjunto: a cópia HERDA a localização do original (o Meta copia o
+        // targeting inteiro). Antes a tela deixava escolher outra cidade e
+        // ignorava a escolha — agora só mostra o que vai valer.
+        <BlocoNumerado n={1} titulo="Onde estão seus clientes?" desc="Herdada do conjunto original.">
+          <LocalizacaoHerdada conjunto={dono.conjunto} />
+        </BlocoNumerado>
+      )}
 
       <div className="border-t border-zinc-100" />
 
@@ -1087,7 +1096,11 @@ function EtapaPublico({ valor, onChange, dono }: { valor: Publico; onChange: (p:
           {/* Resumo do público */}
           <div className="bg-brand/5 border border-brand/10 rounded-xl p-4 h-fit">
             <p className="text-sm font-bold text-brand mb-4">Resumo do público</p>
-            <ResumoItem icon={MapPin}   rotulo="Localização"     valor={valor.localizacao ? `${soACidade(valor.localizacao.nome)} — raio ${valor.raioKm}km` : "Brasil inteiro"} />
+            <ResumoItem icon={MapPin}   rotulo="Localização"     valor={
+              dono.tipo !== "conjunto-novo"
+                ? (dono.conjunto.localizacao?.resumo ?? "Mesma do conjunto original")
+                : valor.localizacao ? `${soACidade(valor.localizacao.nome)} — raio ${valor.raioKm}km` : "Brasil inteiro"
+            } />
             <ResumoItem icon={Users}     rotulo="Gênero"          valor={nomeGenero(valor.genero)} />
             <ResumoItem icon={Calendar}  rotulo="Idade"           valor={`${labelIdade(valor.idadeMin)} a ${labelIdade(valor.idadeMax)}`} />
             <ResumoItem icon={LayoutGrid} rotulo="Aplicativos"    valor={nomePlataforma(valor.plataforma)} />
@@ -1154,6 +1167,32 @@ const FMT_NUM = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maxim
 // Formata reais para exibição — R$ 1.234,56
 function brl(v: number): string {
   return FMT_BRL.format(v);
+}
+
+function LocalizacaoHerdada({ conjunto }: { conjunto: ConjuntoMeta }) {
+  const loc = conjunto.localizacao;
+  const temMapa = loc?.lat != null && loc?.lng != null;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5">
+        <MapPin className="size-4 text-brand mt-0.5 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-zinc-900">{loc?.resumo ?? "Mesma do conjunto original"}</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            O conjunto novo usa a mesma localização de <b>{conjunto.nome}</b>. Para mudar, edite o conjunto no Gerenciador de Anúncios depois de publicar.
+          </p>
+        </div>
+      </div>
+      {temMapa && (
+        <MapaRaio
+          centro={{ lat: loc!.lat!, lon: loc!.lng! }}
+          raioKm={loc!.raioKm ?? 1}
+          rotulo={loc!.resumo.split(" · ")[0]}
+          sublinha={loc!.raioKm ? `Raio de ${loc!.raioKm} km` : "Endereço do conjunto"}
+        />
+      )}
+    </div>
+  );
 }
 
 function AvisoOrcamento({ dono }: { dono: DonoOrcamento }) {

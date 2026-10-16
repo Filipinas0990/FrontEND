@@ -1150,6 +1150,8 @@ export interface ConjuntoMeta {
   destinoWhatsapp: boolean
   dataInicio: string        // YYYY-MM-DD ("" se não houver)
   dataFim: string           // YYYY-MM-DD ("" = sem término)
+  /** Onde o conjunto entrega — no "Novo conjunto" a cópia herda isto. */
+  localizacao?: { resumo: string; lat?: number; lng?: number; raioKm?: number }
 }
 
 export interface NovosAnunciosResultado {

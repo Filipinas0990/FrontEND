@@ -70,13 +70,11 @@ export default function MapaRaio({
       L.control.zoom({ position: "topright" }).addTo(m);
       L.control.scale({ position: "bottomleft", imperial: false }).addTo(m);
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      // Fundo do OpenStreetMap, sem chave. Era o "voyager" da CARTO, que passou a
+      // exigir chave paga e desenhava "API KEY REQUIRED" por cima do mapa (out/2026).
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        detectRetina: true,   // telas de notebook bom não ficam com o mapa borrado
-        subdomains: "abcd",
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' +
-          '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(m);
 
       // Nascem fora do mapa: só entram quando existe cidade escolhida.
