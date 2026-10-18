@@ -27,9 +27,11 @@ interface AppShellProps {
   children: ReactNode;
   headerRight?: ReactNode;
   hideHeader?: boolean;
+  /** Conteúdo ocupa toda a largura da tela, sem o limite de 1280px (telas de tabela larga). */
+  larguraTotal?: boolean;
 }
 
-export function AppShell({ title, children, headerRight, hideHeader }: AppShellProps) {
+export function AppShell({ title, children, headerRight, hideHeader, larguraTotal }: AppShellProps) {
   const navigate = useNavigate();
   const [user, setUser] = useState(() => getUser());
 
@@ -168,7 +170,7 @@ export function AppShell({ title, children, headerRight, hideHeader }: AppShellP
             </div>
           </header>
         )}
-        <div className="p-8 max-w-7xl mx-auto space-y-8">{children}</div>
+        <div className={`p-8 mx-auto space-y-8 ${larguraTotal ? "max-w-none" : "max-w-7xl"}`}>{children}</div>
       </main>
     </div>
   );

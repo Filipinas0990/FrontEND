@@ -1,7 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   ArrowUpDown,
   ArrowUp,
@@ -34,8 +32,7 @@ type SortKey =
   | "google_conv"
   | "meta_custo"
   | "meta_resultados"
-  | "meta_gasto"
-  | "variacao";
+  | "meta_gasto";
 
 const COR_GOOGLE = "#4285F4";
 const COR_META = "#1877F2";
@@ -137,7 +134,6 @@ function Index() {
     if (sortKey === "meta_custo")      { vA = valorCusto(cA); vB = valorCusto(cB); }
     if (sortKey === "meta_resultados") { vA = cA?.resultados ?? -1; vB = cB?.resultados ?? -1; }
     if (sortKey === "meta_gasto")      { vA = cA?.gasto ?? -1; vB = cB?.gasto ?? -1; }
-    if (sortKey === "variacao")        { vA = a.variacao_atendimentos; vB = b.variacao_atendimentos; }
     return sortDir === "desc" ? vB - vA : vA - vB;
   });
 
@@ -178,7 +174,7 @@ function Index() {
   const thBase = "px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider";
 
   return (
-    <AppShell title="Painel de Performance">
+    <AppShell title="Painel de Performance" larguraTotal>
       {/* Gestor filter (admin only) */}
       {admin && (
         <div className="flex items-center gap-3">
@@ -268,15 +264,6 @@ function Index() {
                       <th className={thBase}>Saldo</th>
                     </>
                   )}
-                  <th
-                    className={`px-6 py-3 text-[10px] font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors ${sortKey === "variacao" ? "text-brand" : "text-zinc-500 hover:text-zinc-800"}`}
-                    onClick={() => toggleSort("variacao")}
-                  >
-                    <span className="flex items-center gap-1">
-                      Variação
-                      {sortKey === "variacao" ? (sortDir === "desc" ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />) : <ArrowUpDown className="size-3 text-zinc-300" />}
-                    </span>
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -343,15 +330,6 @@ function Index() {
                         </td>
                       </>
                     )}
-                    {/* Variação */}
-                    <td className="px-6 py-3">
-                      <span className={`flex items-center gap-1 text-[10px] font-medium ${p.variacao_atendimentos >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        {p.variacao_atendimentos >= 0
-                          ? <TrendingUp className="size-3" />
-                          : <TrendingDown className="size-3" />}
-                        {Math.abs(p.variacao_atendimentos).toFixed(1)}%
-                      </span>
-                    </td>
                   </tr>
                   );
                 })}
