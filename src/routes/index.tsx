@@ -2,18 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   TrendingUp,
   TrendingDown,
-  Users,
-  DollarSign,
-  ShoppingCart,
   AlertTriangle,
-  Clock,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
-import { getPainel, getGestores, getFarmacias } from "@/lib/api";
+import { getGestores, getFarmacias, getCustoResultado, type CustoJanela } from "@/lib/api";
 import { isAdmin } from "@/lib/auth";
 import { usePeriod } from "@/contexts/PeriodContext";
 import { PeriodSelector } from "@/components/PeriodSelector";
@@ -30,14 +26,28 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-function fmtBRL(v: number) {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-}
+type Canal = "google" | "meta";
 
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-  return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} às ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+type SortKey =
+  | "criticidade"
+  | "google_cliques"
+  | "google_conv"
+  | "meta_custo"
+  | "meta_resultados"
+  | "meta_gasto"
+  | "variacao";
+
+const COR_GOOGLE = "#4285F4";
+const COR_META = "#1877F2";
+
+/**
+ * Saldo da conta de anúncios do Meta. Ainda não é lido da API (projeto à parte):
+ * por enquanto vale sempre R$ 0,00.
+ */
+const SALDO_META_PROVISORIO = 0;
+
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function alertColor(nivel: string) {
@@ -51,16 +61,21 @@ function alertLabel(nivel: string) {
   return "Ativa";
 }
 
+/** Valor para ordenar o custo: quem gastou e não teve resultado é o pior caso. */
+function valorCusto(j: CustoJanela | null | undefined): number {
+  if (!j) return -1;
+  if (j.custo_por_resultado != null) return j.custo_por_resultado;
+  return j.gasto > 0 ? 1e12 : -1;
+}
+
 function Index() {
   const navigate = useNavigate();
   const admin = isAdmin();
   const [gestorId, setGestorId] = useState<number | undefined>();
   const { period, setPeriod } = usePeriod();
-
-  const { data: painel, isLoading: loadingPainel, isFetching: fetchingPainel } = useQuery({
-    queryKey: ["painel", gestorId, period],
-    queryFn: () => getPainel(gestorId, period),
-  });
+  const [canal, setCanal] = useState<Canal>("meta");
+  const [sortKey, setSortKey] = useState<SortKey>("meta_custo");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
 
   const { data: gestores = [] } = useQuery({
     queryKey: ["gestores"],
@@ -68,16 +83,35 @@ function Index() {
     enabled: admin,
   });
 
-  const { data: farmacias = [], isLoading: loadingFarmacias } = useQuery({
+  const {
+    data: farmacias = [],
+    isLoading: loadingFarmacias,
+    isFetching: fetchingFarmacias,
+  } = useQuery({
     queryKey: ["farmacias", undefined, undefined, gestorId, period],
     queryFn: () => getFarmacias(gestorId ? { gestor_id: gestorId, dias: period } : { dias: period }),
     select: (data) =>
       [...data].sort((a, b) => b.score_criticidade - a.score_criticidade),
   });
 
-  type SortKey = "criticidade" | "google_cliques" | "google_conv" | "meta_cliques" | "meta_conv" | "variacao";
-  const [sortKey, setSortKey] = useState<SortKey>("criticidade");
-  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const { data: custo } = useQuery({
+    queryKey: ["custo-resultado", gestorId],
+    queryFn: () => getCustoResultado(gestorId),
+  });
+
+  /** Custo por resultado da farmácia na janela do período selecionado. */
+  function custoDe(farmaciaId: number): { janela: CustoJanela | null; erro: string | null } {
+    const f = custo?.farmacias.find((x) => x.farmacia_id === farmaciaId);
+    if (!f) return { janela: null, erro: null };
+    const janela = period === 7 ? f.janela_7d : period === 15 ? f.janela_15d : f.janela_30d;
+    return { janela, erro: f.erro };
+  }
+
+  function trocarCanal(novo: Canal) {
+    setCanal(novo);
+    setSortKey(novo === "meta" ? "meta_custo" : "criticidade");
+    setSortDir("desc");
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
@@ -94,46 +128,54 @@ function Index() {
   const sortedFarmacias = [...farmacias].sort((a, b) => {
     const gA = findGoogle(a.canais);
     const gB = findGoogle(b.canais);
-    const mA = a.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
-    const mB = b.canais?.find((c) => c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
+    const cA = custoDe(a.id).janela;
+    const cB = custoDe(b.id).janela;
     let vA = 0, vB = 0;
-    if (sortKey === "criticidade")   { vA = a.score_criticidade; vB = b.score_criticidade; }
-    if (sortKey === "google_cliques"){ vA = gA?.atendimentos ?? 0; vB = gB?.atendimentos ?? 0; }
-    if (sortKey === "google_conv")   { vA = gA?.vendas != null && (gA.atendimentos ?? 0) > 0 ? gA.vendas / gA.atendimentos : 0; vB = gB?.vendas != null && (gB.atendimentos ?? 0) > 0 ? gB.vendas / gB.atendimentos : 0; }
-    if (sortKey === "meta_cliques")  { vA = mA?.atendimentos ?? 0; vB = mB?.atendimentos ?? 0; }
-    if (sortKey === "meta_conv")     { vA = mA?.vendas != null && (mA.atendimentos ?? 0) > 0 ? mA.vendas / mA.atendimentos : 0; vB = mB?.vendas != null && (mB.atendimentos ?? 0) > 0 ? mB.vendas / mB.atendimentos : 0; }
-    if (sortKey === "variacao")      { vA = a.variacao_atendimentos; vB = b.variacao_atendimentos; }
+    if (sortKey === "criticidade")     { vA = a.score_criticidade; vB = b.score_criticidade; }
+    if (sortKey === "google_cliques")  { vA = gA?.atendimentos ?? 0; vB = gB?.atendimentos ?? 0; }
+    if (sortKey === "google_conv")     { vA = gA?.vendas != null && (gA.atendimentos ?? 0) > 0 ? gA.vendas / gA.atendimentos : 0; vB = gB?.vendas != null && (gB.atendimentos ?? 0) > 0 ? gB.vendas / gB.atendimentos : 0; }
+    if (sortKey === "meta_custo")      { vA = valorCusto(cA); vB = valorCusto(cB); }
+    if (sortKey === "meta_resultados") { vA = cA?.resultados ?? -1; vB = cB?.resultados ?? -1; }
+    if (sortKey === "meta_gasto")      { vA = cA?.gasto ?? -1; vB = cB?.gasto ?? -1; }
+    if (sortKey === "variacao")        { vA = a.variacao_atendimentos; vB = b.variacao_atendimentos; }
     return sortDir === "desc" ? vB - vA : vA - vB;
   });
 
-  const kpis = painel
-    ? [
-        {
-          label: "Receita Total",
-          value: fmtBRL(painel.receita_total),
-          icon: DollarSign,
-          color: "text-brand",
-        },
-        {
-          label: "Total de Atendimentos",
-          value: painel.total_atendimentos.toLocaleString("pt-BR"),
-          icon: Users,
-          color: "text-accent-blue",
-        },
-        {
-          label: "Vendas Realizadas",
-          value: painel.vendas_realizadas.toLocaleString("pt-BR"),
-          icon: ShoppingCart,
-          color: "text-brand",
-        },
-        {
-          label: "Taxa de Conversão",
-          value: `${(painel.taxa_conversao_media ?? 0).toFixed(1)}%`,
-          icon: TrendingUp,
-          color: "text-brand",
-        },
-      ]
-    : [];
+  function SortBtn({ k, children }: { k: SortKey; children: React.ReactNode }) {
+    const ativo = sortKey === k;
+    return (
+      <button
+        onClick={() => toggleSort(k)}
+        className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${ativo ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}
+      >
+        {children}{" "}
+        {ativo ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
+      </button>
+    );
+  }
+
+  const filtroCanal = (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider whitespace-nowrap">Canal</span>
+      <div className="flex items-center rounded-lg border-2 border-zinc-200 overflow-hidden">
+        {([
+          { id: "google", nome: "Google", cor: COR_GOOGLE },
+          { id: "meta", nome: "Meta", cor: COR_META },
+        ] as const).map((c) => (
+          <button
+            key={c.id}
+            onClick={() => trocarCanal(c.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors ${canal === c.id ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-800 bg-transparent"}`}
+          >
+            <span className="size-2 rounded-full inline-block" style={{ background: c.cor }} />
+            {c.nome}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const thBase = "px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider";
 
   return (
     <AppShell title="Painel de Performance">
@@ -156,73 +198,20 @@ function Index() {
         </div>
       )}
 
-      {/* ── Seletor global de período ── */}
+      {/* ── Seletor global de período + filtro de canal ── */}
       <PeriodSelector
         value={period}
         onChange={setPeriod}
-        loading={fetchingPainel && !loadingPainel}
+        loading={fetchingFarmacias && !loadingFarmacias}
+        extra={filtroCanal}
       />
-
-      {/* KPI Cards */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-        {loadingPainel
-          ? Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white p-6 rounded-xl ring-1 ring-black/5 h-24 animate-pulse" />
-            ))
-          : kpis.map((k) => (
-              <div
-                key={k.label}
-                className="bg-white p-6 rounded-xl ring-1 ring-black/5 shadow-sm space-y-2 transition-opacity duration-300"
-                style={{ opacity: fetchingPainel ? 0.6 : 1 }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-500 font-medium">{k.label}</span>
-                  <k.icon className={`size-4 ${k.color}`} />
-                </div>
-                <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
-                <div className="flex justify-end">
-                  <PeriodBadge dias={period} />
-                </div>
-              </div>
-            ))}
-      </section>
-
-      {/* Alert badges */}
-      {painel && (
-        <section className="grid grid-cols-3 gap-4">
-          <AlertCard
-            label="Farmácias em Alerta"
-            value={painel.farmacias_alerta}
-            total={painel.farmacias_ativas}
-            color="red"
-          />
-          <AlertCard
-            label="Farmácias em Atenção"
-            value={painel.farmacias_atencao}
-            total={painel.farmacias_ativas}
-            color="amber"
-          />
-          <div className="bg-white p-5 rounded-xl ring-1 ring-black/5 shadow-sm flex flex-col justify-between">
-            <span className="text-xs text-zinc-500 font-medium">Última Atualização</span>
-            <div className="flex items-center gap-2 mt-2">
-              <Clock className="size-4 text-zinc-400" />
-              <span className="text-sm font-medium text-zinc-900">
-                {painel.ultima_atualizacao ? fmtDate(painel.ultima_atualizacao) : "—"}
-              </span>
-            </div>
-            <div className="text-[10px] text-zinc-400 mt-1">
-              {painel.farmacias_ativas} farmácias ativas
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* Top farmácias table */}
       <section className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <AlertTriangle className="size-4 text-zinc-400" />
-            Farmácias em Destaque (por criticidade)
+            {canal === "meta" ? "Farmácias em Destaque (custo por resultado)" : "Farmácias em Destaque (por criticidade)"}
             <PeriodBadge dias={period} />
           </h3>
           <button
@@ -239,39 +228,46 @@ function Index() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-zinc-50/50 border-b border-zinc-100">
-                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">#</th>
-                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Farmácia</th>
-                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Status</th>
-                  {/* Google — cliques clicável, conv clicável */}
-                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1.5">
-                        <span className="size-2 rounded-full bg-[#4285F4] inline-block shrink-0" />
-                        Google
-                      </span>
-                      <button onClick={() => toggleSort("google_cliques")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "google_cliques" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
-                        cliques {sortKey === "google_cliques" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
-                      </button>
-                      <button onClick={() => toggleSort("google_conv")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "google_conv" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
-                        conv% {sortKey === "google_conv" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
-                      </button>
-                    </div>
-                  </th>
-                  {/* Meta — cliques clicável, conv clicável */}
-                  <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1.5">
-                        <span className="size-2 rounded-full bg-[#1877F2] inline-block shrink-0" />
-                        Meta / FB
-                      </span>
-                      <button onClick={() => toggleSort("meta_cliques")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "meta_cliques" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
-                        cliques {sortKey === "meta_cliques" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
-                      </button>
-                      <button onClick={() => toggleSort("meta_conv")} className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded transition-colors ${sortKey === "meta_conv" ? "bg-brand/10 text-brand font-bold" : "text-zinc-400 hover:text-zinc-600"}`}>
-                        conv% {sortKey === "meta_conv" ? (sortDir === "desc" ? <ArrowDown className="size-2.5" /> : <ArrowUp className="size-2.5" />) : <ArrowUpDown className="size-2.5" />}
-                      </button>
-                    </div>
-                  </th>
+                  <th className={thBase}>#</th>
+                  <th className={thBase}>Farmácia</th>
+                  <th className={thBase}>Status</th>
+                  {canal === "google" ? (
+                    <th className={thBase}>
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5">
+                          <span className="size-2 rounded-full inline-block shrink-0" style={{ background: COR_GOOGLE }} />
+                          Google
+                        </span>
+                        <SortBtn k="google_cliques">cliques</SortBtn>
+                        <SortBtn k="google_conv">conv%</SortBtn>
+                      </div>
+                    </th>
+                  ) : (
+                    <>
+                      <th className={thBase}>
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-1.5">
+                            <span className="size-2 rounded-full inline-block shrink-0" style={{ background: COR_META }} />
+                            Meta · Custo por resultado
+                          </span>
+                          <SortBtn k="meta_custo">custo</SortBtn>
+                        </div>
+                      </th>
+                      <th className={thBase}>
+                        <div className="flex items-center gap-2">
+                          Conversas
+                          <SortBtn k="meta_resultados">qtd</SortBtn>
+                        </div>
+                      </th>
+                      <th className={thBase}>
+                        <div className="flex items-center gap-2">
+                          Gasto
+                          <SortBtn k="meta_gasto">valor</SortBtn>
+                        </div>
+                      </th>
+                      <th className={thBase}>Saldo</th>
+                    </>
+                  )}
                   <th
                     className={`px-6 py-3 text-[10px] font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors ${sortKey === "variacao" ? "text-brand" : "text-zinc-500 hover:text-zinc-800"}`}
                     onClick={() => toggleSort("variacao")}
@@ -285,22 +281,12 @@ function Index() {
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {sortedFarmacias.map((p, idx) => {
-                  // Google = canal "google" (prioritário) ou "site" como fallback
-                  // Meta   = canal "meta" ou "facebook"
-                  // NÃO agregar outros canais (WhatsApp, Orgânico, etc.)
-                  const google = p.canais?.find((c) => c.nome.toLowerCase().includes("google"))
-                    ?? p.canais?.find((c) => c.nome.toLowerCase().includes("site")
-                        && !c.nome.toLowerCase().includes("meta")
-                        && !c.nome.toLowerCase().includes("facebook"));
-                  const meta   = p.canais?.find((c) =>
-                    c.nome.toLowerCase().includes("meta") || c.nome.toLowerCase().includes("facebook"));
+                  const google = findGoogle(p.canais);
                   const gAtend = google?.atendimentos ?? 0;
                   const gConv  = google?.vendas != null && gAtend > 0
                     ? ((google.vendas / gAtend) * 100).toFixed(1)
                     : null;
-                  const mConv  = meta?.vendas != null && (meta.atendimentos ?? 0) > 0
-                    ? ((meta.vendas / meta.atendimentos) * 100).toFixed(1)
-                    : null;
+                  const { janela, erro } = custoDe(p.id);
 
                   return (
                   <tr
@@ -315,24 +301,48 @@ function Index() {
                         {alertLabel(p.nivel_alerta)}
                       </span>
                     </td>
-                    {/* Google / Site (todos os canais não-Meta) */}
-                    <td className="px-6 py-3">
-                      {gAtend > 0 ? (
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-semibold text-zinc-800">{gAtend.toLocaleString("pt-BR")}</span>
-                          <span className="text-[11px] font-semibold text-[#4285F4]">{gConv != null ? `${gConv}%` : "—"}</span>
-                        </div>
-                      ) : <span className="text-xs text-zinc-300">—</span>}
-                    </td>
-                    {/* Meta / Facebook */}
-                    <td className="px-6 py-3">
-                      {meta ? (
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-semibold text-zinc-800">{(meta.atendimentos ?? 0).toLocaleString("pt-BR")}</span>
-                          <span className="text-[11px] font-semibold text-[#1877F2]">{mConv != null ? `${mConv}%` : "—"}</span>
-                        </div>
-                      ) : <span className="text-xs text-zinc-300">—</span>}
-                    </td>
+                    {canal === "google" ? (
+                      <td className="px-6 py-3">
+                        {gAtend > 0 ? (
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-sm font-semibold text-zinc-800">{gAtend.toLocaleString("pt-BR")}</span>
+                            <span className="text-[11px] font-semibold" style={{ color: COR_GOOGLE }}>{gConv != null ? `${gConv}%` : "—"}</span>
+                          </div>
+                        ) : <span className="text-xs text-zinc-300">—</span>}
+                      </td>
+                    ) : (
+                      <>
+                        {/* Custo por resultado (campanhas de WhatsApp) */}
+                        <td className="px-6 py-3">
+                          {!janela ? (
+                            <span className="text-xs text-zinc-300">—</span>
+                          ) : janela.custo_por_resultado != null ? (
+                            <span className="text-sm font-semibold text-zinc-800">{fmtBRL(janela.custo_por_resultado)}</span>
+                          ) : janela.gasto > 0 ? (
+                            <span className="text-[11px] font-semibold text-red-600">Gastou sem resultado</span>
+                          ) : (
+                            <span className="text-xs text-zinc-300">—</span>
+                          )}
+                          {erro && (
+                            <span
+                              title={`Falha na última leitura do Meta: ${erro}`}
+                              className="ml-2 inline-flex items-center text-amber-500 align-middle"
+                            >
+                              <AlertTriangle className="size-3" />
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-zinc-800">
+                          {janela ? janela.resultados.toLocaleString("pt-BR") : <span className="text-xs text-zinc-300">—</span>}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-zinc-800">
+                          {janela ? fmtBRL(janela.gasto) : <span className="text-xs text-zinc-300">—</span>}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-zinc-500" title="Saldo da conta de anúncios: em breve">
+                          {fmtBRL(SALDO_META_PROVISORIO)}
+                        </td>
+                      </>
+                    )}
                     {/* Variação */}
                     <td className="px-6 py-3">
                       <span className={`flex items-center gap-1 text-[10px] font-medium ${p.variacao_atendimentos >= 0 ? "text-emerald-600" : "text-red-600"}`}>
@@ -354,33 +364,5 @@ function Index() {
         )}
       </section>
     </AppShell>
-  );
-}
-
-function AlertCard({
-  label,
-  value,
-  total,
-  color,
-}: {
-  label: string;
-  value: number;
-  total: number;
-  color: "red" | "amber";
-}) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-  const barColor = color === "red" ? "bg-red-500" : "bg-amber-400";
-  const textColor = color === "red" ? "text-red-600" : "text-amber-600";
-  const bgColor = color === "red" ? "bg-red-50" : "bg-amber-50";
-
-  return (
-    <div className={`p-5 rounded-xl ring-1 ring-black/5 shadow-sm ${bgColor}`}>
-      <span className="text-xs text-zinc-500 font-medium">{label}</span>
-      <div className={`text-3xl font-bold mt-1 ${textColor}`}>{value}</div>
-      <div className="mt-3 h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
-      </div>
-      <p className="text-[10px] text-zinc-500 mt-1.5">{pct}% do total</p>
-    </div>
   );
 }

@@ -93,17 +93,6 @@ export interface CanalData {
   receita_vendas?: number
 }
 
-export interface PainelData {
-  receita_total: number
-  total_atendimentos: number
-  vendas_realizadas: number
-  farmacias_ativas: number
-  farmacias_alerta: number
-  farmacias_atencao: number
-  taxa_conversao_media: number
-  ultima_atualizacao: string
-}
-
 export interface AcaoAtiva {
   id: number
   nome: string
@@ -234,12 +223,40 @@ export function getMe(): Promise<AuthUser> {
 
 // ── Painel ─────────────────────────────────────────────────────────────────
 
-export function getPainel(gestorId?: number, dias?: 7 | 15 | 30): Promise<PainelData> {
-  const q = new URLSearchParams()
-  if (gestorId) q.set("gestor_id", String(gestorId))
-  if (dias)     q.set("dias", String(dias))
-  const qs = q.toString()
-  return req(`/api/painel${qs ? `?${qs}` : ""}`)
+// ── Custo por resultado do Meta (campanhas de WhatsApp) ──────────────────
+
+export interface CustoJanela {
+  periodo_inicio: string | null
+  periodo_fim: string | null
+  gasto: number
+  resultados: number
+  /** gasto ÷ resultados; null quando não houve nenhuma conversa */
+  custo_por_resultado: number | null
+  tipo_resultado: string | null
+  cliques: number
+  impressoes: number
+}
+
+export interface CustoResultadoFarmacia {
+  farmacia_id: number
+  farmacia: string
+  gestor_id: number | null
+  janela_7d: CustoJanela | null
+  janela_15d: CustoJanela | null
+  janela_30d: CustoJanela | null
+  /** falha na última leitura; os números são os da última leitura boa */
+  erro: string | null
+  sincronizado_em: string | null
+}
+
+export interface CustoResultado {
+  ultima_execucao: string | null
+  farmacias: CustoResultadoFarmacia[]
+}
+
+export function getCustoResultado(gestorId?: number): Promise<CustoResultado> {
+  const qs = gestorId ? `?gestor_id=${gestorId}` : ""
+  return req(`/api/custo-resultado${qs}`)
 }
 
 // ── Farmácias ──────────────────────────────────────────────────────────────

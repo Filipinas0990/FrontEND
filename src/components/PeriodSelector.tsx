@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Calendar } from "lucide-react";
 import {
   type Period,
@@ -12,13 +13,15 @@ interface PeriodSelectorProps {
   onChange: (dias: Period) => void;
   /** Exibe um spinner quando true (período sendo carregado) */
   loading?: boolean;
+  /** Conteúdo extra exibido ao lado dos botões de período */
+  extra?: ReactNode;
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
 
 const PERIODS: Period[] = [7, 15, 30];
 
-export function PeriodSelector({ value, onChange, loading = false }: PeriodSelectorProps) {
+export function PeriodSelector({ value, onChange, loading = false, extra }: PeriodSelectorProps) {
   return (
     <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm px-5 py-4 flex items-center gap-5 flex-wrap">
       {/* Ícone + label */}
@@ -57,6 +60,14 @@ export function PeriodSelector({ value, onChange, loading = false }: PeriodSelec
           );
         })}
       </div>
+
+      {/* Filtros extras ao lado dos períodos (ex.: canal Google / Meta) */}
+      {extra && (
+        <>
+          <span className="h-6 w-px bg-zinc-200 hidden sm:block" />
+          {extra}
+        </>
+      )}
 
       <p className="ml-auto text-[10px] text-zinc-400 hidden sm:block">
         Todos os dados abaixo refletem os últimos <strong>{value} dias</strong>
