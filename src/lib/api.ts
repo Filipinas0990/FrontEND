@@ -107,6 +107,8 @@ export interface Farmacia {
   nome: string
   /** Nome de fachada — o que o cliente final vê. Null nos cadastros antigos. */
   nome_fachada: string | null
+  /** Conta de anúncios do Meta ("act_123"). Uma por cliente; null = fora do painel de custo. */
+  meta_ad_account_id: string | null
   fase: "entrada" | "ativo"
   telefone: string | null
   responsavel: string | null
@@ -295,6 +297,7 @@ export function createFarmacia(data: {
   cidade?: string
   tem_chatbot?: boolean
   gestor_id?: number
+  meta_ad_account_id?: string | null
 }): Promise<{ id: number; nome: string; fase: string; gestor_id: number | null }> {
   return req("/api/farmacias", { method: "POST", body: JSON.stringify(data) })
 }
@@ -310,6 +313,7 @@ export function updateFarmacia(
     cidade: string | null
     gestor_id: number | null
     ativa: boolean
+    meta_ad_account_id: string | null
   }>,
 ): Promise<{ id: number; nome: string; ativa: boolean }> {
   return req(`/api/farmacias/${id}`, { method: "PUT", body: JSON.stringify(data) })
@@ -995,6 +999,23 @@ export interface ListagemContas {
  */
 export function getContasAnuncio(refresh = false): Promise<ListagemContas> {
   return req(`/api/ads/contas${refresh ? "?refresh=1" : ""}`)
+}
+
+/** Conta de anúncios para o cadastro da farmácia, com o cliente que já a usa. */
+export interface ContaMetaCadastro {
+  id: string                    // "act_123456789"
+  nome: string
+  farmacia_id: number | null    // null = livre
+  farmacia_nome: string | null
+}
+
+/**
+ * Contas que os gestores conectados enxergam, para o campo "Conta de anúncios
+ * Meta" do cadastro (só admin). Com `farmaciaId`, vem também a sugerida pelo
+ * nome (a CA01 do cliente). Consulta o Meta na hora: leva alguns segundos.
+ */
+export function getContasMetaCadastro(farmaciaId?: number): Promise<{ contas: ContaMetaCadastro[]; sugerida: string | null }> {
+  return req(`/api/custo-resultado/contas${farmaciaId ? `?farmacia_id=${farmaciaId}` : ""}`)
 }
 
 // ── Localização (segmentação geográfica) ────────────────────────────────────────

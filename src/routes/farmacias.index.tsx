@@ -16,6 +16,7 @@ import {
   deleteFarmacia,
   setFarmaciaMeta,
   ativarFarmacia,
+  getContasMetaCadastro,
   nomeVisivel,
   type Farmacia,
   type Gestor,
@@ -79,6 +80,8 @@ interface FarmaciaForm {
   nome: string;
   /** Nome de fachada — é o que o cliente final vê no criativo do grupo. */
   nome_fachada: string;
+  /** Conta de anúncios do Meta ("act_123"). "" = sem conta (fora do painel de custo). */
+  meta_ad_account_id: string;
   telefone: string;
   responsavel: string;
   cidade: string;
@@ -108,6 +111,7 @@ function FarmaciaDialog({
     fase: editing?.fase ?? "ativo",
     nome: editing?.nome ?? "",
     nome_fachada: editing?.nome_fachada ?? "",
+    meta_ad_account_id: editing?.meta_ad_account_id ?? "",
     telefone: editing?.telefone ?? "",
     responsavel: editing?.responsavel ?? "",
     cidade: editing?.cidade ?? "",
@@ -205,6 +209,12 @@ function FarmaciaDialog({
                 Como o cliente da farmácia a conhece — é este que vai no criativo do grupo de ofertas.
               </p>
             </FormField>
+            <ContaMetaCampo
+              aberto={open}
+              farmaciaId={editing?.id ?? null}
+              valor={form.meta_ad_account_id}
+              onChange={(v) => setForm((p) => ({ ...p, meta_ad_account_id: v }))}
+            />
             {form.fase === "entrada" && (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -295,6 +305,11 @@ function FarmaciaDialog({
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 divide-y divide-zinc-200 text-sm overflow-hidden my-1">
             <Row label="Razão social" value={confirmPending?.nome ?? "—"} />
             <Row label="Nome de fachada" value={confirmPending?.nome_fachada ?? "—"} />
+            <Row
+              label="Conta Meta"
+              value={confirmPending?.meta_ad_account_id || "Sem conta (fora do painel de custo)"}
+              mono={!!confirmPending?.meta_ad_account_id}
+            />
             <Row label="Gestor" value={gestorNome} />
             <Row
               label="Meta de Receita"
@@ -330,6 +345,81 @@ function FarmaciaDialog({
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/**
+ * Conta de anúncios do Meta do cliente — UMA por farmácia. O custo por
+ * resultado lê só esta conta; sem conta, a farmácia fica fora do painel.
+ * A lista vem do Meta na hora (contas que os gestores conectados enxergam);
+ * conta que já é de outro cliente aparece bloqueada.
+ */
+function ContaMetaCampo({
+  aberto, farmaciaId, valor, onChange,
+}: {
+  aberto: boolean;
+  farmaciaId: number | null;
+  valor: string;
+  onChange: (v: string) => void;
+}) {
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ["contas-meta-cadastro", farmaciaId],
+    queryFn: () => getContasMetaCadastro(farmaciaId ?? undefined),
+    enabled: aberto,
+    staleTime: 5 * 60_000,
+  });
+
+  const contas = data?.contas ?? [];
+  const sugerida = data?.sugerida ? contas.find((c) => c.id === data.sugerida) : undefined;
+  // Conta gravada que nenhum token conectado enxerga: continua visível para não sumir do select.
+  const foraDaLista = valor && !contas.some((c) => c.id === valor);
+
+  return (
+    <FormField label="Conta de anúncios Meta">
+      <div className="flex gap-2">
+        <select
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={isLoading}
+          className="form-input flex-1 min-w-0"
+        >
+          <option value="">{isLoading ? "Carregando contas do Meta..." : "Sem conta (fora do painel de custo)"}</option>
+          {foraDaLista && <option value={valor}>{valor} (não aparece nos Facebooks conectados)</option>}
+          {contas.map((c) => {
+            const deOutra = c.farmacia_id !== null && c.farmacia_id !== farmaciaId;
+            return (
+              <option key={c.id} value={c.id} disabled={deOutra}>
+                {c.nome} · {c.id}{deOutra ? ` — já é de ${c.farmacia_nome}` : ""}
+              </option>
+            );
+          })}
+        </select>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Buscar de novo no Meta"
+          className="shrink-0 px-2 rounded-md ring-1 ring-zinc-200 text-zinc-500 hover:text-zinc-800 disabled:opacity-50"
+        >
+          <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+      {isError && (
+        <p className="text-[11px] text-red-600 mt-1">Não deu para buscar as contas no Meta. Tente de novo.</p>
+      )}
+      {sugerida && valor !== sugerida.id && (
+        <button
+          type="button"
+          onClick={() => onChange(sugerida.id)}
+          className="mt-1 text-[11px] font-medium text-brand hover:underline text-left"
+        >
+          Sugestão pelo nome: {sugerida.nome} — usar esta
+        </button>
+      )}
+      <p className="text-[11px] text-zinc-400 mt-1">
+        Uma conta por cliente. É a única que entra no custo por resultado do painel.
+      </p>
+    </FormField>
   );
 }
 
@@ -512,6 +602,7 @@ function FarmaciasPage() {
         const patch: Parameters<typeof updateFarmacia>[1] = {
           nome: form.nome,
           nome_fachada: form.nome_fachada,
+          meta_ad_account_id: form.meta_ad_account_id || null,
           telefone: form.telefone || null,
           responsavel: form.responsavel || null,
           cidade: form.cidade || null,
@@ -523,6 +614,7 @@ function FarmaciasPage() {
         const result = await createMut.mutateAsync({
           nome: form.nome,
           nome_fachada: form.nome_fachada,
+          meta_ad_account_id: form.meta_ad_account_id || null,
           fase: form.fase,
           telefone: form.telefone || undefined,
           responsavel: form.responsavel || undefined,
