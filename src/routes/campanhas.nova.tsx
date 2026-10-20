@@ -977,6 +977,15 @@ function EtapaPublico({ valor, onChange, dono }: { valor: Publico; onChange: (p:
 
       {/* ── 2) Perfil do público ─────────────────────────────────────────── */}
       <BlocoNumerado n={2} titulo="Quais pessoas devem ver o seu anúncio?" desc="Escolha o perfil principal do público.">
+        {/* Público Advantage+ trata idade/gênero como sugestão e recusa limite fixo:
+            mudar aqui desliga o Advantage+ na CÓPIA (decisão do dono, 20/10/2026). */}
+        {dono.tipo !== "conjunto-novo" && dono.conjunto.advantageAudience && (
+          <p className="mb-4 text-xs leading-relaxed rounded-lg px-3 py-2 border bg-amber-50 border-amber-200 text-amber-900">
+            O conjunto original usa <b>Público Advantage+</b>, em que o Meta escolhe o público. Se você mudar a idade ou o
+            gênero, o conjunto novo sai com <b>público manual</b> (Advantage+ desligado) para respeitar a sua escolha.
+            Mantendo como está, ele continua com Advantage+.
+          </p>
+        )}
         {/* Gênero */}
         <div className="grid grid-cols-3 gap-3">
           {GENEROS.map((g) => {

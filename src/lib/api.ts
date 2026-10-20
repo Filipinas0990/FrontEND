@@ -1191,6 +1191,8 @@ export interface ConjuntoMeta {
   dataFim: string           // YYYY-MM-DD ("" = sem término)
   /** Onde o conjunto entrega — no "Novo conjunto" a cópia herda isto. */
   localizacao?: { resumo: string; lat?: number; lng?: number; raioKm?: number }
+  /** Público Advantage+: mudar idade/gênero desliga o Advantage+ na cópia. */
+  advantageAudience?: boolean
 }
 
 export interface NovosAnunciosResultado {
@@ -1769,6 +1771,17 @@ export interface OfertaPublica {
   /** Só vem preenchido nos links antigos, em que o dono escolhia a farmácia. */
   farmacias: { id: number; nome: string; cidade: string | null }[]
   produtos: ProdutoOferta[]
+  /**
+   * Espaço de produtos que o próprio cliente manda (foto + nome), até `limite`.
+   * Null nos links antigos, que não têm farmácia fixa.
+   */
+  meus_produtos: { limite: number; itens: MeuProduto[] } | null
+}
+
+/** Produto que o cliente mandou pelo link (foto + nome). */
+export interface MeuProduto {
+  id: number
+  nome: string
 }
 
 export interface EnviarOfertaPayload {
@@ -1824,7 +1837,44 @@ export function ofertaImagemUrl(token: string, produtoId: number): string {
   return `${BASE_URL}/api/publico/ofertas/${token}/produto/${produtoId}/imagem`
 }
 
+/**
+ * Manda um produto do cliente para o espaço da farmácia. `imagem` é base64
+ * (ou data URL) já comprimido — o servidor recusa acima de ~900 KB.
+ * 409 = o espaço já está cheio.
+ */
+export function enviarMeuProduto(
+  token: string,
+  payload: { nome: string; imagem: string },
+): Promise<MeuProduto> {
+  return req(`/api/publico/ofertas/${token}/meus-produtos`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+/** Exclui um produto que o cliente mandou — libera a vaga. */
+export function excluirMeuProduto(token: string, id: number): Promise<{ ok: boolean }> {
+  return req(`/api/publico/ofertas/${token}/meus-produtos/${id}`, { method: "DELETE" })
+}
+
+/** Foto de um produto que o cliente mandou, na página pública. */
+export function meuProdutoImagemUrl(token: string, id: number): string {
+  return `${BASE_URL}/api/publico/ofertas/${token}/meus-produtos/${id}/imagem`
+}
+
 // -- Do gestor --
+
+/** Os produtos que o cliente mandou pelo link dele, e o tamanho do espaço. */
+export function getProdutosDoCliente(
+  farmaciaId: number,
+): Promise<{ limite: number; itens: (MeuProduto & { criado_em: string | null })[] }> {
+  return req(`/api/ofertas/clientes/${farmaciaId}/produtos`)
+}
+
+/** Foto de um produto que o cliente mandou (rota do gestor, com sessão). */
+export function produtoDoClienteImagemUrl(farmaciaId: number, id: number): string {
+  return `${BASE_URL}/api/ofertas/clientes/${farmaciaId}/produtos/${id}/imagem`
+}
 
 /**
  * Gera um token novo para aquele cliente — o link antigo morre na hora.
