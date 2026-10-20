@@ -527,7 +527,8 @@ export async function iniciarOAuthMeta(): Promise<void> {
 }
 
 /** Alternativa ao botão: salva um token que o gestor gerou no Facebook (validado no servidor). */
-export function salvarTokenMeta(token: string): Promise<{ nome: string; expira_em: string | null }> {
+/** `aviso`: token curto que não deu para estender — vai cair em breve. */
+export function salvarTokenMeta(token: string): Promise<{ nome: string; expira_em: string | null; aviso: string | null }> {
   return req("/api/auth/meta/token", { method: "POST", body: JSON.stringify({ token }) })
 }
 

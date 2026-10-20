@@ -202,6 +202,7 @@ function ModalFacebook({ status, onFechar }: { status?: MetaStatus; onFechar: ()
     try {
       const r = await salvarTokenMeta(tokenColado.trim());
       toast.success(`Token salvo — publicando como ${r.nome}.`);
+      if (r.aviso) toast.warning(r.aviso, { duration: 15_000 });
       setTokenColado("");
       setColando(false);
       await qc.invalidateQueries({ queryKey: ["meta-status"] });
