@@ -8,6 +8,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { getGestores, getFarmacias, getCustoResultado, type CustoJanela } from "@/lib/api";
+import { ESTILO_SAUDE, nivelSaude, preenchimentoBarra } from "@/lib/saudeCusto";
 import { isAdmin } from "@/lib/auth";
 import { usePeriod } from "@/contexts/PeriodContext";
 import { PeriodSelector } from "@/components/PeriodSelector";
@@ -226,7 +227,9 @@ function Index() {
                 <tr className="bg-zinc-50/50 border-b border-zinc-100">
                   <th className={thBase}>#</th>
                   <th className={thBase}>Farmácia</th>
-                  <th className={thBase}>Status</th>
+                  <th className={thBase} title={canal === "meta" ? "Até R$ 7,00 por conversa: saudável · até R$ 10,00: atenção · acima: crítico" : undefined}>
+                    {canal === "meta" ? "Saúde" : "Status"}
+                  </th>
                   {canal === "google" ? (
                     <th className={thBase}>
                       <div className="flex items-center gap-2">
@@ -274,6 +277,7 @@ function Index() {
                     ? ((google.vendas / gAtend) * 100).toFixed(1)
                     : null;
                   const { janela, erro } = custoDe(p.id);
+                  const saude = ESTILO_SAUDE[nivelSaude(janela)];
 
                   return (
                   <tr
@@ -284,9 +288,16 @@ function Index() {
                     <td className="px-6 py-3 text-xs text-zinc-400 font-mono">{idx + 1}</td>
                     <td className="px-6 py-3 text-sm font-medium text-zinc-900">{p.nome}</td>
                     <td className="px-6 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
-                        {alertLabel(p.nivel_alerta)}
-                      </span>
+                      {canal === "meta" ? (
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 whitespace-nowrap ${saude.selo}`}>
+                          <span className={`size-1.5 rounded-full ${saude.barra}`} />
+                          {saude.rotulo}
+                        </span>
+                      ) : (
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
+                          {alertLabel(p.nivel_alerta)}
+                        </span>
+                      )}
                     </td>
                     {canal === "google" ? (
                       <td className="px-6 py-3">
@@ -300,11 +311,11 @@ function Index() {
                     ) : (
                       <>
                         {/* Custo por resultado (campanhas de WhatsApp) */}
-                        <td className="px-6 py-3">
+                        <td className="px-6 py-3 min-w-44">
                           {!janela ? (
                             <span className="text-xs text-zinc-300">—</span>
                           ) : janela.custo_por_resultado != null ? (
-                            <span className="text-sm font-semibold text-zinc-800">{fmtBRL(janela.custo_por_resultado)}</span>
+                            <span className={`text-sm font-semibold tabular-nums ${saude.texto}`}>{fmtBRL(janela.custo_por_resultado)}</span>
                           ) : janela.gasto > 0 ? (
                             <span className="text-[11px] font-semibold text-red-600">Gastou sem resultado</span>
                           ) : (
@@ -317,6 +328,14 @@ function Index() {
                             >
                               <AlertTriangle className="size-3" />
                             </span>
+                          )}
+                          {preenchimentoBarra(janela) > 0 && (
+                            <div className="mt-1.5 h-1.5 w-full max-w-40 rounded-full bg-zinc-100 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${saude.barra}`}
+                                style={{ width: `${preenchimentoBarra(janela) * 100}%` }}
+                              />
+                            </div>
                           )}
                         </td>
                         <td className="px-6 py-3 text-sm text-zinc-800">
