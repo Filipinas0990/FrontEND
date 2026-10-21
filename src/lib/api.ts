@@ -1871,6 +1871,27 @@ export function getProdutosDoCliente(
   return req(`/api/ofertas/clientes/${farmaciaId}/produtos`)
 }
 
+/** Produto que um cliente mandou pelo link, com quem mandou. */
+export interface ProdutoEnviadoPeloCliente {
+  id: number
+  nome: string
+  criado_em: string | null
+  farmacia_id: number
+  /** Razão social — identifica o cliente internamente. */
+  farmacia: string
+  /** Fachada com queda para a razão social. */
+  farmacia_visivel: string
+  cidade: string | null
+}
+
+/**
+ * Tudo o que os clientes da carteira mandaram pelo link (o admin vê todos),
+ * dos mais recentes para os mais antigos. `limite` = tamanho do espaço de cada um.
+ */
+export function getProdutosEnviadosPelosClientes(): Promise<{ limite: number; itens: ProdutoEnviadoPeloCliente[] }> {
+  return req("/api/ofertas/produtos-clientes")
+}
+
 /** Foto de um produto que o cliente mandou (rota do gestor, com sessão). */
 export function produtoDoClienteImagemUrl(farmaciaId: number, id: number): string {
   return `${BASE_URL}/api/ofertas/clientes/${farmaciaId}/produtos/${id}/imagem`

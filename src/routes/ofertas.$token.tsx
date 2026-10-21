@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search, Check, Store, Loader2, AlertCircle, CheckCircle2, Send, ArrowLeft, ImageIcon, X,
+  Plus, Trash2, Camera,
 } from "lucide-react";
 import {
   getOfertaPublica, enviarOfertaPublica, ofertaImagemUrl,
-  type OfertaPublica,
+  enviarMeuProduto, excluirMeuProduto, meuProdutoImagemUrl,
+  type OfertaPublica, type MeuProduto,
 } from "@/lib/api";
+import { prepararFotoProduto } from "@/lib/fotoProduto";
 import { formatarMoeda } from "@/lib/moeda";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 
@@ -45,6 +48,10 @@ function OfertasPublicaPage() {
   const [buscaFarmacia, setBuscaFarmacia] = useState("");
   const [enviadoPor, setEnviadoPor] = useState("");
 
+  // "meus" = aba em que o cliente manda os produtos dele (foto + nome).
+  const [aba, setAba] = useState<"catalogo" | "meus">("catalogo");
+  const [meusProdutos, setMeusProdutos] = useState<MeuProduto[]>([]);
+
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
@@ -53,6 +60,7 @@ function OfertasPublicaPage() {
     getOfertaPublica(token)
       .then((d) => {
         setDados(d);
+        setMeusProdutos(d.meus_produtos?.itens ?? []);
         // Link do cliente: a farmácia vem no token, então já entra nos produtos
         if (d.farmacia) setFarmaciaId(d.farmacia.id);
         else if (d.farmacias.length === 1) setFarmaciaId(d.farmacias[0].id);
@@ -282,6 +290,35 @@ function OfertasPublicaPage() {
           <p className="text-sm font-medium text-zinc-900 truncate">{farmacia?.nome}</p>
         </div>
 
+        {/* Só o link do cliente tem o espaço de produtos próprios */}
+        {dados?.meus_produtos && (
+          <div className="grid grid-cols-2 gap-1 p-1 mb-4 rounded-xl bg-zinc-200/60">
+            {([
+              ["catalogo", "Escolher produtos"],
+              ["meus", `Enviar meus produtos (${meusProdutos.length}/${dados.meus_produtos.limite})`],
+            ] as const).map(([valor, rotulo]) => (
+              <button
+                key={valor}
+                type="button"
+                onClick={() => setAba(valor)}
+                className={`px-2 py-2 rounded-lg text-xs font-semibold transition ${
+                  aba === valor ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500"
+                }`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {aba === "meus" && dados?.meus_produtos ? (
+          <MeusProdutos
+            token={token}
+            limite={dados.meus_produtos.limite}
+            itens={meusProdutos}
+            onChange={setMeusProdutos}
+          />
+        ) : (<>
         <h2 className="text-lg font-bold text-zinc-900">O que você quer anunciar?</h2>
         <p className="text-sm text-zinc-500 mt-1 mb-3">
           Marque os produtos que entram na oferta e informe o preço de cada um.
@@ -423,9 +460,12 @@ function OfertasPublicaPage() {
             <p className="text-sm text-red-800">{erroEnvio}</p>
           </div>
         )}
+        </>)}
       </div>
 
-      {/* Barra fixa de envio */}
+      {/* Barra fixa de envio — é da escolha no catálogo; os produtos próprios
+          já ficam salvos no momento em que o cliente manda cada um. */}
+      {aba === "catalogo" && (
       <div className="fixed bottom-0 inset-x-0 bg-white border-t border-zinc-200 px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <p className="text-sm text-zinc-500 flex-1">
@@ -448,6 +488,221 @@ function OfertasPublicaPage() {
           </button>
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Espaço de produtos do próprio cliente: ele manda foto + nome de um produto
+ * por vez, até o limite (30). Cada envio já fica salvo para o gestor; para
+ * mandar outro com o espaço cheio, exclui um dos que estão lá.
+ */
+function MeusProdutos({
+  token, limite, itens, onChange,
+}: {
+  token: string;
+  limite: number;
+  itens: MeuProduto[];
+  onChange: (itens: MeuProduto[]) => void;
+}) {
+  const inputFoto = useRef<HTMLInputElement>(null);
+  const [foto, setFoto] = useState<string | null>(null);
+  const [nome, setNome] = useState("");
+  const [preparando, setPreparando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  // Exclusão em dois toques, sem confirm() do navegador.
+  const [confirmarExclusao, setConfirmarExclusao] = useState<number | null>(null);
+  const [excluindo, setExcluindo] = useState<number | null>(null);
+
+  const cheio = itens.length >= limite;
+
+  async function escolherFoto(arquivo: File | undefined) {
+    if (!arquivo) return;
+    setErro(null);
+    setAviso(null);
+    setPreparando(true);
+    try {
+      setFoto(await prepararFotoProduto(arquivo));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível abrir esta foto.");
+    } finally {
+      setPreparando(false);
+      // Permite escolher o mesmo arquivo de novo depois de remover.
+      if (inputFoto.current) inputFoto.current.value = "";
+    }
+  }
+
+  async function salvar() {
+    if (!foto || nome.trim().length < 2 || cheio) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      const novo = await enviarMeuProduto(token, { nome: nome.trim(), imagem: foto });
+      onChange([...itens, novo]);
+      setFoto(null);
+      setNome("");
+      setAviso(`“${novo.nome}” foi enviado para o seu gestor.`);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível enviar. Tente de novo.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function excluir(id: number) {
+    if (confirmarExclusao !== id) { setConfirmarExclusao(id); return; }
+    setExcluindo(id);
+    setErro(null);
+    setAviso(null);
+    try {
+      await excluirMeuProduto(token, id);
+      onChange(itens.filter((p) => p.id !== id));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível excluir. Tente de novo.");
+    } finally {
+      setExcluindo(null);
+      setConfirmarExclusao(null);
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="text-lg font-bold text-zinc-900">Enviar meus produtos</h2>
+      <p className="text-sm text-zinc-500 mt-1 mb-3">
+        Não achou o produto na lista? Tire uma foto dele e escreva o nome. Você
+        pode guardar até <strong className="text-zinc-700">{limite} produtos</strong> —
+        para enviar outro depois disso, exclua um dos que já estão aqui.
+      </p>
+
+      {/* Contador do espaço */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="font-medium text-zinc-600">Seu espaço</span>
+          <span className={cheio ? "font-semibold text-amber-600" : "text-zinc-500"}>
+            {itens.length} de {limite}
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full bg-zinc-200 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${cheio ? "bg-amber-500" : "bg-brand"}`}
+            style={{ width: `${Math.min(100, (itens.length / limite) * 100)}%` }}
+          />
+        </div>
+      </div>
+
+      {cheio ? (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2">
+          <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800">
+            Você chegou ao máximo de {limite} produtos. Exclua um para enviar outro.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-4 bg-white rounded-xl border border-zinc-200 p-3">
+          <input
+            ref={inputFoto}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => escolherFoto(e.target.files?.[0])}
+          />
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => inputFoto.current?.click()}
+              disabled={preparando || salvando}
+              className="relative size-24 shrink-0 rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 grid place-items-center overflow-hidden text-zinc-400 hover:border-brand hover:text-brand transition"
+              aria-label={foto ? "Trocar foto" : "Escolher foto"}
+            >
+              {preparando ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : foto ? (
+                <img src={foto} alt="Foto do produto" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="flex flex-col items-center gap-1 text-[11px] font-medium">
+                  <Camera className="size-5" /> Foto
+                </span>
+              )}
+            </button>
+            <div className="flex-1 min-w-0 flex flex-col gap-2">
+              <input
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Nome do produto"
+                maxLength={120}
+                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+              />
+              <button
+                type="button"
+                onClick={salvar}
+                disabled={!foto || nome.trim().length < 2 || salvando || preparando}
+                className="bg-brand hover:bg-brand/90 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition"
+              >
+                {salvando
+                  ? <><Loader2 className="size-4 animate-spin" /> Enviando...</>
+                  : <><Plus className="size-4" /> Enviar produto</>}
+              </button>
+            </div>
+          </div>
+          {!foto && (
+            <p className="text-xs text-zinc-400 mt-2">Toque em “Foto” para tirar ou escolher uma imagem.</p>
+          )}
+        </div>
+      )}
+
+      {erro && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex gap-2">
+          <AlertCircle className="size-4 text-red-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-800">{erro}</p>
+        </div>
+      )}
+      {aviso && !erro && (
+        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex gap-2">
+          <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-emerald-800">{aviso}</p>
+        </div>
+      )}
+
+      {itens.length === 0 ? (
+        <div className="text-center py-8 text-sm text-zinc-400 flex flex-col items-center gap-2">
+          <ImageIcon className="size-6 text-zinc-300" />
+          Você ainda não enviou nenhum produto.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {itens.map((p) => (
+            <div key={p.id} className="relative rounded-xl border border-zinc-200 bg-white p-2">
+              <div className="aspect-square rounded-lg bg-zinc-50 grid place-items-center overflow-hidden mb-2">
+                <img
+                  src={meuProdutoImagemUrl(token, p.id)}
+                  alt={p.nome}
+                  loading="lazy"
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+              <p className="text-xs text-zinc-800 leading-snug line-clamp-2">{p.nome}</p>
+              <button
+                type="button"
+                onClick={() => excluir(p.id)}
+                disabled={excluindo === p.id}
+                className={`mt-2 w-full text-xs font-semibold py-1.5 rounded-lg border flex items-center justify-center gap-1.5 transition ${
+                  confirmarExclusao === p.id
+                    ? "bg-red-600 border-red-600 text-white"
+                    : "border-zinc-200 text-zinc-500 hover:text-red-600 hover:border-red-200"
+                }`}
+              >
+                {excluindo === p.id
+                  ? <Loader2 className="size-3.5 animate-spin" />
+                  : <Trash2 className="size-3.5" />}
+                {confirmarExclusao === p.id ? "Confirmar exclusão" : "Excluir"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

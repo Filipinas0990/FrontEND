@@ -21,6 +21,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
+  PackagePlus,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { getUser } from "@/lib/auth";
@@ -72,7 +73,7 @@ function ConfigPage() {
   const metaAtencao = !!meta && (meta.expirado || (meta.conectado && (meta.dias_restantes ?? 99) <= 7));
 
   // Ativos: Conexões, Gestores e Banco de Imagens (só admin), Horários de
-  // Disparo e Categorias. O resto é futuro (cadeado).
+  // Disparo, Categorias e Produtos enviados pelos clientes. O resto é futuro (cadeado).
   const cards: CardItem[] = [
     { icon: Waypoints, label: "Conexões", to: "/conexoes" },
     {
@@ -88,6 +89,8 @@ function ConfigPage() {
       : { icon: Images, label: "Banco de Imagens", locked: true },
     { icon: Clock, label: "Horários de Disparo", to: "/horarios" },
     { icon: Tags, label: "Categorias", to: "/categorias" },
+    // O que os clientes mandaram pelo link de ofertas (foto + nome, até 30 cada).
+    { icon: PackagePlus, label: "Produtos enviados pelos clientes", to: "/produtos-clientes" },
     { icon: Puzzle, label: "Integrações de API", locked: true },
     { icon: BarChart3, label: "Power BI", locked: true },
     { icon: Bell, label: "Notificações", locked: true },
