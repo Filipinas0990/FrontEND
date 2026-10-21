@@ -31,9 +31,10 @@ import { CampoCategoria } from "@/components/CampoCategoria";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
-  listarCatalogoProdutos, catalogoImagemUrl, criarDisparo, getHorariosDisparo, nomeVisivel,
+  listarCatalogoProdutos, criarDisparo, getHorariosDisparo, nomeVisivel,
   getDonosDeGrupos, getDisparoLogs, getDisparo,
-  getUltimosProdutosDisparados, atualizarSolicitacao,
+  getUltimosProdutosDisparados, atualizarSolicitacao, getProdutosDoCliente, imagemDoProdutoOferta,
+  type CatalogoProdutoItem,
   type Farmacia, type DisparoResumo, type DisparoDetalhe, type ClienteCarteira, type GrupoWhatsApp,
   type MidiaDisparo, type RepetirDisparo,
 } from "@/lib/api";
@@ -978,10 +979,24 @@ function PassoCriativo({
     staleTime: 60_000,
   });
 
-  // Só o que está ligado no Banco de Imagens entra no criativo
-  const ativos = useMemo(
-    () => (data?.produtos ?? []).filter((p) => p.ativo),
-    [data],
+  // Produtos que este cliente mandou pelo link (foto + nome). Entram na grade
+  // com o id NEGATIVO, do mesmo jeito que chegam na lista dele.
+  const { data: doEspaco, isLoading: carregandoEspaco } = useQuery({
+    queryKey: ["produtos-do-cliente", farmacia.id],
+    queryFn: () => getProdutosDoCliente(farmacia.id),
+    staleTime: 60_000,
+  });
+
+  // Só o que está ligado no Banco de Imagens entra no criativo — mais os
+  // produtos do próprio cliente, que vêm primeiro.
+  const ativos = useMemo<CatalogoProdutoItem[]>(
+    () => [
+      ...(doEspaco?.itens ?? []).map((p) => ({
+        id: -p.id, nome: p.nome, ativo: true, categoria: null, criadoEm: p.criado_em,
+      })),
+      ...(data?.produtos ?? []).filter((p) => p.ativo),
+    ],
+    [data, doEspaco],
   );
 
   const pedidos = useMemo(
@@ -1037,7 +1052,9 @@ function PassoCriativo({
   // Uma vez por pedido, para não desfazer o que o gestor mexeu.
   const preMarcado = useRef<string | null>(null);
   useEffect(() => {
-    if (!ultima || doCliente.length === 0) return;
+    // Espera o espaço do cliente: sem isso os produtos dele chegam depois da
+    // pré-marcação, e ela só roda uma vez por pedido.
+    if (!ultima || carregandoEspaco || doCliente.length === 0) return;
     const chave = `${farmacia.id}|${ultima.id}`;
     if (preMarcado.current === chave) return;
     preMarcado.current = chave;
@@ -1051,7 +1068,7 @@ function PassoCriativo({
       for (const id of Object.keys(dePorDoCliente)) novo.add(Number(id));
       return novo;
     });
-  }, [ultima, doCliente, farmacia.id, precosDoCliente, dePorDoCliente]);
+  }, [ultima, carregandoEspaco, doCliente, farmacia.id, precosDoCliente, dePorDoCliente]);
 
   /**
    * Opções do campo de filtro. "Recentes" vem sempre primeiro — repetir a
@@ -1076,7 +1093,8 @@ function PassoCriativo({
       if (filtro && !p.nome.toLowerCase().includes(filtro)) return false;
       if (!filtroCat) return true;                       // nenhum chip aceso
       if (filtroCat === RECENTES) return recentes.has(p.id);
-      if (filtroCat === SEM_CATEGORIA) return !p.categoria?.trim();
+      // Produto do cliente (id negativo) não tem categoria, mas também não é "sem categoria" do banco.
+      if (filtroCat === SEM_CATEGORIA) return p.id > 0 && !p.categoria?.trim();
       // "contém" e não igualdade: o campo aceita texto digitado, e meia palavra
       // ("hig") tem de estreitar a grade em vez de zerá-la.
       return normalizarCategoria(p.categoria ?? "").includes(normalizarCategoria(filtroCat));
@@ -1157,7 +1175,7 @@ function PassoCriativo({
       nome:          produto.nome,
       preco:         precos[produto.id] ?? "",
       precoDe:       dePor.has(produto.id) ? precosDe[produto.id] : undefined,
-      imagem:        catalogoImagemUrl(produto.id),
+      imagem:        imagemDoProdutoOferta(farmacia.id, produto.id),
       localizacao:   nomeVisivel(farmacia),
       titulo:        modeloAtual?.titulo,
       subtitulo,
@@ -1431,7 +1449,7 @@ function PassoCriativo({
             </div>
           )}
 
-          {isLoading || carregandoEscolha ? (
+          {isLoading || carregandoEscolha || carregandoEspaco ? (
             <div className="flex items-center justify-center gap-2 py-12 text-zinc-400 text-sm">
               <Loader2 className="size-4 animate-spin" /> Carregando o banco de imagens...
             </div>
@@ -1461,11 +1479,16 @@ function PassoCriativo({
                     <button onClick={() => alternar(p.id)} className="w-full text-left">
                       <div className="relative">
                         <img
-                          src={catalogoImagemUrl(p.id)}
+                          src={imagemDoProdutoOferta(farmacia.id, p.id)}
                           alt={p.nome}
                           loading="lazy"
                           className="w-full aspect-square object-contain rounded-lg bg-zinc-50"
                         />
+                        {p.id < 0 && (
+                          <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-white/90 text-[10px] font-semibold text-brand shadow-sm">
+                            Foto do cliente
+                          </span>
+                        )}
                         <span className={`absolute top-1.5 left-1.5 size-5 rounded border grid place-items-center ${
                           marcado ? "bg-brand border-brand text-white" : "bg-white/90 border-zinc-300"
                         }`}>

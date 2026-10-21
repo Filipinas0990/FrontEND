@@ -18,6 +18,13 @@ export const Route = createFileRoute("/ofertas/$token")({
   head: () => ({ meta: [{ title: "Ofertas da semana" }] }),
 });
 
+/**
+ * Valor do chip dos produtos que o próprio cliente mandou. Esses produtos
+ * entram na grade e na lista com o id NEGATIVO (-id do espaço dele): é assim
+ * que o backend e o passo 3 do disparo os separam dos do banco de imagens.
+ */
+const MEUS = "__meus__";
+
 /** Minúsculo e sem acento — o dono digita "sao jose" e acha "São José". */
 function semAcento(texto: string): string {
   return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -78,22 +85,35 @@ function OfertasPublicaPage() {
   const chips = useMemo(() => {
     const { nomes, temSemCategoria } = categoriasDe(dados?.produtos ?? []);
     const lista: { valor: string; rotulo: string }[] = [{ valor: "todas", rotulo: "Todos" }];
+    if (meusProdutos.length > 0) lista.push({ valor: MEUS, rotulo: "Meus produtos" });
     for (const nome of nomes) lista.push({ valor: nome, rotulo: nome });
     // "Outros" e não "Sem categoria": o dono da farmácia não tem por que saber
     // que a classificação do nosso banco está incompleta.
     if (temSemCategoria) lista.push({ valor: SEM_CATEGORIA, rotulo: "Outros" });
     return lista;
-  }, [dados]);
+  }, [dados, meusProdutos.length]);
+
+  // Os do cliente vêm primeiro: foi ele que mandou, é o que mais quer anunciar.
+  const todosProdutos = useMemo(() => [
+    ...meusProdutos.map((p) => ({ id: -p.id, nome: p.nome, categoria: null as string | null })),
+    ...(dados?.produtos ?? []),
+  ], [dados, meusProdutos]);
 
   const produtosFiltrados = useMemo(() => {
     const termo = semAcento(busca);
-    return (dados?.produtos ?? []).filter((p) => {
+    return todosProdutos.filter((p) => {
       if (termo && !semAcento(p.nome).includes(termo)) return false;
       if (filtroCat === "todas") return true;
-      if (filtroCat === SEM_CATEGORIA) return !p.categoria?.trim();
+      if (filtroCat === MEUS) return p.id < 0;
+      if (filtroCat === SEM_CATEGORIA) return p.id > 0 && !p.categoria?.trim();
       return normalizarCategoria(p.categoria ?? "") === normalizarCategoria(filtroCat);
     });
-  }, [dados, busca, filtroCat]);
+  }, [todosProdutos, busca, filtroCat]);
+
+  /** Foto do produto na grade: o do cliente vem do espaço dele. */
+  function fotoUrl(id: number): string {
+    return id < 0 ? meuProdutoImagemUrl(token, -id) : ofertaImagemUrl(token, id);
+  }
 
   // Nos links de cliente a farmácia é fixa: não há lista nem como trocar.
   const farmaciaFixa = dados?.farmacia ?? null;
@@ -317,6 +337,15 @@ function OfertasPublicaPage() {
             limite={dados.meus_produtos.limite}
             itens={meusProdutos}
             onChange={setMeusProdutos}
+            naLista={selecionados}
+            onAlternar={(id) => alternar(-id)}
+            onEnviado={(id) => setSelecionados((atual) => new Set(atual).add(-id))}
+            onExcluido={(id) => setSelecionados((atual) => {
+              const novo = new Set(atual);
+              novo.delete(-id);
+              return novo;
+            })}
+            onVerLista={() => { setAba("catalogo"); setFiltroCat(MEUS); }}
           />
         ) : (<>
         <h2 className="text-lg font-bold text-zinc-900">O que você quer anunciar?</h2>
@@ -376,7 +405,7 @@ function OfertasPublicaPage() {
                 <button onClick={() => alternar(p.id)} className="w-full text-left">
                   <div className="aspect-square rounded-lg bg-zinc-50 grid place-items-center overflow-hidden mb-2">
                     <img
-                      src={ofertaImagemUrl(token, p.id)}
+                      src={fotoUrl(p.id)}
                       alt={p.nome}
                       loading="lazy"
                       className="max-h-full max-w-full object-contain"
@@ -384,6 +413,11 @@ function OfertasPublicaPage() {
                     />
                   </div>
                   <p className="text-xs text-zinc-800 leading-snug line-clamp-2">{p.nome}</p>
+                  {p.id < 0 && (
+                    <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-white/90 text-[10px] font-semibold text-brand shadow-sm">
+                      Seu produto
+                    </span>
+                  )}
                   {marcado && (
                     <span className="absolute top-2 right-2 size-6 rounded-full bg-brand text-white grid place-items-center shadow">
                       <Check className="size-3.5" />
@@ -463,9 +497,8 @@ function OfertasPublicaPage() {
         </>)}
       </div>
 
-      {/* Barra fixa de envio — é da escolha no catálogo; os produtos próprios
-          já ficam salvos no momento em que o cliente manda cada um. */}
-      {aba === "catalogo" && (
+      {/* Barra fixa de envio — vale para as duas abas: os produtos que o
+          cliente mandou entram na mesma lista que os do banco. */}
       <div className="fixed bottom-0 inset-x-0 bg-white border-t border-zinc-200 px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <p className="text-sm text-zinc-500 flex-1">
@@ -488,7 +521,6 @@ function OfertasPublicaPage() {
           </button>
         </div>
       </div>
-      )}
     </div>
   );
 }
@@ -499,12 +531,20 @@ function OfertasPublicaPage() {
  * mandar outro com o espaço cheio, exclui um dos que estão lá.
  */
 function MeusProdutos({
-  token, limite, itens, onChange,
+  token, limite, itens, onChange, naLista, onAlternar, onEnviado, onExcluido, onVerLista,
 }: {
   token: string;
   limite: number;
   itens: MeuProduto[];
   onChange: (itens: MeuProduto[]) => void;
+  /** Ids marcados na oferta — os deste espaço aparecem negativos (-id). */
+  naLista: Set<number>;
+  onAlternar: (id: number) => void;
+  /** Produto recém-enviado: já entra marcado na oferta. */
+  onEnviado: (id: number) => void;
+  onExcluido: (id: number) => void;
+  /** Leva para a grade, onde o cliente informa o preço. */
+  onVerLista: () => void;
 }) {
   const inputFoto = useRef<HTMLInputElement>(null);
   const [foto, setFoto] = useState<string | null>(null);
@@ -542,9 +582,10 @@ function MeusProdutos({
     try {
       const novo = await enviarMeuProduto(token, { nome: nome.trim(), imagem: foto });
       onChange([...itens, novo]);
+      onEnviado(novo.id);
       setFoto(null);
       setNome("");
-      setAviso(`“${novo.nome}” foi enviado para o seu gestor.`);
+      setAviso(`“${novo.nome}” foi salvo e já está marcado na sua oferta.`);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível enviar. Tente de novo.");
     } finally {
@@ -560,6 +601,7 @@ function MeusProdutos({
     try {
       await excluirMeuProduto(token, id);
       onChange(itens.filter((p) => p.id !== id));
+      onExcluido(id);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível excluir. Tente de novo.");
     } finally {
@@ -666,6 +708,18 @@ function MeusProdutos({
         </div>
       )}
 
+      {/* Salvar no espaço não é mandar a oferta: o gestor só recebe quando o
+          cliente toca em Enviar, como na escolha pelo banco. */}
+      {itens.length > 0 && (
+        <div className="mb-4 bg-zinc-100 rounded-xl p-3 text-sm text-zinc-600">
+          Os produtos marcados entram na sua oferta. Para mandar ao gestor, toque em{" "}
+          <strong className="text-zinc-800">Enviar</strong> lá embaixo.{" "}
+          <button type="button" onClick={onVerLista} className="font-semibold text-brand hover:underline">
+            Informar os preços
+          </button>
+        </div>
+      )}
+
       {itens.length === 0 ? (
         <div className="text-center py-8 text-sm text-zinc-400 flex flex-col items-center gap-2">
           <ImageIcon className="size-6 text-zinc-300" />
@@ -684,6 +738,18 @@ function MeusProdutos({
                 />
               </div>
               <p className="text-xs text-zinc-800 leading-snug line-clamp-2">{p.nome}</p>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={naLista.has(-p.id)}
+                onClick={() => onAlternar(p.id)}
+                className="mt-2 flex items-center justify-between gap-2 w-full select-none"
+              >
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">
+                  Na oferta
+                </span>
+                <Toggle ligado={naLista.has(-p.id)} />
+              </button>
               <button
                 type="button"
                 onClick={() => excluir(p.id)}

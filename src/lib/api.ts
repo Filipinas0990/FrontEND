@@ -1758,6 +1758,11 @@ export interface ProdutoOferta {
    */
   preco_de?: string | null
   /**
+   * 'cliente' = foto do espaço do próprio cliente; nesse caso `id` é NEGATIVO
+   * (-id do produto dele). Ver `imagemDoProdutoOferta`.
+   */
+  origem?: "cliente"
+  /**
    * Categoria — só vem na vitrine do link público, para os chips de filtro.
    * As listas de pedido já enviado gravam {id, nome} e não têm o campo.
    */
@@ -1895,6 +1900,15 @@ export function getProdutosEnviadosPelosClientes(): Promise<{ limite: number; it
 /** Foto de um produto que o cliente mandou (rota do gestor, com sessão). */
 export function produtoDoClienteImagemUrl(farmaciaId: number, id: number): string {
   return `${BASE_URL}/api/ofertas/clientes/${farmaciaId}/produtos/${id}/imagem`
+}
+
+/**
+ * Foto de um item da lista que o cliente enviou. Id NEGATIVO = produto que o
+ * próprio cliente mandou pelo link (o backend grava -id de produtos_cliente);
+ * positivo = banco de imagens.
+ */
+export function imagemDoProdutoOferta(farmaciaId: number, id: number): string {
+  return id < 0 ? produtoDoClienteImagemUrl(farmaciaId, -id) : catalogoImagemUrl(id)
 }
 
 /**

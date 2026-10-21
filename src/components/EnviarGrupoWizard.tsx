@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   conectarMeuWhatsapp, getMeuWhatsappStatus, getMeusGrupos, criarDisparo,
   getConexoesDisparo, getHorariosDisparo, type HorarioDisparo,
-  getCarteiraOfertas, catalogoImagemUrl, getDonosDeGrupos, type DonoDeGrupo,
+  getCarteiraOfertas, imagemDoProdutoOferta, getDonosDeGrupos, type DonoDeGrupo,
   type GrupoWhatsApp, type RepetirDisparo, type InstanciaStatus,
   type ClienteCarteira, type MidiaDisparo, type ConexaoDisparo,
 } from "@/lib/api";
@@ -292,7 +292,8 @@ export function EnviarGrupoWizard({
     const doCatalogo: ItemOferta[] = pedido.produtos.map((p) => ({
       chave:   `cat-${p.id}`,
       nome:    p.nome,
-      imagem:  catalogoImagemUrl(p.id),
+      // Id negativo = foto que o próprio cliente mandou pelo link.
+      imagem:  imagemDoProdutoOferta(c.farmacia_id, p.id),
       // O dono já pode ter mandado o preço no link dele
       preco:   p.preco ?? "",
       // ...e o preço antigo, quando ligou o de/por lá
