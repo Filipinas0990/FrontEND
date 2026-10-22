@@ -114,7 +114,7 @@ export function AppShell({ title, children, headerRight, hideHeader, larguraTota
 
   return (
     <div className="flex min-h-screen bg-neutral-50 text-zinc-900 font-sans">
-      <aside className="w-52 bg-brand flex flex-col sticky top-0 h-screen">
+      <aside className="w-60 bg-brand flex flex-col sticky top-0 h-screen">
         <div className="px-5 py-5 flex items-center gap-3 border-b border-white/15">
           <div className="size-9 bg-white/20 rounded-xl grid place-items-center text-white shadow-inner">
             <Activity className="size-[18px]" strokeWidth={2.5} />

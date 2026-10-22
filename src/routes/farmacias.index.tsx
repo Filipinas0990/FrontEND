@@ -1,26 +1,31 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { Search, Plus, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, Settings, Phone, MapPin, User, Rocket, CheckCircle2, Megaphone } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import type { ReactNode } from "react";
+import {
+  Search, Plus, Pencil, Trash2, RefreshCw, Target, Megaphone, ArrowUpRight, ArrowDownRight, ExternalLink,
+  TrendingUp, Store, CheckCircle2, AlertTriangle, type LucideIcon,
+} from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { FarmaciasTabs } from "@/components/FarmaciasTabs";
-import { usePeriod } from "@/contexts/PeriodContext";
-import { PeriodSelector } from "@/components/PeriodSelector";
-import { PeriodBadge } from "@/components/PeriodBadge";
+import { usePeriod, type Period } from "@/contexts/PeriodContext";
 import {
   getFarmacias,
   getGestores,
+  getCustoResultado,
+  getFarmaciaEvolucaoPorPeriodo,
   createFarmacia,
   updateFarmacia,
   deleteFarmacia,
   setFarmaciaMeta,
-  ativarFarmacia,
   getContasMetaCadastro,
   nomeVisivel,
+  type CustoJanela,
   type Farmacia,
   type Gestor,
 } from "@/lib/api";
+import { nivelSaude, ESTILO_SAUDE } from "@/lib/saudeCusto";
 import { isAdmin } from "@/lib/auth";
 import {
   Dialog,
@@ -45,24 +50,28 @@ export const Route = createFileRoute("/farmacias/")({
   head: () => ({ meta: [{ title: "Farmácias — PharmaFlow" }] }),
 });
 
-function alertColor(nivel: string) {
-  if (nivel === "vermelho") return "bg-red-50 text-red-700 ring-red-600/10";
-  if (nivel === "amarelo") return "bg-amber-50 text-amber-700 ring-amber-600/10";
-  return "bg-emerald-50 text-emerald-700 ring-emerald-600/10";
-}
+type Nivel = Farmacia["nivel_alerta"];
 
-function alertLabel(nivel: string) {
-  if (nivel === "vermelho") return "Alerta";
-  if (nivel === "amarelo") return "Atenção";
-  return "Ativa";
+/** Grupos da lista, na ordem de urgência. O nível vem pronto do backend. */
+const GRUPOS: { nivel: Nivel; titulo: string; dica: string; rotulo: string; ponto: string; selo: string }[] = [
+  { nivel: "vermelho", titulo: "Precisam de ação agora", dica: "em alerta",          rotulo: "Alerta",  ponto: "bg-red-500",     selo: "bg-red-50 text-red-700 ring-red-600/10" },
+  { nivel: "amarelo",  titulo: "De olho",                dica: "abaixo do esperado", rotulo: "Atenção", ponto: "bg-amber-500",   selo: "bg-amber-50 text-amber-700 ring-amber-600/10" },
+  { nivel: "verde",    titulo: "No caminho certo",       dica: "saudáveis",          rotulo: "Ativa",   ponto: "bg-emerald-500", selo: "bg-emerald-50 text-emerald-700 ring-emerald-600/10" },
+];
+
+const grupoDo = (nivel: Nivel) => GRUPOS.find((g) => g.nivel === nivel) ?? GRUPOS[2];
+
+/** Ainda não tem coleta no período: fica fora dos grupos e da soma de receita. */
+function semDados(p: Farmacia) {
+  return p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0);
 }
 
 function Variacao({ value }: { value: number | null | undefined }) {
-  if (value == null || value === 0) return <span className="text-zinc-400 text-[10px]">—</span>;
+  if (value == null || value === 0) return <span className="text-zinc-400 text-[11px]">—</span>;
   const pos = value > 0;
   return (
-    <span className={`flex items-center gap-0.5 text-[10px] font-medium ${pos ? "text-emerald-600" : "text-red-600"}`}>
-      {pos ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+    <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${pos ? "text-emerald-600" : "text-red-600"}`}>
+      {pos ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
       {Math.abs(value).toFixed(1)}%
     </span>
   );
@@ -70,6 +79,19 @@ function Variacao({ value }: { value: number | null | undefined }) {
 
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+}
+
+function fmtCompacto(v: number) {
+  return v >= 1000
+    ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k`
+    : `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+}
+
+/** Cor do progresso da meta de receita: bateu, perto (≥ 70%) ou longe. */
+function corMeta(pct: number) {
+  if (pct >= 100) return { barra: "bg-emerald-500", traco: "stroke-emerald-500", texto: "text-emerald-600" };
+  if (pct >= 70) return { barra: "bg-amber-500", traco: "stroke-amber-500", texto: "text-amber-600" };
+  return { barra: "bg-red-500", traco: "stroke-red-500", texto: "text-red-600" };
 }
 
 // ── Form dialog ────────────────────────────────────────────────────────────
@@ -453,7 +475,7 @@ function LeadsChannelRow({ canalNome, atual, meta }: { canalNome: string; atual:
   const s = LEADS_STATUS_STYLE[leadsStatus(pct)];
   return (
     <div className="space-y-0.5">
-      <div className="flex items-center justify-between text-[10px]">
+      <div className="flex items-center justify-between text-[11px]">
         <span className="font-medium text-zinc-600">{s.emoji} {canalNome}</span>
         <span className={`font-semibold ${s.text}`}>{Math.round(Math.min(pct, 100))}%</span>
       </div>
@@ -465,80 +487,60 @@ function LeadsChannelRow({ canalNome, atual, meta }: { canalNome: string; atual:
   );
 }
 
-// ── Modal Ativar Farmácia ──────────────────────────────────────────────────
+// ── Próximo passo ──────────────────────────────────────────────────────────
 
-function ModalAtivarFarmacia({
-  farmacia,
-  gestores,
-  onClose,
-  onSaved,
-}: {
-  farmacia: Farmacia | null;
-  gestores: Gestor[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({ gestor_id: "" });
-
-  useEffect(() => {
-    if (farmacia) setForm({ gestor_id: farmacia.gestor_id ? String(farmacia.gestor_id) : "" });
-  }, [farmacia]);
-
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((p) => ({ ...p, [k]: e.target.value }));
-
-  const mut = useMutation({
-    mutationFn: () =>
-      ativarFarmacia(farmacia!.id, {
-        gestor_id: form.gestor_id ? Number(form.gestor_id) : undefined,
-      }),
-    onSuccess: () => {
-      toast.success(`${farmacia!.nome} ativada com sucesso!`);
-      qc.invalidateQueries({ queryKey: ["farmacias"] });
-      onSaved();
-      onClose();
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  return (
-    <Dialog open={!!farmacia} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Rocket className="size-4 text-brand" />
-            Ativar Cliente — {farmacia?.nome}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-1">
-          <FormField label="Atribuir Gestor">
-            <select value={form.gestor_id} onChange={set("gestor_id")} className="form-input">
-              <option value="">Sem gestor</option>
-              {gestores.filter((g) => !g.is_admin).map((g) => (
-                <option key={g.id} value={g.id}>{g.nome}</option>
-              ))}
-            </select>
-          </FormField>
-        </div>
-        <DialogFooter>
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900">Cancelar</button>
-          <button
-            type="button"
-            onClick={() => mut.mutate()}
-            disabled={mut.isPending}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90 disabled:opacity-60"
-          >
-            {mut.isPending ? <RefreshCw className="size-3.5 animate-spin" /> : <Rocket className="size-3.5" />}
-            Ativar Cliente
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+/**
+ * Sugestão do que o gestor faz agora com a farmácia. A ordem é a prioridade:
+ * a primeira regra que bate é a que aparece.
+ */
+function proximoPasso(p: Farmacia, custo: CustoJanela | null): { titulo: string; texto: string; tom: Nivel } {
+  if (p.nivel_alerta === "vermelho") {
+    return {
+      titulo: "Revisar campanhas hoje",
+      texto: p.variacao_receita < 0
+        ? `Receita caiu ${Math.abs(p.variacao_receita).toFixed(0)}% no período. Veja se os anúncios estão rodando e se o saldo do Meta acabou.`
+        : "Farmácia em alerta no período. Veja se os anúncios estão rodando e se o saldo do Meta acabou.",
+      tom: "vermelho",
+    };
+  }
+  if (nivelSaude(custo) === "critico") {
+    return {
+      titulo: "Custo por conversa alto",
+      texto: custo?.custo_por_resultado != null
+        ? `Cada conversa está saindo a ${custo.custo_por_resultado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Revise público e criativos.`
+        : "Gastou no Meta e não gerou nenhuma conversa. Revise a campanha.",
+      tom: "vermelho",
+    };
+  }
+  if (!p.nome_fachada) {
+    return { titulo: "Completar o nome de fachada", texto: "O criativo do grupo está saindo com a razão social.", tom: "amarelo" };
+  }
+  if (p.meta_receita == null) {
+    return { titulo: "Definir meta de receita", texto: "Sem meta, não dá para saber se o resultado é bom. Combine um valor com o cliente.", tom: "amarelo" };
+  }
+  if (!p.meta_ad_account_id) {
+    return { titulo: "Vincular a conta de anúncios", texto: "Sem conta Meta no cadastro, a farmácia fica fora do custo por resultado.", tom: "amarelo" };
+  }
+  if (p.nivel_alerta === "amarelo") {
+    return { titulo: "Ajustar público e criativos", texto: "Resultado abaixo do esperado. Teste novos criativos ou redistribua o investimento.", tom: "amarelo" };
+  }
+  if (p.atingiu_meta) {
+    return { titulo: "Meta batida — hora de escalar", texto: "Bom momento para aumentar o investimento e mostrar o resultado ao cliente.", tom: "verde" };
+  }
+  return { titulo: "Manter acompanhamento", texto: "Tudo dentro do esperado. Siga de olho no custo por conversa.", tom: "verde" };
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────
+
+type FiltroAcao = "todos" | "com_acao" | "sem_acao" | "abre_mes" | "fecha_mes";
+
+const FILTROS_ACAO: { value: FiltroAcao; label: string }[] = [
+  { value: "todos",     label: "Todas as ações" },
+  { value: "com_acao",  label: "Com ação" },
+  { value: "sem_acao",  label: "Sem ação" },
+  { value: "abre_mes",  label: "Abre mês" },
+  { value: "fecha_mes", label: "Fecha mês" },
+];
 
 function FarmaciasPage() {
   const navigate = useNavigate();
@@ -547,22 +549,17 @@ function FarmaciasPage() {
   const { period, setPeriod } = usePeriod();
 
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"todas" | "Ativa" | "Atencao" | "Alerta">("todas");
-  const [acaoFilter, setAcaoFilter] = useState<"todos" | "com_acao" | "sem_acao" | "abre_mes" | "fecha_mes">("todos");
+  /** Filtro pelos indicadores do topo: "ativas" = verde, "atencao" = amarelo + vermelho. */
+  const [nivelFiltro, setNivelFiltro] = useState<"ativas" | "atencao" | null>(null);
+  const [acaoFilter, setAcaoFilter] = useState<FiltroAcao>("todos");
+  const [selId, setSelId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
-  const [ativarTarget, setAtivarTarget] = useState<Farmacia | null>(null);
 
   const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["farmacias", filter, query, period],
-    queryFn: () =>
-      getFarmacias({
-        status: filter !== "todas" ? filter : undefined,
-        busca: query || undefined,
-        dias: period,
-        fase: "ativo",
-      }),
+    queryKey: ["farmacias", period],
+    queryFn: () => getFarmacias({ dias: period, fase: "ativo" }),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     staleTime: 0,
@@ -573,6 +570,20 @@ function FarmaciasPage() {
     queryFn: getGestores,
     enabled: admin,
   });
+
+  const { data: custo } = useQuery({
+    queryKey: ["custo-resultado", undefined],
+    queryFn: () => getCustoResultado(),
+  });
+
+  /** Custo por resultado do Meta na janela do período selecionado. */
+  function custoDe(farmaciaId: number): CustoJanela | null {
+    const f = custo?.farmacias.find((x) => x.farmacia_id === farmaciaId);
+    if (!f) return null;
+    return period === 7 ? f.janela_7d : period === 15 ? f.janela_15d : f.janela_30d;
+  }
+
+  const gestorNome = (id: number | null) => (id ? gestores.find((g) => g.id === id)?.nome ?? null : null);
 
   const createMut = useMutation({
     mutationFn: createFarmacia,
@@ -644,327 +655,207 @@ function FarmaciasPage() {
 
   const saving = createMut.isPending || updateMut.isPending;
 
-  const farmaciasFiltradas = farmacias.filter((p) => {
-    if (acaoFilter === "com_acao")  return (p.acoes_ativas?.length ?? 0) > 0;
-    if (acaoFilter === "sem_acao")  return (p.acoes_ativas?.length ?? 0) === 0;
-    if (acaoFilter === "abre_mes")  return p.acoes_ativas?.some((a) => a.tipo === "abre_mes") ?? false;
-    if (acaoFilter === "fecha_mes") return p.acoes_ativas?.some((a) => a.tipo === "fecha_mes") ?? false;
-    return true;
-  });
+  // Saúde da carteira: sempre sobre a carteira inteira, sem os filtros da lista
+  const comDados = farmacias.filter((p) => !semDados(p));
+  const receitaCarteira = comDados.reduce((s, p) => s + p.receita_total, 0);
+  const vendasCarteira = comDados.reduce((s, p) => s + p.vendas_realizadas, 0);
+  const contagem: Record<Nivel, number> = { vermelho: 0, amarelo: 0, verde: 0 };
+  comDados.forEach((p) => { contagem[p.nivel_alerta]++; });
+  const totalSemDados = farmacias.length - comDados.length;
+
+  const filtradas = useMemo(() => {
+    const termo = query.trim().toLowerCase();
+    return farmacias.filter((p) => {
+      if (termo) {
+        const alvo = [p.nome, p.nome_fachada, p.cidade, gestorNome(p.gestor_id)].filter(Boolean).join(" ").toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      if (nivelFiltro && (semDados(p) || (nivelFiltro === "ativas") !== (p.nivel_alerta === "verde"))) return false;
+      if (acaoFilter === "com_acao")  return (p.acoes_ativas?.length ?? 0) > 0;
+      if (acaoFilter === "sem_acao")  return (p.acoes_ativas?.length ?? 0) === 0;
+      if (acaoFilter === "abre_mes")  return p.acoes_ativas?.some((a) => a.tipo === "abre_mes") ?? false;
+      if (acaoFilter === "fecha_mes") return p.acoes_ativas?.some((a) => a.tipo === "fecha_mes") ?? false;
+      return true;
+    });
+  }, [farmacias, query, nivelFiltro, acaoFilter, gestores]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const grupos = GRUPOS.map((g) => ({
+    ...g,
+    itens: filtradas
+      .filter((p) => !semDados(p) && p.nivel_alerta === g.nivel)
+      .sort((a, b) => b.score_criticidade - a.score_criticidade),
+  }));
+  const aguardando = filtradas.filter(semDados);
+  const ordenadas = [...grupos.flatMap((g) => g.itens), ...aguardando];
+  const atual = ordenadas.find((p) => p.id === selId) ?? ordenadas[0] ?? null;
+
+  // Abaixo de xl não há painel lateral: o clique vai direto para a página da farmácia
+  function abrir(p: Farmacia) {
+    if (window.matchMedia("(min-width: 1280px)").matches) setSelId(p.id);
+    else navigate({ to: "/farmacias/$id", params: { id: String(p.id) } });
+  }
+
+  function editar(p: Farmacia) {
+    setEditTarget(p);
+    setDialogOpen(true);
+  }
+
+  const linha = (p: Farmacia) => (
+    <LinhaFarmacia
+      key={p.id}
+      p={p}
+      gestor={gestorNome(p.gestor_id)}
+      selecionada={atual?.id === p.id}
+      onClick={() => abrir(p)}
+    />
+  );
 
   return (
-    <AppShell
-      title="Farmácias"
-      headerRight={
-        <div className="flex items-center gap-2">
-          {isFetching && !isLoading && (
-            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-              <RefreshCw className="size-3 animate-spin" />
-              Atualizando...
-            </span>
-          )}
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            title="Atualizar dados"
-            className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-md transition-colors disabled:opacity-40"
-          >
-            <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
-          </button>
-          {admin && (
+    <AppShell title="Farmácias" hideHeader larguraTotal>
+      {/* Cabeçalho da página com os números da carteira */}
+      <section className="rounded-3xl bg-gradient-to-br from-red-500 via-brand to-[#5c0a24] px-6 py-5 text-white shadow-lg">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <p className="text-sm font-medium text-white/80">Gestão da rede</p>
+            <h1 className="text-3xl font-extrabold tracking-tight">Farmácias</h1>
+            <p className="mt-1 text-sm text-white/75">
+              {farmacias.length} unidades cadastradas · últimos {period} dias
+              {totalSemDados > 0 && ` · ${totalSemDados} sem dados no período`}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1 rounded-2xl bg-white/15 p-1">
+              {([7, 15, 30] as Period[]).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setPeriod(d)}
+                  className={`rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    period === d ? "bg-white text-brand" : "text-white/85 hover:text-white"
+                  }`}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
             <button
-              onClick={() => { setEditTarget(null); setDialogOpen(true); }}
-              className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-brand text-white rounded-md hover:opacity-90"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title="Atualizar dados"
+              className="grid size-10 place-items-center rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors disabled:opacity-50"
             >
-              <Plus className="size-3.5" /> Nova Farmácia
+              <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
             </button>
-          )}
+            {admin && (
+              <button
+                onClick={() => { setEditTarget(null); setDialogOpen(true); }}
+                className="flex items-center gap-2 h-10 px-4 text-sm font-semibold bg-white text-brand rounded-xl shadow-sm hover:bg-white/90"
+              >
+                <Plus className="size-4" /> Nova farmácia
+              </button>
+            )}
+          </div>
         </div>
-      }
-    >
-      <FarmaciasTabs />
 
-      {/* Seletor de período */}
-      <PeriodSelector
-        value={period}
-        onChange={setPeriod}
-        loading={isFetching && !isLoading}
-      />
-
-      {/* Filters */}
-      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4 flex flex-wrap items-center gap-3">
-        <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-zinc-50 rounded-md border border-zinc-100">
-          <Search className="size-4 text-zinc-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nome..."
-            className="bg-transparent outline-none text-sm flex-1"
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <IndicadorTopo icone={TrendingUp} rotulo="Receita total" carregando={isLoading} valor={fmtBRL(receitaCarteira)} />
+          <IndicadorTopo icone={Store} rotulo="Vendas" carregando={isLoading} valor={vendasCarteira.toLocaleString("pt-BR")} />
+          <IndicadorTopo
+            icone={CheckCircle2}
+            rotulo="Ativas"
+            carregando={isLoading}
+            valor={`${contagem.verde}/${farmacias.length}`}
+            ativo={nivelFiltro === "ativas"}
+            onClick={() => setNivelFiltro(nivelFiltro === "ativas" ? null : "ativas")}
+          />
+          <IndicadorTopo
+            icone={AlertTriangle}
+            rotulo="Em atenção"
+            carregando={isLoading}
+            valor={String(contagem.vermelho + contagem.amarelo)}
+            detalhe={`${contagem.vermelho} em alerta · ${contagem.amarelo} atenção`}
+            ativo={nivelFiltro === "atencao"}
+            onClick={() => setNivelFiltro(nivelFiltro === "atencao" ? null : "atencao")}
           />
         </div>
-        <div className="flex gap-1 bg-zinc-50 p-1 rounded-md">
-          {(["todas", "Ativa", "Atencao", "Alerta"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors capitalize ${
-                filter === f ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
-              }`}
-            >
-              {f === "Atencao" ? "Atenção" : f}
-            </button>
-          ))}
-        </div>
-      </div>
+      </section>
 
-      {/* Filtro por ação */}
-      <div className="flex items-center gap-2">
-          <Megaphone className="size-3 text-zinc-300 shrink-0" />
-          {(
-            [
-              { value: "todos",     label: "Todos" },
-              { value: "com_acao",  label: "Com Ação" },
-              { value: "sem_acao",  label: "Sem Ação" },
-              { value: "abre_mes",  label: "Abre Mês" },
-              { value: "fecha_mes", label: "Fecha Mês" },
-            ] as const
-          ).map((f, i) => (
-            <span key={f.value} className="flex items-center gap-2">
-              {i > 0 && <span className="text-zinc-200 select-none">·</span>}
+      <div className={`grid items-start gap-6 ${atual ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
+        {/* Lista */}
+        <section className="rounded-2xl bg-white ring-1 ring-black/5 shadow-sm overflow-hidden">
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 p-4">
+            <FarmaciasTabs />
+            <label className="flex h-10 flex-1 min-w-56 items-center gap-2 rounded-xl px-3 ring-1 ring-zinc-200 focus-within:ring-zinc-400">
+              <Search className="size-4 text-zinc-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={admin ? "Buscar farmácia, cidade ou gestor…" : "Buscar farmácia ou cidade…"}
+                className="w-full bg-transparent text-sm outline-none"
+              />
+            </label>
+            <div className="flex items-center gap-1.5">
+              <Megaphone className="size-3.5 text-zinc-400 shrink-0" />
+              <select
+                value={acaoFilter}
+                onChange={(e) => setAcaoFilter(e.target.value as FiltroAcao)}
+                className="h-10 rounded-xl px-2 text-sm text-zinc-700 bg-white ring-1 ring-zinc-200 outline-none"
+              >
+                {FILTROS_ACAO.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+              </select>
+            </div>
+            {nivelFiltro && (
               <button
-                onClick={() => setAcaoFilter(f.value)}
-                className={`text-xs transition-colors ${
-                  acaoFilter === f.value
-                    ? "text-zinc-800 font-semibold"
-                    : "text-zinc-400 hover:text-zinc-600 font-medium"
-                }`}
+                onClick={() => setNivelFiltro(null)}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${grupoDo(nivelFiltro === "ativas" ? "verde" : "amarelo").selo}`}
               >
-                {f.label}
+                {nivelFiltro === "ativas" ? "Só ativas" : "Só em atenção"} ✕
               </button>
-            </span>
+            )}
+          </div>
+
+          {isLoading && (
+            <div className="divide-y divide-zinc-100">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-16 px-4 py-3"><div className="h-full rounded-lg bg-zinc-100 animate-pulse" /></div>
+              ))}
+            </div>
+          )}
+
+          {!isLoading && grupos.map((g) => g.itens.length > 0 && (
+            <div key={g.nivel}>
+              <CabecalhoGrupo ponto={g.ponto} titulo={g.titulo} detalhe={`${g.itens.length} ${g.dica}`} />
+              {g.itens.map(linha)}
+            </div>
           ))}
-        </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="grid grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl ring-1 ring-black/5 h-36 animate-pulse" />
-          ))}
-        </div>
-      )}
+          {!isLoading && aguardando.length > 0 && (
+            <div>
+              <CabecalhoGrupo ponto="bg-zinc-300" titulo="Aguardando dados" detalhe={`${aguardando.length} sem coleta no período`} />
+              {aguardando.map(linha)}
+            </div>
+          )}
 
-      {/* Cards */}
-      {!isLoading && (
-        <div className="grid grid-cols-3 gap-4">
-          {farmaciasFiltradas.map((p) => {
-            const isEntrada = p.fase === "entrada";
-            const semDados = !isEntrada && (p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0));
-            const naoAtingiuMeta = !isEntrada && !semDados && p.atingiu_meta === false;
-            return (
-              <div
-                key={p.id}
-                className={`bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer ${
-                  isEntrada ? "ring-1 ring-amber-200"
-                  : naoAtingiuMeta ? "ring-2 ring-red-500"
-                  : !p.tem_chatbot ? "ring-1 ring-sky-200"
-                  : "ring-1 ring-black/5"
-                }`}
-                onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {isEntrada && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 ring-1 ring-amber-200 shrink-0">
-                          ENTRADA
-                        </span>
-                      )}
-                      {!p.nome_fachada && (
-                        <span
-                          title="Sem nome de fachada — o criativo do grupo está saindo com a razão social"
-                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 ring-1 ring-red-200 shrink-0"
-                        >
-                          SEM FACHADA
-                        </span>
-                      )}
-                      <h3 className="text-sm font-semibold truncate">{nomeVisivel(p)}</h3>
-                    </div>
-                    {p.nome_fachada && (
-                      <p className="text-[10px] text-zinc-400 truncate">{p.nome}</p>
-                    )}
-                    {isEntrada
-                      ? <p className="text-[10px] text-amber-600 mt-0.5 italic">Aguardando ativação</p>
-                      : semDados
-                        ? <p className="text-[10px] text-zinc-400 mt-0.5 italic">Aguardando dados</p>
-                        : <p className="text-[10px] text-zinc-500 mt-0.5">#{p.posicao_ranking} no ranking</p>
-                    }
-                  </div>
-                  {!isEntrada && (
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ring-1 ${alertColor(p.nivel_alerta)}`}>
-                        {alertLabel(p.nivel_alerta)}
-                      </span>
-                      {!p.tem_chatbot && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-sky-50 text-sky-600 ring-1 ring-sky-200">
-                          Sem ChatBot
-                        </span>
-                      )}
-                      <PeriodBadge dias={period} />
-                    </div>
-                  )}
-                </div>
+          {!isLoading && filtradas.length === 0 && (
+            <p className="p-12 text-center text-sm text-zinc-500">
+              {acaoFilter !== "todos" ? "Nenhuma farmácia com este filtro de ação." : "Nenhuma farmácia encontrada."}
+            </p>
+          )}
+        </section>
 
-                {isEntrada ? (
-                  <div className="pt-3 border-t border-zinc-100 space-y-1.5">
-                    {(p.responsavel || p.telefone || p.cidade) ? (
-                      <div className="space-y-1">
-                        {p.responsavel && (
-                          <div className="flex items-center gap-1.5 text-xs text-zinc-600">
-                            <User className="size-3 text-zinc-400 shrink-0" />{p.responsavel}
-                          </div>
-                        )}
-                        {p.telefone && (
-                          <div className="flex items-center gap-1.5 text-xs text-zinc-600">
-                            <Phone className="size-3 text-zinc-400 shrink-0" />{p.telefone}
-                          </div>
-                        )}
-                        {p.cidade && (
-                          <div className="flex items-center gap-1.5 text-xs text-zinc-600">
-                            <MapPin className="size-3 text-zinc-400 shrink-0" />{p.cidade}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-zinc-400 italic">Sem dados de contato</p>
-                    )}
-                    <div className="text-[10px] text-zinc-400">
-                      {p.gestor_id
-                        ? gestores.find((g) => g.id === p.gestor_id)?.nome ?? "Gestor atribuído"
-                        : "Sem gestor atribuído"}
-                    </div>
-                  </div>
-                ) : semDados ? (
-                  <div className="pt-3 border-t border-zinc-100 flex items-center justify-center py-4">
-                    <span className="text-xs text-zinc-400 italic">Nenhum dado coletado neste período.</span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-3 pt-3 border-t border-zinc-100">
-                    <div>
-                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Receita</div>
-                      <div className="text-sm font-semibold text-zinc-900">{fmtBRL(p.receita_total)}</div>
-                      <Variacao value={p.variacao_receita} />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Vendas</div>
-                      <div className="text-sm font-semibold text-zinc-900">{p.vendas_realizadas}</div>
-                      <Variacao value={p.variacao_vendas} />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Conversão</div>
-                      <div className={`text-sm font-semibold ${(p.taxa_conversao ?? 0) >= 60 ? "text-brand" : "text-zinc-900"}`}>
-                        {(p.taxa_conversao ?? 0).toFixed(1)}%
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {!semDados && (
-                  <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1" onClick={(e) => e.stopPropagation()}>
-                    {p.meta_receita != null && p.percentual_meta_receita != null ? (
-                      <>
-                        <div className="flex justify-between text-[10px] text-zinc-500">
-                          <span>Meta receita</span>
-                          <span className={`font-semibold ${p.atingiu_meta ? "text-emerald-600" : "text-red-500"}`}>
-                            {(p.percentual_meta_receita ?? 0).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${p.atingiu_meta ? "bg-emerald-500" : "bg-red-500"}`}
-                            style={{ width: `${Math.min(p.percentual_meta_receita, 100)}%` }}
-                          />
-                        </div>
-                        <div className="text-[10px] text-zinc-400">
-                          {fmtBRL(p.receita_total)} / {fmtBRL(p.meta_receita)}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex justify-between text-[10px] text-zinc-400">
-                          <span>Meta receita</span><span>Sem meta</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-100 rounded-full" />
-                        <div className="text-[10px] text-zinc-300">—</div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {!semDados && (p.meta_leads_google !== null || p.meta_leads_meta !== null) && (
-                  <div className="mt-3 pt-3 border-t border-zinc-100 space-y-2" onClick={(e) => e.stopPropagation()}>
-                    <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Leads da semana</div>
-                    {p.meta_leads_google !== null && (
-                      <LeadsChannelRow canalNome="Google" atual={p.canais?.find((c) => c.nome.toLowerCase().includes("google"))?.atendimentos ?? 0} meta={p.meta_leads_google} />
-                    )}
-                    {p.meta_leads_meta !== null && (
-                      <LeadsChannelRow canalNome="Meta" atual={p.canais?.find((c) => c.nome.toLowerCase().includes("meta"))?.atendimentos ?? 0} meta={p.meta_leads_meta} />
-                    )}
-                  </div>
-                )}
-
-                {/* Badges de ações ativas */}
-                {!isEntrada && p.acoes_ativas && p.acoes_ativas.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-zinc-100 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-                    {p.acoes_ativas.map((a) => (
-                      <button
-                        key={a.id}
-                        onClick={() => navigate({ to: "/acoes/$id", params: { id: String(a.id) } })}
-                        title={`${a.tipo} · ${a.status}`}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white truncate max-w-[140px] hover:opacity-80 transition-opacity"
-                        style={{ backgroundColor: a.cor ?? "#6B7280" }}
-                      >
-                        <Megaphone className="size-2.5 shrink-0" />
-                        <span className="truncate">{a.nome}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {admin && (
-                  <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
-                      <Pencil className="size-3" /> Editar
-                    </button>
-                    {!isEntrada && (
-                      <button onClick={() => { setEditTarget(p); setDialogOpen(true); }} className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900">
-                        <Settings className="size-3" /> Metas de leads
-                      </button>
-                    )}
-                    <button onClick={() => setDeleteTarget(p)} className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-600">
-                      <Trash2 className="size-3" /> Desativar
-                    </button>
-                    {isEntrada && (
-                      <button
-                        onClick={() => setAtivarTarget(p)}
-                        className="flex items-center gap-1.5 ml-auto text-[10px] font-semibold bg-amber-500 text-white px-2.5 py-1 rounded-md hover:opacity-90"
-                      >
-                        <Rocket className="size-3" /> Ativar Cliente
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {!isLoading && farmaciasFiltradas.length === 0 && (
-        <div className="text-center py-16 text-zinc-500 text-sm">
-          {acaoFilter !== "todos" ? "Nenhuma farmácia com este filtro de ação." : "Nenhuma farmácia encontrada."}
-        </div>
-      )}
+        {/* Detalhe */}
+        {atual && (
+          <PainelFarmacia
+            key={atual.id}
+            p={atual}
+            gestor={gestorNome(atual.gestor_id)}
+            custo={custoDe(atual.id)}
+            period={period}
+            admin={admin}
+            onEditar={() => editar(atual)}
+            onDesativar={() => setDeleteTarget(atual)}
+          />
+        )}
+      </div>
 
       {/* Create / Edit dialog */}
       {admin && (
@@ -1000,6 +891,327 @@ function FarmaciasPage() {
       </AlertDialog>
 
     </AppShell>
+  );
+}
+
+// ── Indicadores do topo ────────────────────────────────────────────────────
+
+function IndicadorTopo({
+  icone: Icone, rotulo, valor, detalhe, carregando, ativo, onClick,
+}: {
+  icone: LucideIcon;
+  rotulo: string;
+  valor: string;
+  detalhe?: string;
+  carregando: boolean;
+  ativo?: boolean;
+  onClick?: () => void;
+}) {
+  const conteudo = (
+    <>
+      <p className="flex items-center gap-1.5 text-xs text-white/85">
+        <Icone className="size-4" /> {rotulo}
+      </p>
+      {carregando
+        ? <div className="mt-1.5 h-6 w-24 rounded-lg bg-white/15 animate-pulse" />
+        : <p className="mt-0.5 text-2xl font-extrabold tracking-tight">{valor}</p>}
+      {detalhe && !carregando && <p className="text-xs text-white/70">{detalhe}</p>}
+    </>
+  );
+  const base = "rounded-xl px-4 py-3 text-left ring-1 transition-colors";
+  if (!onClick) return <div className={`${base} bg-white/10 ring-white/10`}>{conteudo}</div>;
+  return (
+    <button
+      onClick={onClick}
+      title={ativo ? "Mostrar todas" : `Filtrar a lista: ${rotulo.toLowerCase()}`}
+      className={`${base} ${ativo ? "bg-white/25 ring-white/50" : "bg-white/10 ring-white/10 hover:bg-white/15"}`}
+    >
+      {conteudo}
+    </button>
+  );
+}
+
+// ── Lista ──────────────────────────────────────────────────────────────────
+
+function CabecalhoGrupo({ ponto, titulo, detalhe }: { ponto: string; titulo: string; detalhe: string }) {
+  return (
+    <div className="flex items-center gap-2 bg-zinc-50 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500 border-y border-zinc-100">
+      <span className={`size-2 rounded-full ${ponto}`} />
+      {titulo}
+      <span className="font-medium normal-case tracking-normal text-zinc-400">· {detalhe}</span>
+    </div>
+  );
+}
+
+function LinhaFarmacia({
+  p, gestor, selecionada, onClick,
+}: {
+  p: Farmacia;
+  gestor: string | null;
+  selecionada: boolean;
+  onClick: () => void;
+}) {
+  const vazia = semDados(p);
+  const acoes = p.acoes_ativas?.length ?? 0;
+  const pct = p.percentual_meta_receita;
+  const cor = pct != null ? corMeta(pct) : null;
+
+  return (
+    <button
+      onClick={onClick}
+      className={`grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 border-l-4 px-4 py-3 text-left transition-colors hover:bg-zinc-50 ${
+        selecionada ? "border-l-brand bg-red-50/40" : "border-l-transparent"
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="truncate text-sm font-bold text-zinc-900">{nomeVisivel(p)}</p>
+          {!p.nome_fachada && (
+            <span
+              title="Sem nome de fachada — o criativo do grupo está saindo com a razão social"
+              className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-700 ring-1 ring-red-200"
+            >
+              SEM FACHADA
+            </span>
+          )}
+          {!p.tem_chatbot && (
+            <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-sky-50 text-sky-600 ring-1 ring-sky-200">
+              Sem ChatBot
+            </span>
+          )}
+          {acoes > 0 && (
+            <span title={`${acoes} ação(ões) ativa(s)`} className="shrink-0 flex items-center gap-0.5 text-[10px] font-semibold text-zinc-500">
+              <Megaphone className="size-3" />{acoes}
+            </span>
+          )}
+        </div>
+        <p className="truncate text-xs text-zinc-500">
+          {[gestor, vazia ? "Aguardando dados" : `${p.total_atendimentos} atendimentos`, !vazia && `#${p.posicao_ranking} no ranking`]
+            .filter(Boolean).join(" · ")}
+        </p>
+      </div>
+
+      {/* Progresso da meta de receita */}
+      <div className="hidden sm:block w-28">
+        {vazia ? null : pct != null && cor ? (
+          <>
+            <div className="flex justify-between text-[10px] text-zinc-400">
+              <span>Meta</span>
+              <span className={`font-semibold ${cor.texto}`}>{pct.toFixed(0)}%</span>
+            </div>
+            <div className="mt-0.5 h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+              <div className={`h-full rounded-full ${cor.barra}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+            </div>
+          </>
+        ) : (
+          <p className="text-[10px] text-zinc-300 text-right">sem meta</p>
+        )}
+      </div>
+
+      <div className="w-24 text-right">
+        {vazia ? (
+          <p className="text-xs text-zinc-300">—</p>
+        ) : (
+          <>
+            <p className="font-mono text-sm font-bold text-zinc-900">{fmtCompacto(p.receita_total)}</p>
+            <Variacao value={p.variacao_receita} />
+          </>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ── Painel lateral ─────────────────────────────────────────────────────────
+
+const TOM_PASSO: Record<Nivel, string> = {
+  vermelho: "border-l-red-500 bg-red-50",
+  amarelo: "border-l-amber-500 bg-amber-50",
+  verde: "border-l-emerald-500 bg-emerald-50",
+};
+
+function PainelFarmacia({
+  p, gestor, custo, period, admin, onEditar, onDesativar,
+}: {
+  p: Farmacia;
+  gestor: string | null;
+  custo: CustoJanela | null;
+  period: Period;
+  admin: boolean;
+  onEditar: () => void;
+  onDesativar: () => void;
+}) {
+  const navigate = useNavigate();
+  const vazia = semDados(p);
+  const grupo = grupoDo(p.nivel_alerta);
+  const pct = p.percentual_meta_receita;
+  const cor = pct != null ? corMeta(pct) : null;
+  const passo = proximoPasso(p, custo);
+  const saude = nivelSaude(custo);
+  const C = 2 * Math.PI * 42;
+
+  const { data: evolucao = [], isLoading: carregandoEvolucao } = useQuery({
+    queryKey: ["farmacia-evolucao", p.id, period],
+    queryFn: () => getFarmaciaEvolucaoPorPeriodo(p.id, period),
+    enabled: !vazia,
+  });
+
+  const leadsDe = (termo: string) => p.canais?.find((c) => c.nome.toLowerCase().includes(termo))?.atendimentos ?? 0;
+
+  return (
+    <aside className="hidden xl:block sticky top-6 space-y-4 rounded-2xl bg-white ring-1 ring-black/5 shadow-sm p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-lg font-extrabold leading-tight text-zinc-900">{nomeVisivel(p)}</p>
+          <p className="truncate text-xs text-zinc-500">
+            {[p.nome_fachada ? p.nome : null, gestor && `Gestor ${gestor}`].filter(Boolean).join(" · ") || " "}
+          </p>
+        </div>
+        {!vazia && (
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${grupo.selo}`}>{grupo.rotulo}</span>
+        )}
+      </div>
+
+      {vazia ? (
+        <p className="rounded-xl bg-zinc-50 p-6 text-center text-sm text-zinc-400 italic">
+          Nenhum dado coletado nos últimos {period} dias.
+        </p>
+      ) : (
+        <>
+          <div className="flex items-center gap-5">
+            <div className="relative size-24 shrink-0">
+              <svg viewBox="0 0 100 100" className="size-full -rotate-90">
+                <circle cx="50" cy="50" r="42" fill="none" strokeWidth="10" className="stroke-zinc-100" />
+                {pct != null && cor && (
+                  <circle
+                    cx="50" cy="50" r="42" fill="none" strokeWidth="10" strokeLinecap="round"
+                    strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(pct, 100) / 100)}
+                    className={cor.traco}
+                  />
+                )}
+              </svg>
+              <div className="absolute inset-0 grid place-items-center text-center">
+                {pct != null
+                  ? <div><p className="font-mono text-lg font-bold">{Math.round(pct)}%</p><p className="text-[10px] text-zinc-400">da meta</p></div>
+                  : <p className="text-[11px] font-semibold text-zinc-400 leading-tight">sem<br />meta</p>}
+              </div>
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-xs text-zinc-500">Receita · {period} dias</p>
+              <p className="font-mono text-2xl font-bold text-zinc-900">{fmtBRL(p.receita_total)}</p>
+              <Variacao value={p.variacao_receita} />
+              {p.meta_receita != null && <p className="text-xs text-zinc-400">Meta: {fmtBRL(p.meta_receita)}</p>}
+            </div>
+          </div>
+
+          <EvolucaoReceita pontos={evolucao.map((e) => e.receita_total)} carregando={carregandoEvolucao} />
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <Mini rotulo="Vendas" valor={String(p.vendas_realizadas)} extra={<Variacao value={p.variacao_vendas} />} />
+            <Mini rotulo="Atendimentos" valor={String(p.total_atendimentos)} extra={<Variacao value={p.variacao_atendimentos} />} />
+            <Mini rotulo="Conversão" valor={`${(p.taxa_conversao ?? 0).toFixed(1)}%`} />
+            <Mini rotulo="Ranking" valor={`#${p.posicao_ranking}`} />
+            {p.meta_ad_account_id ? (
+              <>
+                <Mini rotulo="Investido no Meta" valor={custo ? fmtBRL(custo.gasto) : "—"} extra={custo && <span className="text-[11px] text-zinc-400">{custo.resultados} conversas</span>} />
+                <Mini
+                  rotulo="Custo / conversa"
+                  valor={custo?.custo_por_resultado != null ? custo.custo_por_resultado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
+                  extra={<span className={`inline-block rounded px-1.5 text-[10px] font-semibold ring-1 ${ESTILO_SAUDE[saude].selo}`}>{ESTILO_SAUDE[saude].rotulo}</span>}
+                />
+              </>
+            ) : (
+              <p className="col-span-2 rounded-xl bg-zinc-50 px-3 py-2 text-xs text-zinc-400">
+                Sem conta de anúncios Meta — fora do custo por resultado.
+              </p>
+            )}
+          </div>
+
+          {(p.meta_leads_google !== null || p.meta_leads_meta !== null) && (
+            <div className="space-y-2 rounded-xl ring-1 ring-zinc-100 p-3">
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Leads da semana</p>
+              {p.meta_leads_google !== null && <LeadsChannelRow canalNome="Google" atual={leadsDe("google")} meta={p.meta_leads_google} />}
+              {p.meta_leads_meta !== null && <LeadsChannelRow canalNome="Meta" atual={leadsDe("meta")} meta={p.meta_leads_meta} />}
+            </div>
+          )}
+
+          <div className={`rounded-xl border-l-4 p-4 ${TOM_PASSO[passo.tom]}`}>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Próximo passo</p>
+            <p className="mt-1 font-bold text-zinc-900">{passo.titulo}</p>
+            <p className="mt-1 text-sm text-zinc-600">{passo.texto}</p>
+          </div>
+        </>
+      )}
+
+      {p.acoes_ativas && p.acoes_ativas.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {p.acoes_ativas.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => navigate({ to: "/acoes/$id", params: { id: String(a.id) } })}
+              title={`${a.tipo} · ${a.status}`}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white truncate max-w-[160px] hover:opacity-80 transition-opacity"
+              style={{ backgroundColor: a.cor ?? "#6B7280" }}
+            >
+              <Megaphone className="size-2.5 shrink-0" />
+              <span className="truncate">{a.nome}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => navigate({ to: "/farmacias/$id", params: { id: String(p.id) } })}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white hover:opacity-90"
+        >
+          <ExternalLink className="size-3.5" /> Ver detalhes
+        </button>
+        {admin && (
+          <>
+            <button onClick={onEditar} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg ring-1 ring-zinc-200 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50">
+              <Pencil className="size-3.5" /> Editar
+            </button>
+            <button onClick={onEditar} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg ring-1 ring-zinc-200 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50">
+              <Target className="size-3.5" /> Metas
+            </button>
+            <button onClick={onDesativar} title="Desativar" className="flex items-center justify-center rounded-lg px-3 py-2 text-red-500 hover:bg-red-50">
+              <Trash2 className="size-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+/** Receita semana a semana dentro do período (vw_evolucao_semanal). */
+function EvolucaoReceita({ pontos, carregando }: { pontos: number[]; carregando: boolean }) {
+  if (carregando) return <div className="h-20 rounded-xl bg-zinc-50 animate-pulse" />;
+  if (pontos.length < 2) {
+    return <p className="rounded-xl bg-zinc-50 px-3 py-4 text-center text-xs text-zinc-400">Histórico semanal insuficiente para o gráfico.</p>;
+  }
+  const W = 300, H = 56;
+  const max = Math.max(...pontos, 1);
+  const xy = pontos.map((v, i) => `${(i / (pontos.length - 1)) * W},${H - (v / max) * (H - 4) - 2}`).join(" ");
+  const subiu = pontos[pontos.length - 1] >= pontos[0];
+  return (
+    <div className="rounded-xl bg-zinc-50 p-3">
+      <p className="mb-1 text-[11px] text-zinc-400">Receita por semana</p>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={`h-14 w-full ${subiu ? "text-emerald-500" : "text-red-500"}`}>
+        <polyline points={xy} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+}
+
+function Mini({ rotulo, valor, extra }: { rotulo: string; valor: string; extra?: ReactNode }) {
+  return (
+    <div className="rounded-xl ring-1 ring-zinc-100 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{rotulo}</p>
+      <p className="mt-0.5 font-mono text-base font-bold text-zinc-900">{valor}</p>
+      {extra}
+    </div>
   );
 }
 
