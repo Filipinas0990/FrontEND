@@ -1040,8 +1040,6 @@ function PainelFarmacia({
           <div className="grid grid-cols-2 gap-2.5">
             <Mini rotulo="Vendas" valor={String(p.vendas_realizadas)} extra={<Variacao value={p.variacao_vendas} />} />
             <Mini rotulo="Atendimentos" valor={String(p.total_atendimentos)} extra={<Variacao value={p.variacao_atendimentos} />} />
-            <Mini rotulo="Conversão" valor={`${(p.taxa_conversao ?? 0).toFixed(1)}%`} />
-            <Mini rotulo="Ranking" valor={`#${p.posicao_ranking}`} />
             {p.meta_ad_account_id ? (
               <>
                 <Mini rotulo="Investido no Meta" valor={custo ? fmtBRL(custo.gasto) : "—"} extra={custo && <span className="text-[11px] text-zinc-400">{custo.resultados} conversas</span>} />
