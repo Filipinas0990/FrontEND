@@ -4,8 +4,8 @@ import { getUser } from "@/lib/auth";
 
 /**
  * Abas do módulo Farmácias. "Em Entrada" deixou de ser item de sidebar e virou
- * uma aba aqui (só para admin). Renderize no topo das telas /farmacias e
- * /farmacias/entrada.
+ * uma aba aqui (só para admin). Fica no cabeçalho do card da lista nas telas
+ * /farmacias e /farmacias/entrada, abaixo do FarmaciasCabecalho.
  */
 export function FarmaciasTabs() {
   const { pathname } = useLocation();

@@ -3,12 +3,13 @@ import { useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import {
   Search, Plus, Pencil, Trash2, RefreshCw, Target, Megaphone, ArrowUpRight, ArrowDownRight, ExternalLink,
-  TrendingUp, Store, CheckCircle2, AlertTriangle, type LucideIcon,
+  TrendingUp, Store, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { FarmaciasTabs } from "@/components/FarmaciasTabs";
+import { FarmaciasCabecalho, IndicadorTopo, CLASSE_ACAO_TOPO } from "@/components/FarmaciasCabecalho";
 import { usePeriod, type Period } from "@/contexts/PeriodContext";
 import {
   getFarmacias,
@@ -546,7 +547,7 @@ function FarmaciasPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const admin = isAdmin();
-  const { period, setPeriod } = usePeriod();
+  const { period } = usePeriod();
 
   const [query, setQuery] = useState("");
   /** Filtro pelos indicadores do topo: "ativas" = verde, "atencao" = amarelo + vermelho. */
@@ -712,72 +713,39 @@ function FarmaciasPage() {
 
   return (
     <AppShell title="Farmácias" hideHeader larguraTotal>
-      {/* Cabeçalho da página com os números da carteira */}
-      <section className="rounded-3xl bg-gradient-to-br from-red-500 via-brand to-[#5c0a24] px-6 py-5 text-white shadow-lg">
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <div>
-            <p className="text-sm font-medium text-white/80">Gestão da rede</p>
-            <h1 className="text-3xl font-extrabold tracking-tight">Farmácias</h1>
-            <p className="mt-1 text-sm text-white/75">
-              {farmacias.length} unidades cadastradas · últimos {period} dias
-              {totalSemDados > 0 && ` · ${totalSemDados} sem dados no período`}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1 rounded-2xl bg-white/15 p-1">
-              {([7, 15, 30] as Period[]).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setPeriod(d)}
-                  className={`rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    period === d ? "bg-white text-brand" : "text-white/85 hover:text-white"
-                  }`}
-                >
-                  {d}d
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              title="Atualizar dados"
-              className="grid size-10 place-items-center rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
-            </button>
-            {admin && (
-              <button
-                onClick={() => { setEditTarget(null); setDialogOpen(true); }}
-                className="flex items-center gap-2 h-10 px-4 text-sm font-semibold bg-white text-brand rounded-xl shadow-sm hover:bg-white/90"
-              >
-                <Plus className="size-4" /> Nova farmácia
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <IndicadorTopo icone={TrendingUp} rotulo="Receita total" carregando={isLoading} valor={fmtBRL(receitaCarteira)} />
-          <IndicadorTopo icone={Store} rotulo="Vendas" carregando={isLoading} valor={vendasCarteira.toLocaleString("pt-BR")} />
-          <IndicadorTopo
-            icone={CheckCircle2}
-            rotulo="Ativas"
-            carregando={isLoading}
-            valor={`${contagem.verde}/${farmacias.length}`}
-            ativo={nivelFiltro === "ativas"}
-            onClick={() => setNivelFiltro(nivelFiltro === "ativas" ? null : "ativas")}
-          />
-          <IndicadorTopo
-            icone={AlertTriangle}
-            rotulo="Em atenção"
-            carregando={isLoading}
-            valor={String(contagem.vermelho + contagem.amarelo)}
-            detalhe={`${contagem.vermelho} em alerta · ${contagem.amarelo} atenção`}
-            ativo={nivelFiltro === "atencao"}
-            onClick={() => setNivelFiltro(nivelFiltro === "atencao" ? null : "atencao")}
-          />
-        </div>
-      </section>
+      <FarmaciasCabecalho
+        subtitulo={<>
+          {farmacias.length} unidades cadastradas · últimos {period} dias
+          {totalSemDados > 0 && ` · ${totalSemDados} sem dados no período`}
+        </>}
+        atualizando={isFetching}
+        onAtualizar={() => refetch()}
+        acao={admin && (
+          <button onClick={() => { setEditTarget(null); setDialogOpen(true); }} className={CLASSE_ACAO_TOPO}>
+            <Plus className="size-4" /> Nova farmácia
+          </button>
+        )}
+      >
+        <IndicadorTopo icone={TrendingUp} rotulo="Receita total" carregando={isLoading} valor={fmtBRL(receitaCarteira)} />
+        <IndicadorTopo icone={Store} rotulo="Vendas" carregando={isLoading} valor={vendasCarteira.toLocaleString("pt-BR")} />
+        <IndicadorTopo
+          icone={CheckCircle2}
+          rotulo="Ativas"
+          carregando={isLoading}
+          valor={`${contagem.verde}/${farmacias.length}`}
+          ativo={nivelFiltro === "ativas"}
+          onClick={() => setNivelFiltro(nivelFiltro === "ativas" ? null : "ativas")}
+        />
+        <IndicadorTopo
+          icone={AlertTriangle}
+          rotulo="Em atenção"
+          carregando={isLoading}
+          valor={String(contagem.vermelho + contagem.amarelo)}
+          detalhe={`${contagem.vermelho} em alerta · ${contagem.amarelo} atenção`}
+          ativo={nivelFiltro === "atencao"}
+          onClick={() => setNivelFiltro(nivelFiltro === "atencao" ? null : "atencao")}
+        />
+      </FarmaciasCabecalho>
 
       <div className={`grid items-start gap-6 ${atual ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
         {/* Lista */}
@@ -891,43 +859,6 @@ function FarmaciasPage() {
       </AlertDialog>
 
     </AppShell>
-  );
-}
-
-// ── Indicadores do topo ────────────────────────────────────────────────────
-
-function IndicadorTopo({
-  icone: Icone, rotulo, valor, detalhe, carregando, ativo, onClick,
-}: {
-  icone: LucideIcon;
-  rotulo: string;
-  valor: string;
-  detalhe?: string;
-  carregando: boolean;
-  ativo?: boolean;
-  onClick?: () => void;
-}) {
-  const conteudo = (
-    <>
-      <p className="flex items-center gap-1.5 text-xs text-white/85">
-        <Icone className="size-4" /> {rotulo}
-      </p>
-      {carregando
-        ? <div className="mt-1.5 h-6 w-24 rounded-lg bg-white/15 animate-pulse" />
-        : <p className="mt-0.5 text-2xl font-extrabold tracking-tight">{valor}</p>}
-      {detalhe && !carregando && <p className="text-xs text-white/70">{detalhe}</p>}
-    </>
-  );
-  const base = "rounded-xl px-4 py-3 text-left ring-1 transition-colors";
-  if (!onClick) return <div className={`${base} bg-white/10 ring-white/10`}>{conteudo}</div>;
-  return (
-    <button
-      onClick={onClick}
-      title={ativo ? "Mostrar todas" : `Filtrar a lista: ${rotulo.toLowerCase()}`}
-      className={`${base} ${ativo ? "bg-white/25 ring-white/50" : "bg-white/10 ring-white/10 hover:bg-white/15"}`}
-    >
-      {conteudo}
-    </button>
   );
 }
 

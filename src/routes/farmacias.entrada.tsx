@@ -2,15 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   Search, Plus, Pencil, Trash2, RefreshCw, Phone, MapPin,
-  User, Rocket, Clock,
+  User, Rocket, Clock, UserCheck, Bot, BotOff, type LucideIcon,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { FarmaciasTabs } from "@/components/FarmaciasTabs";
+import { FarmaciasCabecalho, IndicadorTopo, CLASSE_ACAO_TOPO } from "@/components/FarmaciasCabecalho";
 import {
   getFarmacias, getGestores, createFarmacia, updateFarmacia,
-  deleteFarmacia, ativarFarmacia, type Farmacia, type Gestor,
+  deleteFarmacia, ativarFarmacia, nomeVisivel, type Farmacia, type Gestor,
 } from "@/lib/api";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -319,14 +320,15 @@ function ModalNovo({
 function EntradaPage() {
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
+  const [selId, setSelId] = useState<number | null>(null);
   const [ativarTarget, setAtivarTarget] = useState<Farmacia | null>(null);
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
   const [novoOpen, setNovoOpen] = useState(false);
 
   const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["farmacias-entrada", query],
-    queryFn: () => getFarmacias({ fase: "entrada", busca: query || undefined }),
+    queryKey: ["farmacias-entrada"],
+    queryFn: () => getFarmacias({ fase: "entrada" }),
     refetchOnMount: "always",
     staleTime: 0,
   });
@@ -347,154 +349,169 @@ function EntradaPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const gestorNome = (id: number | null) => (id ? gestores.find((g) => g.id === id)?.nome ?? null : null);
+
+  const termo = query.trim().toLowerCase();
+  const filtradas = farmacias.filter((p) =>
+    !termo || [p.nome, p.nome_fachada, p.responsavel, p.cidade, gestorNome(p.gestor_id)]
+      .filter(Boolean).join(" ").toLowerCase().includes(termo),
+  );
+  const atual = filtradas.find((p) => p.id === selId) ?? filtradas[0] ?? null;
+
+  const comGestor = farmacias.filter((p) => p.gestor_id).length;
+  const comContato = farmacias.filter((p) => p.responsavel || p.telefone).length;
+  const semChatbot = farmacias.filter((p) => !p.tem_chatbot).length;
+
   return (
-    <AppShell
-      title="Farmácias"
-      headerRight={
-        <div className="flex items-center gap-2">
-          {isFetching && !isLoading && (
-            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-              <RefreshCw className="size-3 animate-spin" /> Atualizando...
-            </span>
+    <AppShell title="Farmácias" hideHeader larguraTotal>
+      <FarmaciasCabecalho
+        subtitulo={`${farmacias.length} clientes em implantação · ainda fora do painel`}
+        atualizando={isFetching}
+        onAtualizar={() => refetch()}
+        acao={
+          <button onClick={() => setNovoOpen(true)} className={CLASSE_ACAO_TOPO}>
+            <Plus className="size-4" /> Novo cliente
+          </button>
+        }
+      >
+        <IndicadorTopo icone={Clock} rotulo="Em entrada" carregando={isLoading} valor={String(farmacias.length)} />
+        <IndicadorTopo icone={UserCheck} rotulo="Com gestor" carregando={isLoading} valor={`${comGestor}/${farmacias.length}`} />
+        <IndicadorTopo icone={Phone} rotulo="Com contato" carregando={isLoading} valor={`${comContato}/${farmacias.length}`} />
+        <IndicadorTopo icone={BotOff} rotulo="Sem ChatBot" carregando={isLoading} valor={String(semChatbot)} />
+      </FarmaciasCabecalho>
+
+      <div className={`grid items-start gap-6 ${atual ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
+        {/* Lista */}
+        <section className="rounded-2xl bg-white ring-1 ring-black/5 shadow-sm overflow-hidden">
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 p-4">
+            <FarmaciasTabs />
+            <label className="flex h-10 flex-1 min-w-56 items-center gap-2 rounded-xl px-3 ring-1 ring-zinc-200 focus-within:ring-zinc-400">
+              <Search className="size-4 text-zinc-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar cliente, responsável, cidade ou gestor…"
+                className="w-full bg-transparent text-sm outline-none"
+              />
+            </label>
+          </div>
+
+          {isLoading && (
+            <div className="divide-y divide-zinc-100">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-16 px-4 py-3"><div className="h-full rounded-lg bg-zinc-100 animate-pulse" /></div>
+              ))}
+            </div>
           )}
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-md transition-colors disabled:opacity-40"
-          >
-            <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} />
-          </button>
-          <button
-            onClick={() => setNovoOpen(true)}
-            className="flex items-center gap-2 py-2 px-3 text-sm font-medium bg-amber-500 text-white rounded-md hover:opacity-90"
-          >
-            <Plus className="size-3.5" /> Novo Cliente
-          </button>
-        </div>
-      }
-    >
-      <FarmaciasTabs />
 
-      {/* Barra de aviso */}
-      <div className="bg-amber-50 rounded-xl ring-1 ring-amber-200 px-4 py-3 flex items-center gap-3">
-        <Clock className="size-4 text-amber-500 shrink-0" />
-        <p className="text-sm text-amber-800">
-          Clientes cadastrados que ainda não são acompanhados no painel.
-          Ative-os assim que tiver as informações de acesso.
-        </p>
-      </div>
-
-      {/* Busca */}
-      <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm p-4">
-        <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50 rounded-md border border-zinc-100">
-          <Search className="size-4 text-zinc-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nome..."
-            className="bg-transparent outline-none text-sm flex-1"
-          />
-        </div>
-      </div>
-
-      {/* Loading */}
-      {isLoading && (
-        <div className="grid grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl ring-1 ring-amber-100 h-44 animate-pulse" />
-          ))}
-        </div>
-      )}
-
-      {/* Cards */}
-      {!isLoading && farmacias.length === 0 && (
-        <div className="text-center py-20">
-          <Clock className="size-10 text-zinc-200 mx-auto mb-3" />
-          <p className="text-sm text-zinc-500">Nenhum cliente em entrada no momento.</p>
-          <button
-            onClick={() => setNovoOpen(true)}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-amber-500 text-white rounded-md hover:opacity-90"
-          >
-            <Plus className="size-3.5" /> Adicionar primeiro cliente
-          </button>
-        </div>
-      )}
-
-      {!isLoading && farmacias.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          {farmacias.map((p) => {
-            const gestorNome = gestores.find((g) => g.id === p.gestor_id)?.nome;
-            return (
-              <div key={p.id} className="bg-white rounded-xl ring-1 ring-amber-200 shadow-sm p-5 flex flex-col gap-3">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 ring-1 ring-amber-200 shrink-0">
-                        ENTRADA
-                      </span>
-                    </div>
-                    <h3 className="text-sm font-semibold text-zinc-900 truncate">{p.nome}</h3>
-                    <p className="text-[10px] text-amber-600 italic mt-0.5">Aguardando ativação</p>
-                  </div>
-                  {!p.tem_chatbot && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-sky-50 text-sky-600 ring-1 ring-sky-200 shrink-0">
-                      Sem ChatBot
-                    </span>
-                  )}
-                </div>
-
-                {/* Contato */}
-                <div className="space-y-1">
-                  {p.responsavel && (
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-600">
-                      <User className="size-3 text-zinc-400 shrink-0" />{p.responsavel}
-                    </div>
-                  )}
-                  {p.telefone && (
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-600">
-                      <Phone className="size-3 text-zinc-400 shrink-0" />{p.telefone}
-                    </div>
-                  )}
-                  {p.cidade && (
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-600">
-                      <MapPin className="size-3 text-zinc-400 shrink-0" />{p.cidade}
-                    </div>
-                  )}
-                  {!p.responsavel && !p.telefone && !p.cidade && (
-                    <p className="text-xs text-zinc-400 italic">Sem dados de contato</p>
-                  )}
-                  <p className="text-[10px] text-zinc-400">
-                    {gestorNome ?? "Sem gestor atribuído"}
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 pt-2 border-t border-zinc-100 mt-auto">
-                  <button
-                    onClick={() => setEditTarget(p)}
-                    className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-900"
-                  >
-                    <Pencil className="size-3" /> Editar
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(p)}
-                    className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-600"
-                  >
-                    <Trash2 className="size-3" /> Remover
-                  </button>
-                  <button
-                    onClick={() => setAtivarTarget(p)}
-                    className="ml-auto flex items-center gap-1.5 text-[10px] font-semibold bg-amber-500 text-white px-2.5 py-1 rounded-md hover:opacity-90"
-                  >
-                    <Rocket className="size-3" /> Ativar Cliente
-                  </button>
-                </div>
+          {!isLoading && filtradas.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 bg-zinc-50 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500 border-y border-zinc-100">
+                <span className="size-2 rounded-full bg-amber-500" />
+                Aguardando ativação
+                <span className="font-medium normal-case tracking-normal text-zinc-400">· {filtradas.length} clientes</span>
               </div>
-            );
-          })}
-        </div>
-      )}
+              {filtradas.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelId(p.id)}
+                  className={`flex w-full items-center gap-4 border-l-4 px-4 py-3 text-left transition-colors hover:bg-zinc-50 ${
+                    atual?.id === p.id ? "border-l-brand bg-red-50/40" : "border-l-transparent"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="truncate text-sm font-bold text-zinc-900">{nomeVisivel(p)}</p>
+                      {!p.nome_fachada && (
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-700 ring-1 ring-red-200">
+                          SEM FACHADA
+                        </span>
+                      )}
+                      {!p.tem_chatbot && (
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-sky-50 text-sky-600 ring-1 ring-sky-200">
+                          Sem ChatBot
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-zinc-500">
+                      {[gestorNome(p.gestor_id) ?? "Sem gestor", p.responsavel, p.cidade].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/15">
+                    Em entrada
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!isLoading && farmacias.length === 0 && (
+            <div className="p-12 text-center">
+              <Clock className="size-10 text-zinc-200 mx-auto mb-3" />
+              <p className="text-sm text-zinc-500">Nenhum cliente em entrada no momento.</p>
+              <button
+                onClick={() => setNovoOpen(true)}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-brand text-white rounded-xl hover:opacity-90"
+              >
+                <Plus className="size-4" /> Adicionar primeiro cliente
+              </button>
+            </div>
+          )}
+
+          {!isLoading && farmacias.length > 0 && filtradas.length === 0 && (
+            <p className="p-12 text-center text-sm text-zinc-500">Nenhum cliente encontrado.</p>
+          )}
+        </section>
+
+        {/* Detalhe */}
+        {atual && (
+          <aside className="sticky top-6 space-y-4 rounded-2xl bg-white ring-1 ring-black/5 shadow-sm p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-lg font-extrabold leading-tight text-zinc-900">{nomeVisivel(atual)}</p>
+                <p className="truncate text-xs text-zinc-500">{atual.nome_fachada ? atual.nome : " "}</p>
+              </div>
+              <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/15">
+                Em entrada
+              </span>
+            </div>
+
+            <div className="divide-y divide-zinc-100 rounded-xl ring-1 ring-zinc-100">
+              <Dado icone={UserCheck} rotulo="Gestor" valor={gestorNome(atual.gestor_id)} vazio="Sem gestor atribuído" />
+              <Dado icone={User} rotulo="Responsável" valor={atual.responsavel} />
+              <Dado icone={Phone} rotulo="Telefone" valor={atual.telefone} />
+              <Dado icone={MapPin} rotulo="Cidade" valor={atual.cidade} />
+              <Dado icone={Bot} rotulo="PharmaChatBot" valor={atual.tem_chatbot ? "Sim" : "Não"} />
+            </div>
+
+            <div className="rounded-xl border-l-4 border-l-amber-500 bg-amber-50 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Próximo passo</p>
+              <p className="mt-1 font-bold text-zinc-900">Ativar o cliente</p>
+              <p className="mt-1 text-sm text-zinc-600">
+                Ainda não é acompanhado no painel. Ative assim que tiver as informações de acesso.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAtivarTarget(atual)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white hover:opacity-90"
+              >
+                <Rocket className="size-3.5" /> Ativar cliente
+              </button>
+              <button
+                onClick={() => setEditTarget(atual)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg ring-1 ring-zinc-200 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                <Pencil className="size-3.5" /> Editar
+              </button>
+              <button onClick={() => setDeleteTarget(atual)} title="Remover" className="flex items-center justify-center rounded-lg px-3 py-2 text-red-500 hover:bg-red-50">
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          </aside>
+        )}
+      </div>
 
       {/* Modals */}
       <ModalNovo open={novoOpen} onOpenChange={setNovoOpen} gestores={gestores} />
@@ -522,5 +539,15 @@ function EntradaPage() {
         </AlertDialogContent>
       </AlertDialog>
     </AppShell>
+  );
+}
+
+function Dado({ icone: Icone, rotulo, valor, vazio = "—" }: { icone: LucideIcon; rotulo: string; valor: string | null; vazio?: string }) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5">
+      <Icone className="size-4 shrink-0 text-zinc-400" />
+      <span className="text-xs text-zinc-500">{rotulo}</span>
+      <span className={`ml-auto truncate text-sm ${valor ? "font-medium text-zinc-800" : "text-zinc-400 italic"}`}>{valor || vazio}</span>
+    </div>
   );
 }
