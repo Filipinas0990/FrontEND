@@ -1902,6 +1902,11 @@ export function produtoDoClienteImagemUrl(farmaciaId: number, id: number): strin
   return `${BASE_URL}/api/ofertas/clientes/${farmaciaId}/produtos/${id}/imagem`
 }
 
+/** O gestor exclui um produto que o cliente mandou — libera a vaga dele. */
+export function excluirProdutoDoCliente(farmaciaId: number, id: number): Promise<{ ok: boolean }> {
+  return req(`/api/ofertas/clientes/${farmaciaId}/produtos/${id}`, { method: "DELETE" })
+}
+
 /**
  * Foto de um item da lista que o cliente enviou. Id NEGATIVO = produto que o
  * próprio cliente mandou pelo link (o backend grava -id de produtos_cliente);

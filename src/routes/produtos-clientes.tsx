@@ -1,14 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ChevronLeft, PackagePlus, Search, Loader2, Store, ImageIcon, Download, X,
+  ChevronLeft, PackagePlus, Search, Loader2, Store, ImageIcon, Download, X, Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import {
-  getProdutosEnviadosPelosClientes, produtoDoClienteImagemUrl,
+  getProdutosEnviadosPelosClientes, produtoDoClienteImagemUrl, excluirProdutoDoCliente,
   type ProdutoEnviadoPeloCliente,
 } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/produtos-clientes")({
   component: ProdutosClientesPage,
@@ -44,10 +55,26 @@ interface GrupoCliente {
 function ProdutosClientesPage() {
   const [busca, setBusca] = useState("");
   const [clienteSel, setClienteSel] = useState<number | "todos">("todos");
+  // Produto com a confirmação de exclusão aberta; null = fechada.
+  const [excluindo, setExcluindo] = useState<ProdutoEnviadoPeloCliente | null>(null);
+  const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["produtos-enviados-clientes"],
     queryFn: getProdutosEnviadosPelosClientes,
+  });
+
+  const excluir = useMutation({
+    mutationFn: (p: ProdutoEnviadoPeloCliente) => excluirProdutoDoCliente(p.farmacia_id, p.id),
+    onSuccess: (_r, p) => {
+      qc.invalidateQueries({ queryKey: ["produtos-enviados-clientes"] });
+      // O passo 3 do disparo mostra os produtos do cliente: sem isto, o
+      // excluído continuaria lá até o próximo fetch.
+      qc.invalidateQueries({ queryKey: ["produtos-do-cliente", p.farmacia_id] });
+      toast.success(`"${p.nome}" excluído. A vaga voltou para o cliente.`);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível excluir."),
+    onSettled: () => setExcluindo(null),
   });
   const limite = data?.limite ?? 30;
 
@@ -211,15 +238,27 @@ function ProdutosClientesPage() {
                         <p className="text-xs text-zinc-800 leading-snug line-clamp-2" title={p.nome}>{p.nome}</p>
                         <div className="flex items-center justify-between mt-1">
                           <span className="text-[11px] text-zinc-400">{fmtData(p.criado_em)}</span>
-                          <a
-                            href={url}
-                            download={`${p.nome}.jpg`}
-                            className="text-zinc-400 hover:text-brand"
-                            title="Baixar a foto"
-                            aria-label={`Baixar a foto de ${p.nome}`}
-                          >
-                            <Download className="size-3.5" />
-                          </a>
+                          <span className="flex items-center gap-2">
+                            <a
+                              href={url}
+                              download={`${p.nome}.jpg`}
+                              className="text-zinc-400 hover:text-brand"
+                              title="Baixar a foto"
+                              aria-label={`Baixar a foto de ${p.nome}`}
+                            >
+                              <Download className="size-3.5" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setExcluindo(p)}
+                              disabled={excluir.isPending}
+                              className="text-zinc-400 hover:text-red-600 disabled:opacity-50"
+                              title="Excluir o produto"
+                              aria-label={`Excluir ${p.nome}`}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </span>
                         </div>
                       </div>
                     );
@@ -230,6 +269,31 @@ function ProdutosClientesPage() {
           })
         )}
       </div>
+
+      <AlertDialog open={excluindo !== null} onOpenChange={(aberto) => { if (!aberto && !excluir.isPending) setExcluindo(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir “{excluindo?.nome}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A foto sai do espaço de {excluindo?.farmacia_visivel} e a vaga volta para o cliente.
+              Campanhas já agendadas com este produto não mudam. Não dá para desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluir.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (excluindo) excluir.mutate(excluindo);
+              }}
+              disabled={excluir.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {excluir.isPending && <Loader2 className="size-4 animate-spin" />} Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
