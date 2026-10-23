@@ -53,16 +53,16 @@ export const Route = createFileRoute("/farmacias/")({
 
 type Nivel = Farmacia["nivel_alerta"];
 
-/** Grupos da lista, na ordem de urgência. O nível vem pronto do backend. */
-const GRUPOS: { nivel: Nivel; titulo: string; dica: string; rotulo: string; ponto: string; selo: string }[] = [
-  { nivel: "vermelho", titulo: "Precisam de ação agora", dica: "em alerta",          rotulo: "Alerta",  ponto: "bg-red-500",     selo: "bg-red-50 text-red-700 ring-red-600/10" },
-  { nivel: "amarelo",  titulo: "De olho",                dica: "abaixo do esperado", rotulo: "Atenção", ponto: "bg-amber-500",   selo: "bg-amber-50 text-amber-700 ring-amber-600/10" },
-  { nivel: "verde",    titulo: "No caminho certo",       dica: "saudáveis",          rotulo: "Ativa",   ponto: "bg-emerald-500", selo: "bg-emerald-50 text-emerald-700 ring-emerald-600/10" },
+/** Ordem de urgência da lista (o nível vem pronto do backend) e o selo de cada nível. */
+const GRUPOS: { nivel: Nivel; selo: string }[] = [
+  { nivel: "vermelho", selo: "bg-red-50 text-red-700 ring-red-600/10" },
+  { nivel: "amarelo",  selo: "bg-amber-50 text-amber-700 ring-amber-600/10" },
+  { nivel: "verde",    selo: "bg-emerald-50 text-emerald-700 ring-emerald-600/10" },
 ];
 
 const grupoDo = (nivel: Nivel) => GRUPOS.find((g) => g.nivel === nivel) ?? GRUPOS[2];
 
-/** Ainda não tem coleta no período: fica fora dos grupos e da soma de receita. */
+/** Ainda não tem coleta no período: vai para o fim da lista e fica fora da soma de receita. */
 function semDados(p: Farmacia) {
   return p.posicao_ranking >= 9999 || (p.receita_total === 0 && p.total_atendimentos === 0 && p.vendas_realizadas === 0);
 }
@@ -789,19 +789,8 @@ function FarmaciasPage() {
             </div>
           )}
 
-          {!isLoading && grupos.map((g) => g.itens.length > 0 && (
-            <div key={g.nivel}>
-              <CabecalhoGrupo ponto={g.ponto} titulo={g.titulo} detalhe={`${g.itens.length} ${g.dica}`} />
-              {g.itens.map(linha)}
-            </div>
-          ))}
-
-          {!isLoading && aguardando.length > 0 && (
-            <div>
-              <CabecalhoGrupo ponto="bg-zinc-300" titulo="Aguardando dados" detalhe={`${aguardando.length} sem coleta no período`} />
-              {aguardando.map(linha)}
-            </div>
-          )}
+          {/* Já vem na ordem de urgência: alerta, atenção, saudáveis e por último sem dados */}
+          {!isLoading && <div className="divide-y divide-zinc-100">{ordenadas.map(linha)}</div>}
 
           {!isLoading && filtradas.length === 0 && (
             <p className="p-12 text-center text-sm text-zinc-500">
@@ -864,16 +853,6 @@ function FarmaciasPage() {
 
 // ── Lista ──────────────────────────────────────────────────────────────────
 
-function CabecalhoGrupo({ ponto, titulo, detalhe }: { ponto: string; titulo: string; detalhe: string }) {
-  return (
-    <div className="flex items-center gap-2 bg-zinc-50 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500 border-y border-zinc-100">
-      <span className={`size-2 rounded-full ${ponto}`} />
-      {titulo}
-      <span className="font-medium normal-case tracking-normal text-zinc-400">· {detalhe}</span>
-    </div>
-  );
-}
-
 function LinhaFarmacia({
   p, gestor, selecionada, onClick,
 }: {
@@ -884,13 +863,11 @@ function LinhaFarmacia({
 }) {
   const vazia = semDados(p);
   const acoes = p.acoes_ativas?.length ?? 0;
-  const pct = p.percentual_meta_receita;
-  const cor = pct != null ? corMeta(pct) : null;
 
   return (
     <button
       onClick={onClick}
-      className={`grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 border-l-4 px-4 py-3 text-left transition-colors hover:bg-zinc-50 ${
+      className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-l-4 px-4 py-3 text-left transition-colors hover:bg-zinc-50 ${
         selecionada ? "border-l-brand bg-red-50/40" : "border-l-transparent"
       }`}
     >
@@ -922,33 +899,9 @@ function LinhaFarmacia({
         </p>
       </div>
 
-      {/* Progresso da meta de receita */}
-      <div className="hidden sm:block w-28">
-        {vazia ? null : pct != null && cor ? (
-          <>
-            <div className="flex justify-between text-[10px] text-zinc-400">
-              <span>Meta</span>
-              <span className={`font-semibold ${cor.texto}`}>{pct.toFixed(0)}%</span>
-            </div>
-            <div className="mt-0.5 h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
-              <div className={`h-full rounded-full ${cor.barra}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-            </div>
-          </>
-        ) : (
-          <p className="text-[10px] text-zinc-300 text-right">sem meta</p>
-        )}
-      </div>
-
-      <div className="w-24 text-right">
-        {vazia ? (
-          <p className="text-xs text-zinc-300">—</p>
-        ) : (
-          <>
-            <p className="font-mono text-sm font-bold text-zinc-900">{fmtCompacto(p.receita_total)}</p>
-            <Variacao value={p.variacao_receita} />
-          </>
-        )}
-      </div>
+      <p className={`w-24 text-right font-mono text-sm font-bold ${vazia ? "text-zinc-300" : "text-zinc-900"}`}>
+        {vazia ? "—" : fmtCompacto(p.receita_total)}
+      </p>
     </button>
   );
 }
@@ -974,7 +927,6 @@ function PainelFarmacia({
 }) {
   const navigate = useNavigate();
   const vazia = semDados(p);
-  const grupo = grupoDo(p.nivel_alerta);
   const pct = p.percentual_meta_receita;
   const cor = pct != null ? corMeta(pct) : null;
   const passo = proximoPasso(p, custo);
@@ -998,9 +950,6 @@ function PainelFarmacia({
             {[p.nome_fachada ? p.nome : null, gestor && `Gestor ${gestor}`].filter(Boolean).join(" · ") || " "}
           </p>
         </div>
-        {!vazia && (
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${grupo.selo}`}>{grupo.rotulo}</span>
-        )}
       </div>
 
       {vazia ? (
