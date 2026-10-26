@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import {
-  Search, Plus, Pencil, Trash2, RefreshCw, Target, Megaphone, ArrowUpRight, ArrowDownRight, ExternalLink,
+  Search, Plus, Pencil, Trash2, RefreshCw, Target, ArrowUpRight, ArrowDownRight, ExternalLink,
   TrendingUp, Store, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -533,16 +533,6 @@ function proximoPasso(p: Farmacia, custo: CustoJanela | null): { titulo: string;
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
-type FiltroAcao = "todos" | "com_acao" | "sem_acao" | "abre_mes" | "fecha_mes";
-
-const FILTROS_ACAO: { value: FiltroAcao; label: string }[] = [
-  { value: "todos",     label: "Todas as ações" },
-  { value: "com_acao",  label: "Com ação" },
-  { value: "sem_acao",  label: "Sem ação" },
-  { value: "abre_mes",  label: "Abre mês" },
-  { value: "fecha_mes", label: "Fecha mês" },
-];
-
 function FarmaciasPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -552,7 +542,6 @@ function FarmaciasPage() {
   const [query, setQuery] = useState("");
   /** Filtro pelos indicadores do topo: "ativas" = verde, "atencao" = amarelo + vermelho. */
   const [nivelFiltro, setNivelFiltro] = useState<"ativas" | "atencao" | null>(null);
-  const [acaoFilter, setAcaoFilter] = useState<FiltroAcao>("todos");
   const [selId, setSelId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Farmacia | null>(null);
@@ -671,14 +660,9 @@ function FarmaciasPage() {
         const alvo = [p.nome, p.nome_fachada, p.cidade, gestorNome(p.gestor_id)].filter(Boolean).join(" ").toLowerCase();
         if (!alvo.includes(termo)) return false;
       }
-      if (nivelFiltro && (semDados(p) || (nivelFiltro === "ativas") !== (p.nivel_alerta === "verde"))) return false;
-      if (acaoFilter === "com_acao")  return (p.acoes_ativas?.length ?? 0) > 0;
-      if (acaoFilter === "sem_acao")  return (p.acoes_ativas?.length ?? 0) === 0;
-      if (acaoFilter === "abre_mes")  return p.acoes_ativas?.some((a) => a.tipo === "abre_mes") ?? false;
-      if (acaoFilter === "fecha_mes") return p.acoes_ativas?.some((a) => a.tipo === "fecha_mes") ?? false;
-      return true;
+      return !(nivelFiltro && (semDados(p) || (nivelFiltro === "ativas") !== (p.nivel_alerta === "verde")));
     });
-  }, [farmacias, query, nivelFiltro, acaoFilter, gestores]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [farmacias, query, nivelFiltro, gestores]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const grupos = GRUPOS.map((g) => ({
     ...g,
@@ -761,16 +745,6 @@ function FarmaciasPage() {
                 className="w-full bg-transparent text-sm outline-none"
               />
             </label>
-            <div className="flex items-center gap-1.5">
-              <Megaphone className="size-3.5 text-zinc-400 shrink-0" />
-              <select
-                value={acaoFilter}
-                onChange={(e) => setAcaoFilter(e.target.value as FiltroAcao)}
-                className="h-10 rounded-xl px-2 text-sm text-zinc-700 bg-white ring-1 ring-zinc-200 outline-none"
-              >
-                {FILTROS_ACAO.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-              </select>
-            </div>
             {nivelFiltro && (
               <button
                 onClick={() => setNivelFiltro(null)}
@@ -794,7 +768,7 @@ function FarmaciasPage() {
 
           {!isLoading && filtradas.length === 0 && (
             <p className="p-12 text-center text-sm text-zinc-500">
-              {acaoFilter !== "todos" ? "Nenhuma farmácia com este filtro de ação." : "Nenhuma farmácia encontrada."}
+              Nenhuma farmácia encontrada.
             </p>
           )}
         </section>
@@ -862,7 +836,6 @@ function LinhaFarmacia({
   onClick: () => void;
 }) {
   const vazia = semDados(p);
-  const acoes = p.acoes_ativas?.length ?? 0;
 
   return (
     <button
@@ -885,11 +858,6 @@ function LinhaFarmacia({
           {!p.tem_chatbot && (
             <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-sky-50 text-sky-600 ring-1 ring-sky-200">
               Sem ChatBot
-            </span>
-          )}
-          {acoes > 0 && (
-            <span title={`${acoes} ação(ões) ativa(s)`} className="shrink-0 flex items-center gap-0.5 text-[10px] font-semibold text-zinc-500">
-              <Megaphone className="size-3" />{acoes}
             </span>
           )}
         </div>
@@ -1019,23 +987,6 @@ function PainelFarmacia({
             <p className="mt-1 text-sm text-zinc-600">{passo.texto}</p>
           </div>
         </>
-      )}
-
-      {p.acoes_ativas && p.acoes_ativas.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {p.acoes_ativas.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => navigate({ to: "/acoes/$id", params: { id: String(a.id) } })}
-              title={`${a.tipo} · ${a.status}`}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white truncate max-w-[160px] hover:opacity-80 transition-opacity"
-              style={{ backgroundColor: a.cor ?? "#6B7280" }}
-            >
-              <Megaphone className="size-2.5 shrink-0" />
-              <span className="truncate">{a.nome}</span>
-            </button>
-          ))}
-        </div>
       )}
 
       <div className="flex gap-2">
