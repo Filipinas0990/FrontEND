@@ -10,7 +10,6 @@ import {
   Home,
   Megaphone,
   Send,
-  Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -86,7 +85,6 @@ export function AppShell({ title, children, headerRight, hideHeader, larguraTota
     // "Em Entrada" saiu da sidebar — agora é uma aba dentro de Farmácias (FarmaciasTabs)
     { icon: Building2,       label: "Farmácias",      to: "/farmacias" as const,        badge: undefined as ReactNode },
     { icon: CalendarDays,    label: "Reuniões",       to: "/reunioes" as const,         badge: undefined as ReactNode },
-   // { icon: Zap,             label: "Ações",          to: "/acoes" as const,            badge: undefined as ReactNode },
     { icon: Megaphone,       label: "Anúncios",       to: "/anuncios" as const,         badge: undefined as ReactNode },
     // Disparo em grupos de WhatsApp — hub próprio (saiu do botão da tela de Anúncios)
     {
