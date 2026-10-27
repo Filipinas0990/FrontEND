@@ -730,7 +730,7 @@ function ModalAgendarReuniao({
                 className="mt-1 form-input w-full disabled:opacity-60"
               >
                 <option value="">Selecionar farmácia...</option>
-                {farmacias.map((f) => (
+                {[...farmacias].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).map((f) => (
                   <option key={f.id} value={f.id}>{f.nome}</option>
                 ))}
               </select>

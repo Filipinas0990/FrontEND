@@ -141,6 +141,7 @@ function ModalEditar({
     onSuccess: () => {
       toast.success("Cliente atualizado!");
       qc.invalidateQueries({ queryKey: ["farmacias-entrada"] });
+      qc.invalidateQueries({ queryKey: ["farmacias"] });
       onSaved();
       onClose();
     },
@@ -235,6 +236,7 @@ function ModalNovo({
     onSuccess: () => {
       toast.success("Cliente adicionado!");
       qc.invalidateQueries({ queryKey: ["farmacias-entrada"] });
+      qc.invalidateQueries({ queryKey: ["farmacias"] });
       onOpenChange(false);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -344,6 +346,7 @@ function EntradaPage() {
     onSuccess: () => {
       toast.success("Cliente removido.");
       qc.invalidateQueries({ queryKey: ["farmacias-entrada"] });
+      qc.invalidateQueries({ queryKey: ["farmacias"] });
       setDeleteTarget(null);
     },
     onError: (err: Error) => toast.error(err.message),
