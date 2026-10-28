@@ -537,7 +537,7 @@ function FarmaciasPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const admin = isAdmin();
-  const { period } = usePeriod();
+  const { period, filtro, chave, rotulo } = usePeriod();
 
   const [query, setQuery] = useState("");
   /** Filtro pelos indicadores do topo: "ativas" = verde, "atencao" = amarelo + vermelho. */
@@ -548,8 +548,8 @@ function FarmaciasPage() {
   const [deleteTarget, setDeleteTarget] = useState<Farmacia | null>(null);
 
   const { data: farmacias = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["farmacias", period],
-    queryFn: () => getFarmacias({ dias: period, fase: "ativo" }),
+    queryKey: ["farmacias", chave],
+    queryFn: () => getFarmacias({ ...filtro, fase: "ativo" }),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     staleTime: 0,
@@ -699,7 +699,7 @@ function FarmaciasPage() {
     <AppShell title="Farmácias" hideHeader larguraTotal>
       <FarmaciasCabecalho
         subtitulo={<>
-          {farmacias.length} unidades cadastradas · últimos {period} dias
+          {farmacias.length} unidades cadastradas · {rotulo}
           {totalSemDados > 0 && ` · ${totalSemDados} sem dados no período`}
         </>}
         atualizando={isFetching}
@@ -900,11 +900,13 @@ function PainelFarmacia({
   const passo = proximoPasso(p, custo);
   const saude = nivelSaude(custo);
   const C = 2 * Math.PI * 42;
+  // A evolução semanal é por janela (7/15/30); com mês fechado ou de/até ela some
+  const { intervalo, rotulo } = usePeriod();
 
   const { data: evolucao = [], isLoading: carregandoEvolucao } = useQuery({
     queryKey: ["farmacia-evolucao", p.id, period],
     queryFn: () => getFarmaciaEvolucaoPorPeriodo(p.id, period),
-    enabled: !vazia,
+    enabled: !vazia && !intervalo,
   });
 
   const leadsDe = (termo: string) => p.canais?.find((c) => c.nome.toLowerCase().includes(termo))?.atendimentos ?? 0;
@@ -922,7 +924,7 @@ function PainelFarmacia({
 
       {vazia ? (
         <p className="rounded-xl bg-zinc-50 p-6 text-center text-sm text-zinc-400 italic">
-          Nenhum dado coletado nos últimos {period} dias.
+          Nenhum dado coletado — {rotulo}.
         </p>
       ) : (
         <>
@@ -945,14 +947,14 @@ function PainelFarmacia({
               </div>
             </div>
             <div className="space-y-0.5 min-w-0">
-              <p className="text-xs text-zinc-500">Receita · {period} dias</p>
+              <p className="text-xs text-zinc-500">Receita · {intervalo ? rotulo : `${period} dias`}</p>
               <p className="font-mono text-2xl font-bold text-zinc-900">{fmtBRL(p.receita_total)}</p>
               <Variacao value={p.variacao_receita} />
               {p.meta_receita != null && <p className="text-xs text-zinc-400">Meta: {fmtBRL(p.meta_receita)}</p>}
             </div>
           </div>
 
-          <EvolucaoReceita pontos={evolucao.map((e) => e.receita_total)} carregando={carregandoEvolucao} />
+          {!intervalo && <EvolucaoReceita pontos={evolucao.map((e) => e.receita_total)} carregando={carregandoEvolucao} />}
 
           <div className="grid grid-cols-2 gap-2.5">
             <Mini rotulo="Vendas" valor={String(p.vendas_realizadas)} extra={<Variacao value={p.variacao_vendas} />} />

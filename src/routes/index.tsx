@@ -70,7 +70,7 @@ function Index() {
   const navigate = useNavigate();
   const admin = isAdmin();
   const [gestorId, setGestorId] = useState<number | undefined>();
-  const { period, setPeriod } = usePeriod();
+  const { period, setPeriod, filtro, chave } = usePeriod();
   const [canal, setCanal] = useState<Canal>("meta");
   const [sortKey, setSortKey] = useState<SortKey>("meta_custo");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
@@ -86,8 +86,8 @@ function Index() {
     isLoading: loadingFarmacias,
     isFetching: fetchingFarmacias,
   } = useQuery({
-    queryKey: ["farmacias", undefined, undefined, gestorId, period],
-    queryFn: () => getFarmacias(gestorId ? { gestor_id: gestorId, dias: period } : { dias: period }),
+    queryKey: ["farmacias", undefined, undefined, gestorId, chave],
+    queryFn: () => getFarmacias(gestorId ? { gestor_id: gestorId, ...filtro } : filtro),
     select: (data) =>
       [...data].sort((a, b) => b.score_criticidade - a.score_criticidade),
   });

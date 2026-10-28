@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { RefreshCw, type LucideIcon } from "lucide-react";
 import { usePeriod, type Period } from "@/contexts/PeriodContext";
+import { SeletorIntervalo } from "@/components/SeletorIntervalo";
 
 /**
  * Bloco vermelho do topo do módulo Farmácias. As abas "Farmácias" e
@@ -18,7 +19,7 @@ export function FarmaciasCabecalho({
   /** Os indicadores (IndicadorTopo), quatro por linha. */
   children: ReactNode;
 }) {
-  const { period, setPeriod } = usePeriod();
+  const { period, setPeriod, intervalo } = usePeriod();
 
   return (
     <section className="rounded-3xl bg-gradient-to-br from-red-500 via-brand to-[#5c0a24] px-6 py-5 text-white shadow-lg">
@@ -35,13 +36,14 @@ export function FarmaciasCabecalho({
                 key={d}
                 onClick={() => setPeriod(d)}
                 className={`rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  period === d ? "bg-white text-brand" : "text-white/85 hover:text-white"
+                  !intervalo && period === d ? "bg-white text-brand" : "text-white/85 hover:text-white"
                 }`}
               >
                 {d}d
               </button>
             ))}
           </div>
+          <SeletorIntervalo escuro />
           <button
             onClick={onAtualizar}
             disabled={atualizando}

@@ -4,7 +4,9 @@ import {
   type Period,
   PERIOD_ACTIVE_CLASS,
   PERIOD_LABEL,
+  usePeriod,
 } from "@/contexts/PeriodContext";
+import { SeletorIntervalo } from "@/components/SeletorIntervalo";
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -22,6 +24,8 @@ interface PeriodSelectorProps {
 const PERIODS: Period[] = [7, 15, 30];
 
 export function PeriodSelector({ value, onChange, loading = false, extra }: PeriodSelectorProps) {
+  // Com mês fechado ou de/até escolhido, nenhum atalho fica ativo
+  const { intervalo, rotulo } = usePeriod();
   return (
     <div className="bg-white rounded-xl ring-1 ring-black/5 shadow-sm px-5 py-4 flex items-center gap-5 flex-wrap">
       {/* Ícone + label */}
@@ -38,7 +42,7 @@ export function PeriodSelector({ value, onChange, loading = false, extra }: Peri
       {/* Botões */}
       <div className="flex items-center gap-2">
         {PERIODS.map((p) => {
-          const isActive = value === p;
+          const isActive = !intervalo && value === p;
           return (
             <button
               key={p}
@@ -59,6 +63,7 @@ export function PeriodSelector({ value, onChange, loading = false, extra }: Peri
             </button>
           );
         })}
+        <SeletorIntervalo />
       </div>
 
       {/* Filtros extras ao lado dos períodos (ex.: canal Google / Meta) */}
@@ -70,7 +75,7 @@ export function PeriodSelector({ value, onChange, loading = false, extra }: Peri
       )}
 
       <p className="ml-auto text-[10px] text-zinc-400 hidden sm:block">
-        Todos os dados abaixo refletem os últimos <strong>{value} dias</strong>
+        Todos os dados abaixo refletem <strong>{rotulo}</strong>
       </p>
     </div>
   );

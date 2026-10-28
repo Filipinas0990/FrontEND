@@ -303,15 +303,15 @@ function FarmaciaDetailPage() {
   const admin = isAdmin();
   const qc = useQueryClient();
 
-  const { period, setPeriod } = usePeriod();
+  const { period, setPeriod, filtro, chave } = usePeriod();
   const [canalAberto, setCanalAberto] = useState<CanalData | null>(null);
   const [editLeadsOpen, setEditLeadsOpen] = useState(false);
   const [leadsGoogle, setLeadsGoogle] = useState("");
   const [leadsMeta, setLeadsMeta] = useState("");
 
   const { data: farmacias = [], isFetching } = useQuery({
-    queryKey: ["farmacias", period],
-    queryFn: () => getFarmacias({ dias: period }),
+    queryKey: ["farmacias", "detalhe", chave],
+    queryFn: () => getFarmacias(filtro),
     staleTime: 60_000,
   });
   const farmacia = farmacias.find((f) => f.id === farmaciaId);

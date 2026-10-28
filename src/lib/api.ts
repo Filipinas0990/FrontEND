@@ -259,6 +259,9 @@ export function getFarmacias(params?: {
   status?: string
   busca?: string
   dias?: 7 | 15 | 30
+  /** Período livre (mês fechado, de/até) — no lugar de `dias`. */
+  inicio?: string
+  fim?: string
   fase?: "entrada" | "ativo"
 }): Promise<Farmacia[]> {
   const q = new URLSearchParams()
@@ -266,9 +269,16 @@ export function getFarmacias(params?: {
   if (params?.status)    q.set("status", params.status)
   if (params?.busca)     q.set("busca", params.busca)
   if (params?.dias)      q.set("dias", String(params.dias))
+  if (params?.inicio)    q.set("inicio", params.inicio)
+  if (params?.fim)       q.set("fim", params.fim)
   if (params?.fase)      q.set("fase", params.fase)
   const qs = q.toString()
   return req(`/api/farmacias${qs ? `?${qs}` : ""}`)
+}
+
+/** Primeiro e último dia com coleta gravada — limites do seletor de período. */
+export function getPeriodoDisponivel(): Promise<{ primeiro_dia: string | null; ultimo_dia: string | null }> {
+  return req("/api/farmacias/periodo-disponivel")
 }
 
 export function getFarmaciaEvolucao(id: number): Promise<FarmaciaEvolucao[]> {
