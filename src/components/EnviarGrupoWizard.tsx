@@ -15,6 +15,7 @@ import {
 import { getUser } from "@/lib/auth";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import { ehFimDeSemana, nomeDoDia } from "@/lib/diaUtil";
+import { SeletorFimDeSemana } from "@/components/SeletorFimDeSemana";
 import { descreverRodizio } from "@/lib/rodizio";
 import { CriativoCard } from "@/components/CriativoCard";
 import { exportarCriativoPng, comprimirParaEnvio, orcamentoPorCriativo } from "@/lib/exportarCriativo";
@@ -159,6 +160,9 @@ export function EnviarGrupoWizard({
   // Toggle "Repetir os produtos": a lista dá a volta ao acabar, e a data de
   // término vira a ÚNICA condição de parada da campanha.
   const [repetirProdutos, setRepetirProdutos] = useState(false);
+  // Interruptor "Permitir disparos no fim de semana": desligado (padrão) mantém
+  // a regra do dono; ligado libera sábado e domingo só para esta campanha.
+  const [permitirFimDeSemana, setPermitirFimDeSemana] = useState(false);
   const [horaInicio, setHoraInicio] = useState("08:00");
   // Lista de horários fixos do gestor (Configurações → Horários de Disparo).
   const [horarios, setHorarios] = useState<HorarioDisparo[]>([]);
@@ -496,8 +500,9 @@ export function EnviarGrupoWizard({
       if (repete && !dataFim) {
         toast.error("Informe até quando a campanha se repete."); return;
       }
-      // O primeiro envio é a data escolhida aqui — o backend recusa fim de semana.
-      if (ehFimDeSemana(quandoISO)) {
+      // O primeiro envio é a data escolhida aqui — o backend recusa fim de
+      // semana, a menos que o gestor tenha ligado o interruptor.
+      if (!permitirFimDeSemana && ehFimDeSemana(quandoISO)) {
         toast.error(`O primeiro envio cairia num ${nomeDoDia(quandoISO)}. Disparos só saem em dia útil.`);
         return;
       }
@@ -531,6 +536,8 @@ export function EnviarGrupoWizard({
         repetir_ate: repete ? new Date(`${dataFim}T23:59:59`).toISOString() : null,
         // Com isto ligado a lista dá a volta e só a data acima encerra
         repetir_produtos: repete && repetirProdutos,
+        // Só `true` libera; desligado a API mantém a trava de sábado e domingo
+        permitir_fim_de_semana: permitirFimDeSemana,
         timezone: "America/Sao_Paulo",
         farmacia_id: clienteSel?.farmacia_id ?? null,
         // O pedido que esta campanha fecha — a pendente, ou a última lista
@@ -1387,11 +1394,12 @@ export function EnviarGrupoWizard({
                     </div>
                   )}
 
-                  {ehFimDeSemana(quandoISO) && (
-                    <p className="text-[11px] text-red-600">
-                      Esse dia é {nomeDoDia(quandoISO)} — disparos só saem em dia útil. Escolha outra data.
-                    </p>
-                  )}
+                  {/* Fim de semana: bloqueado por padrão, o gestor libera por campanha */}
+                  <SeletorFimDeSemana
+                    permitido={permitirFimDeSemana}
+                    onChange={setPermitirFimDeSemana}
+                    quandoISO={quandoISO}
+                  />
 
                   {jaPassou && (
                     <p className="text-[11px] text-amber-600">

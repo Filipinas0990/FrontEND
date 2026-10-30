@@ -25,6 +25,7 @@ import { desde } from "@/lib/tempo";
 import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import { agruparPostagens } from "@/lib/timelineDisparo";
 import { ehFimDeSemana, nomeDoDia } from "@/lib/diaUtil";
+import { SeletorFimDeSemana } from "@/components/SeletorFimDeSemana";
 import { descreverRodizio, PRODUTOS_POR_ENVIO } from "@/lib/rodizio";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 import { CampoCategoria } from "@/components/CampoCategoria";
@@ -1985,6 +1986,9 @@ function ModalAgendamento({
   // Toggle "Repetir os produtos": a lista dá a volta ao acabar, e a data de
   // término vira a ÚNICA condição de parada da campanha.
   const [repetirProdutos, setRepetirProdutos] = useState(false);
+  // Interruptor "Permitir disparos no fim de semana": desligado (padrão) mantém
+  // a regra do dono; ligado libera sábado e domingo só para esta campanha.
+  const [permitirFimDeSemana, setPermitirFimDeSemana] = useState(false);
   const [horaInicio, setHoraInicio] = useState("08:00");
   // Marcado = a hora sai da lista pré-definida, e os campos de hora somem
   const [usarPreset, setUsarPreset] = useState(false);
@@ -2121,8 +2125,9 @@ function ModalAgendamento({
       toast.error("Informe a data de término da repetição."); return;
     }
     // O primeiro envio é a data que o gestor escolheu — o backend recusa fim de
-    // semana, e avisar aqui evita montar a campanha toda para errar no fim.
-    if (ehFimDeSemana(quandoISO)) {
+    // semana (a menos que o gestor tenha ligado o interruptor), e avisar aqui
+    // evita montar a campanha toda para errar no fim.
+    if (!permitirFimDeSemana && ehFimDeSemana(quandoISO)) {
       toast.error(`O primeiro envio cairia num ${nomeDoDia(quandoISO)}. Disparos só saem em dia útil.`);
       return;
     }
@@ -2180,6 +2185,8 @@ function ModalAgendamento({
           : null,
         // Com isto ligado a lista dá a volta e só a data acima encerra
         repetir_produtos: repete && repetirProdutos,
+        // Só `true` libera; desligado a API mantém a trava de sábado e domingo
+        permitir_fim_de_semana: permitirFimDeSemana,
         timezone:      "America/Sao_Paulo",
         farmacia_id:   farmacia.id,
         // Fecha o pedido do cliente: sem isto ele continua "aguardando" na
@@ -2519,11 +2526,12 @@ function ModalAgendamento({
             </div>
           )}
 
-          {ehFimDeSemana(quandoISO) && (
-            <p className="text-[11px] text-red-600">
-              Esse dia é {nomeDoDia(quandoISO)} — disparos só saem em dia útil. Escolha outra data.
-            </p>
-          )}
+          {/* Fim de semana: bloqueado por padrão, o gestor libera por campanha */}
+          <SeletorFimDeSemana
+            permitido={permitirFimDeSemana}
+            onChange={setPermitirFimDeSemana}
+            quandoISO={quandoISO}
+          />
 
           {jaPassou && (
             <p className="text-[11px] text-amber-600">

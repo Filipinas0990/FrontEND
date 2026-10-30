@@ -1409,6 +1409,12 @@ export interface CriarDisparoPayload {
    * vira obrigatória — a API recusa com 400 sem ela).
    */
   repetir_produtos?: boolean
+  /**
+   * true = o gestor liberou sábado e domingo para ESTA campanha. Ausente/false
+   * (padrão) mantém a regra do dono: nada sai no fim de semana, e a API recusa
+   * com 400 um primeiro envio nesses dias.
+   */
+  permitir_fim_de_semana?: boolean
   timezone?: string
   farmacia_id?: number | null
   solicitacao_id?: number | null
@@ -1442,6 +1448,8 @@ export interface DisparoResumo {
   criado_em: string
   /** true = a lista de produtos dá a volta; só a data de término encerra. */
   repetir_produtos?: boolean
+  /** true = esta campanha foi criada com o fim de semana liberado. */
+  permitir_fim_de_semana?: boolean
 }
 
 /**
@@ -1479,6 +1487,8 @@ export interface DisparoDetalhe {
   repetir: RepetirDisparo
   repetir_ate: string | null
   repetir_produtos: boolean
+  /** true = esta campanha foi criada com o fim de semana liberado. */
+  permitir_fim_de_semana: boolean
   agendado_para: string | null
   proximo_envio: string | null
   ultimo_envio: string | null
