@@ -40,6 +40,9 @@ interface EnviarGrupoWizardProps {
 }
 
 /** Usado quando o gestor abre o disparo sem ter montado criativos na tela. */
+/** Quantos criativos são gerados ao mesmo tempo na Revisão. */
+const GERACAO_PARALELA = 4;
+
 const CONFIG_PADRAO: CriativosConfig = {
   layout: "azul",
   enquadramento: "4:5",
@@ -432,58 +435,79 @@ export function EnviarGrupoWizard({
     // O teto é por ENVIO, não por imagem: o proxy da Vercel recusa o POST
     // inteiro acima de ~4,2 MB, e com o rodízio um disparo leva a lista toda.
     const teto = orcamentoPorCriativo(itensEscolhidos.length);
-    const geradas: MidiaDisparo[] = [];
-    const naoGerados: string[] = [];
-    try {
-      for (const item of itensEscolhidos) {
-        if (!valida()) return;
-        const preco = precos[item.chave] ?? item.preco;
-        // Só sai preço riscado em quem está com o de/por ligado.
-        const precoDe = dePor.has(item.chave)
-          ? (precosDe[item.chave] ?? item.precoDe) || undefined
-          : undefined;
-        const dados = {
-          layout:        criativosConfig.layout,
-          enquadramento: criativosConfig.enquadramento,
-          nome:          item.nome,
-          preco,
-          precoDe,
-          imagem:        item.imagem,
-          localizacao:   localizacaoCriativo,
-          titulo:        criativosConfig.titulo,
-          subtitulo:     criativosConfig.subtitulo,
-        };
-        // Um produto com problema não pode derrubar os outros 42: tenta de novo
-        // sem a foto e, se nem assim, deixa ele de fora e avisa quem foi.
-        let png: string | null = null;
+    const total = itensEscolhidos.length;
+
+    /** Um produto. Nunca rejeita: falha vira null e o produto fica de fora. */
+    async function gerarUm(item: (typeof itensEscolhidos)[number]): Promise<MidiaDisparo | null> {
+      const preco = precos[item.chave] ?? item.preco;
+      // Só sai preço riscado em quem está com o de/por ligado.
+      const precoDe = dePor.has(item.chave)
+        ? (precosDe[item.chave] ?? item.precoDe) || undefined
+        : undefined;
+      const dados = {
+        layout:        criativosConfig.layout,
+        enquadramento: criativosConfig.enquadramento,
+        nome:          item.nome,
+        preco,
+        precoDe,
+        imagem:        item.imagem,
+        localizacao:   localizacaoCriativo,
+        titulo:        criativosConfig.titulo,
+        subtitulo:     criativosConfig.subtitulo,
+      };
+      // Um produto com problema não pode derrubar os outros: tenta de novo
+      // sem a foto e, se nem assim, deixa ele de fora e avisa quem foi.
+      let png: string | null = null;
+      try {
+        png = await exportarCriativoPng(dados);
+      } catch (err) {
+        console.warn(`Criativo de "${item.nome}" falhou, tentando sem a foto:`, err);
         try {
-          png = await exportarCriativoPng(dados);
-        } catch (err) {
-          console.warn(`Criativo de "${item.nome}" falhou, tentando sem a foto:`, err);
-          try {
-            png = await exportarCriativoPng({ ...dados, imagem: null });
-          } catch (err2) {
-            console.error(`Criativo de "${item.nome}" falhou mesmo sem a foto:`, err2);
-          }
+          png = await exportarCriativoPng({ ...dados, imagem: null });
+        } catch (err2) {
+          console.error(`Criativo de "${item.nome}" falhou mesmo sem a foto:`, err2);
+          return null;
         }
-        if (png) {
-          // Comprime para caber sob o limite de 1 MB do nginx da Evolution.
-          const comprimido = await comprimirParaEnvio(png, teto);
-          geradas.push({
-            b64:    comprimido.b64,
-            mime:   comprimido.mime,
-            rotulo: preco
-              ? (precoDe
-                ? `${item.nome} — de R$${precoDe} por R$${preco}`
-                : `${item.nome} — ${preco}`)
-              : item.nome,
-          });
-        } else {
-          naoGerados.push(item.nome);
-        }
-        if (valida()) setProgresso({ feito: geradas.length + naoGerados.length, total: itensEscolhidos.length });
       }
+      try {
+        // Comprime para caber sob o limite de 1 MB do nginx da Evolution.
+        const comprimido = await comprimirParaEnvio(png, teto);
+        return {
+          b64:    comprimido.b64,
+          mime:   comprimido.mime,
+          rotulo: preco
+            ? (precoDe
+              ? `${item.nome} — de R$${precoDe} por R$${preco}`
+              : `${item.nome} — ${preco}`)
+            : item.nome,
+        };
+      } catch (err) {
+        console.error(`Não consegui comprimir o criativo de "${item.nome}":`, err);
+        return null;
+      }
+    }
+
+    // Alguns de cada vez: um por um, 42 produtos levavam minutos (a maior parte
+    // é esperar a foto chegar). Mais que isso pesa no celular/PC fraco.
+    // A ordem do resultado é a da lista — é a ordem do rodízio.
+    const resultados: (MidiaDisparo | null)[] = new Array(total).fill(null);
+    let proximo = 0;
+    let feitos = 0;
+    async function trabalhador() {
+      while (proximo < total) {
+        if (!valida()) return;
+        const i = proximo++;
+        resultados[i] = await gerarUm(itensEscolhidos[i]);
+        feitos++;
+        if (valida()) setProgresso({ feito: feitos, total });
+      }
+    }
+
+    try {
+      await Promise.all(Array.from({ length: Math.min(GERACAO_PARALELA, total) }, trabalhador));
       if (!valida()) return;
+      const geradas = resultados.filter((m): m is MidiaDisparo => m !== null);
+      const naoGerados = itensEscolhidos.filter((_, i) => resultados[i] === null).map((i) => i.nome);
       setMidias(geradas);
       setFalhas(naoGerados);
       if (naoGerados.length) {
@@ -496,10 +520,8 @@ export function EnviarGrupoWizard({
     } catch (err) {
       console.error("Erro ao gerar os criativos:", err);
       if (valida()) {
-        // Guarda o que já saiu e lista o resto como falha — assim aparece o "Tentar de novo".
-        const processados = geradas.length + naoGerados.length;
-        setMidias(geradas);
-        setFalhas([...naoGerados, ...itensEscolhidos.slice(processados).map((i) => i.nome)]);
+        setMidias([]);
+        setFalhas(itensEscolhidos.map((i) => i.nome));
         toast.error("Erro ao gerar os criativos.");
       }
     } finally {

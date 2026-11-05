@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
-import { toPng } from "html-to-image";
+import { toPng, getFontEmbedCSS } from "html-to-image";
 import { CriativoCard, type CriativoDados } from "@/components/CriativoCard";
 
 /**
@@ -108,6 +108,25 @@ async function embutirImagem(src?: string | null): Promise<string | null | undef
   }
 }
 
+/**
+ * CSS das fontes já embutidas (base64), calculado UMA vez por sessão.
+ *
+ * Sem isto, cada toPng varre todas as folhas de estilo da página e embute de
+ * novo os arquivos da Inter (vários pesos × subconjuntos do Google Fonts) —
+ * com 42 produtos era o grosso da demora. Falhou? Zera para tentar na próxima.
+ */
+let fontesCss: Promise<string> | null = null;
+function cssDasFontes(alvo: HTMLElement): Promise<string> {
+  if (!fontesCss) {
+    fontesCss = getFontEmbedCSS(alvo).catch((err) => {
+      console.warn("Não consegui embutir as fontes no criativo:", err);
+      fontesCss = null;
+      return "";
+    });
+  }
+  return fontesCss;
+}
+
 export async function exportarCriativoPng(dados: CriativoDados): Promise<string> {
   const dim = DIMENSOES[dados.enquadramento] ?? DIMENSOES["4:5"];
   const largura = dim.w;
@@ -138,6 +157,9 @@ export async function exportarCriativoPng(dados: CriativoDados): Promise<string>
     await proximoFrame();
     await proximoFrame();
 
+    const fontEmbedCSS = await comTempoLimite(cssDasFontes(alvo), TEMPO_PNG_MS, "Fontes do criativo")
+      .catch(() => undefined);
+
     // O toPng pode ficar pendurado para sempre (o img.decode() interno dele
     // rejeita sem ninguém tratar) — era o "Gerando os criativos..." infinito.
     return await comTempoLimite(
@@ -146,6 +168,7 @@ export async function exportarCriativoPng(dados: CriativoDados): Promise<string>
         height: altura,
         pixelRatio: 1,
         backgroundColor: "#ffffff",
+        fontEmbedCSS,
         // Imagem que falhar lá dentro não derruba o PNG inteiro.
         onImageErrorHandler: () => undefined,
       }),
