@@ -55,12 +55,43 @@ async function esperarImagens(raiz: HTMLElement, timeoutMs = 8000): Promise<void
  * interno dele falhar, ele desiste em silêncio: o criativo sai com o quadro
  * vazio, sem erro nenhum. Buscando aqui, a imagem chega garantida ao PNG.
  */
+const TEMPO_FOTO_MS = 10_000;
+const TEMPO_PNG_MS = 30_000;
+
+/** Rejeita se a promessa não terminar a tempo — nada aqui pode travar a revisão. */
+function comTempoLimite<T>(p: Promise<T>, ms: number, oque: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${oque}: tempo esgotado (${ms / 1000}s)`)), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
+/**
+ * Devolve a foto como data URI, ou null quando não dá para usá-la.
+ *
+ * Nunca devolve a URL original: se ela chegasse ao html-to-image, ele tentaria
+ * de novo, falharia, trocaria por src="" e REJEITARIA o PNG inteiro com um
+ * Event (sem mensagem). Num disparo de 43 produtos, uma foto 404 derrubava
+ * todos. Sem foto, o card mostra o quadro vazio e o criativo sai do mesmo jeito.
+ */
 async function embutirImagem(src?: string | null): Promise<string | null | undefined> {
   if (!src || src.startsWith("data:")) return src;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), TEMPO_FOTO_MS);
   try {
-    const res = await fetch(src, { mode: "cors", credentials: "omit" });
-    if (!res.ok) return src;
+    const res = await fetch(src, { mode: "cors", credentials: "omit", signal: ctrl.signal });
+    if (!res.ok) {
+      console.warn(`Foto do produto indisponível (${res.status}), criativo sai sem ela:`, src);
+      return null;
+    }
     const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) {
+      console.warn(`Foto do produto não é imagem (${blob.type || "sem tipo"}), criativo sai sem ela:`, src);
+      return null;
+    }
     return await new Promise<string>((resolve, reject) => {
       const fr = new FileReader();
       fr.onload = () => resolve(fr.result as string);
@@ -71,7 +102,9 @@ async function embutirImagem(src?: string | null): Promise<string | null | undef
     // Falhar em silêncio aqui é justamente o que fazia o criativo sair sem a
     // foto do produto — se acontecer, o motivo tem que aparecer no console.
     console.warn("Não consegui embutir a imagem do produto no criativo:", src, err);
-    return src; // deixa o html-to-image tentar do jeito dele
+    return null;
+  } finally {
+    clearTimeout(t);
   }
 }
 
@@ -105,12 +138,20 @@ export async function exportarCriativoPng(dados: CriativoDados): Promise<string>
     await proximoFrame();
     await proximoFrame();
 
-    return await toPng(alvo, {
-      width: largura,
-      height: altura,
-      pixelRatio: 1,
-      backgroundColor: "#ffffff",
-    });
+    // O toPng pode ficar pendurado para sempre (o img.decode() interno dele
+    // rejeita sem ninguém tratar) — era o "Gerando os criativos..." infinito.
+    return await comTempoLimite(
+      toPng(alvo, {
+        width: largura,
+        height: altura,
+        pixelRatio: 1,
+        backgroundColor: "#ffffff",
+        // Imagem que falhar lá dentro não derruba o PNG inteiro.
+        onImageErrorHandler: () => undefined,
+      }),
+      TEMPO_PNG_MS,
+      `Criativo "${dados.nome}"`,
+    );
   } finally {
     root.unmount();
     host.remove();

@@ -174,6 +174,12 @@ export function EnviarGrupoWizard({
   // Etapa 6 — criativos gerados
   const [midias, setMidias] = useState<MidiaDisparo[]>([]);
   const [gerando, setGerando] = useState(false);
+  // "12 de 43" enquanto gera — com a lista inteira do cliente demora mesmo.
+  const [progresso, setProgresso] = useState<{ feito: number; total: number } | null>(null);
+  // Produtos que não viraram criativo nem sem a foto.
+  const [falhas, setFalhas] = useState<string[]>([]);
+  // Voltar e avançar de novo começa outra geração; a antiga não pode sobrescrever.
+  const geracaoAtual = useRef(0);
   const [enviando, setEnviando] = useState(false);
 
   // Conexões disponíveis para o disparo (a do gestor + as globais) e a escolhida.
@@ -417,19 +423,26 @@ export function EnviarGrupoWizard({
 
   /** Rasteriza um criativo por produto escolhido. Roda ao entrar na revisão. */
   async function gerarMidias() {
+    const minha = ++geracaoAtual.current;
+    const valida = () => geracaoAtual.current === minha;
     setGerando(true);
+    setMidias([]);
+    setFalhas([]);
+    setProgresso({ feito: 0, total: itensEscolhidos.length });
+    // O teto é por ENVIO, não por imagem: o proxy da Vercel recusa o POST
+    // inteiro acima de ~4,2 MB, e com o rodízio um disparo leva a lista toda.
+    const teto = orcamentoPorCriativo(itensEscolhidos.length);
+    const geradas: MidiaDisparo[] = [];
+    const naoGerados: string[] = [];
     try {
-      // O teto é por ENVIO, não por imagem: o proxy da Vercel recusa o POST
-      // inteiro acima de ~4,2 MB, e com o rodízio um disparo leva a lista toda.
-      const teto = orcamentoPorCriativo(itensEscolhidos.length);
-      const geradas: MidiaDisparo[] = [];
       for (const item of itensEscolhidos) {
+        if (!valida()) return;
         const preco = precos[item.chave] ?? item.preco;
         // Só sai preço riscado em quem está com o de/por ligado.
         const precoDe = dePor.has(item.chave)
           ? (precosDe[item.chave] ?? item.precoDe) || undefined
           : undefined;
-        const png = await exportarCriativoPng({
+        const dados = {
           layout:        criativosConfig.layout,
           enquadramento: criativosConfig.enquadramento,
           nome:          item.nome,
@@ -439,24 +452,58 @@ export function EnviarGrupoWizard({
           localizacao:   localizacaoCriativo,
           titulo:        criativosConfig.titulo,
           subtitulo:     criativosConfig.subtitulo,
-        });
-        // Comprime para caber sob o limite de 1 MB do nginx da Evolution.
-        const comprimido = await comprimirParaEnvio(png, teto);
-        geradas.push({
-          b64:    comprimido.b64,
-          mime:   comprimido.mime,
-          rotulo: preco
-            ? (precoDe
-              ? `${item.nome} — de R$${precoDe} por R$${preco}`
-              : `${item.nome} — ${preco}`)
-            : item.nome,
-        });
+        };
+        // Um produto com problema não pode derrubar os outros 42: tenta de novo
+        // sem a foto e, se nem assim, deixa ele de fora e avisa quem foi.
+        let png: string | null = null;
+        try {
+          png = await exportarCriativoPng(dados);
+        } catch (err) {
+          console.warn(`Criativo de "${item.nome}" falhou, tentando sem a foto:`, err);
+          try {
+            png = await exportarCriativoPng({ ...dados, imagem: null });
+          } catch (err2) {
+            console.error(`Criativo de "${item.nome}" falhou mesmo sem a foto:`, err2);
+          }
+        }
+        if (png) {
+          // Comprime para caber sob o limite de 1 MB do nginx da Evolution.
+          const comprimido = await comprimirParaEnvio(png, teto);
+          geradas.push({
+            b64:    comprimido.b64,
+            mime:   comprimido.mime,
+            rotulo: preco
+              ? (precoDe
+                ? `${item.nome} — de R$${precoDe} por R$${preco}`
+                : `${item.nome} — ${preco}`)
+              : item.nome,
+          });
+        } else {
+          naoGerados.push(item.nome);
+        }
+        if (valida()) setProgresso({ feito: geradas.length + naoGerados.length, total: itensEscolhidos.length });
       }
+      if (!valida()) return;
       setMidias(geradas);
-    } catch {
-      toast.error("Erro ao gerar os criativos.");
+      setFalhas(naoGerados);
+      if (naoGerados.length) {
+        toast.error(
+          geradas.length
+            ? `${naoGerados.length} produto(s) ficaram sem criativo: ${naoGerados.join(", ")}.`
+            : "Não consegui gerar nenhum criativo.",
+        );
+      }
+    } catch (err) {
+      console.error("Erro ao gerar os criativos:", err);
+      if (valida()) {
+        // Guarda o que já saiu e lista o resto como falha — assim aparece o "Tentar de novo".
+        const processados = geradas.length + naoGerados.length;
+        setMidias(geradas);
+        setFalhas([...naoGerados, ...itensEscolhidos.slice(processados).map((i) => i.nome)]);
+        toast.error("Erro ao gerar os criativos.");
+      }
     } finally {
-      setGerando(false);
+      if (valida()) { setGerando(false); setProgresso(null); }
     }
   }
 
@@ -1511,9 +1558,27 @@ export function EnviarGrupoWizard({
                       <p className="text-sm text-zinc-800 whitespace-pre-wrap break-words">{mensagem}</p>
                     </div>
                   )}
+                  {!gerando && falhas.length > 0 && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm mb-2 flex flex-col gap-2 text-sm">
+                      <p className="text-red-600 flex items-start gap-1.5">
+                        <AlertCircle className="size-4 shrink-0 mt-0.5" />
+                        {midias.length === 0
+                          ? "Não consegui gerar os criativos."
+                          : `${falhas.length} produto(s) ficaram de fora: ${falhas.join(", ")}.`}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void gerarMidias()}
+                        className="self-start text-sm font-medium text-brand hover:underline flex items-center gap-1.5"
+                      >
+                        <RefreshCw className="size-3.5" /> Tentar de novo
+                      </button>
+                    </div>
+                  )}
                   {gerando ? (
                     <div className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-center gap-2 text-sm text-zinc-400">
-                      <Loader2 className="size-4 animate-spin" /> Gerando os criativos...
+                      <Loader2 className="size-4 animate-spin" /> Gerando os criativos
+                      {progresso && progresso.total > 1 ? ` (${progresso.feito} de ${progresso.total})` : ""}...
                     </div>
                   ) : (
                     midias.map((m, i) => (
