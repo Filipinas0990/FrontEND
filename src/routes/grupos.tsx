@@ -19,6 +19,7 @@ import { EditorCriativoModal } from "@/components/EditorCriativoModal";
 import { pecasAjustadas, type AjustesCriativo } from "@/lib/ajustesCriativo";
 import {
   exportarCriativoPng, comprimirParaEnvio, baixarCriativos, orcamentoPorCriativo,
+  FotoIndisponivelError,
 } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import { desde } from "@/lib/tempo";
@@ -1891,10 +1892,13 @@ function rotuloDaPeca(peca: PecaEnvio): string {
   return peca.tipo === "criativo" ? rotuloDoCriativo(peca.dados) : "";
 }
 
-/** A imagem da peça como data URI, do jeito que a compressão espera receber. */
+/**
+ * A imagem da peça como data URI, do jeito que a compressão espera receber.
+ * Criativo sem a foto do produto não sai: iria para o grupo com o quadro vazio.
+ */
 function imagemDaPeca(peca: PecaEnvio): Promise<string> {
   return peca.tipo === "criativo"
-    ? exportarCriativoPng(peca.dados)
+    ? exportarCriativoPng(peca.dados, { exigirFoto: true })
     : Promise.resolve(peca.dataUrl);
 }
 
@@ -2200,7 +2204,11 @@ function ModalAgendamento({
       toast.success("Campanha agendada!");
       onPronto();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao agendar a campanha.");
+      if (err instanceof FotoIndisponivelError) {
+        toast.error(`Campanha não agendada — ${err.message}. Troque a foto desse produto ou tire-o da lista e tente de novo.`);
+      } else {
+        toast.error(err instanceof Error ? err.message : "Erro ao agendar a campanha.");
+      }
     } finally {
       setEnviando(false);
     }

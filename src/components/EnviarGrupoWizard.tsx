@@ -18,7 +18,7 @@ import { ehFimDeSemana, nomeDoDia } from "@/lib/diaUtil";
 import { SeletorFimDeSemana } from "@/components/SeletorFimDeSemana";
 import { descreverRodizio } from "@/lib/rodizio";
 import { CriativoCard } from "@/components/CriativoCard";
-import { exportarCriativoPng, comprimirParaEnvio, orcamentoPorCriativo } from "@/lib/exportarCriativo";
+import { exportarCriativoPng, comprimirParaEnvio, orcamentoPorCriativo, FotoIndisponivelError } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import type { CriativosConfig } from "@/components/CriativosModal";
 
@@ -179,7 +179,7 @@ export function EnviarGrupoWizard({
   const [gerando, setGerando] = useState(false);
   // "12 de 43" enquanto gera — com a lista inteira do cliente demora mesmo.
   const [progresso, setProgresso] = useState<{ feito: number; total: number } | null>(null);
-  // Produtos que não viraram criativo nem sem a foto.
+  // Produtos que não viraram criativo — "(sem foto)" quando a foto não carregou.
   const [falhas, setFalhas] = useState<string[]>([]);
   // Voltar e avançar de novo começa outra geração; a antiga não pode sobrescrever.
   const geracaoAtual = useRef(0);
@@ -437,8 +437,8 @@ export function EnviarGrupoWizard({
     const teto = orcamentoPorCriativo(itensEscolhidos.length);
     const total = itensEscolhidos.length;
 
-    /** Um produto. Nunca rejeita: falha vira null e o produto fica de fora. */
-    async function gerarUm(item: (typeof itensEscolhidos)[number]): Promise<MidiaDisparo | null> {
+    /** Um produto. Nunca rejeita: falha vira texto (o motivo) e o produto fica de fora. */
+    async function gerarUm(item: (typeof itensEscolhidos)[number]): Promise<MidiaDisparo | string> {
       const preco = precos[item.chave] ?? item.preco;
       // Só sai preço riscado em quem está com o de/por ligado.
       const precoDe = dePor.has(item.chave)
@@ -455,18 +455,24 @@ export function EnviarGrupoWizard({
         titulo:        criativosConfig.titulo,
         subtitulo:     criativosConfig.subtitulo,
       };
-      // Um produto com problema não pode derrubar os outros: tenta de novo
-      // sem a foto e, se nem assim, deixa ele de fora e avisa quem foi.
-      let png: string | null = null;
+      // Um produto com problema não pode derrubar os outros: ele fica de fora
+      // e a tela diz quem foi e por quê. Sem a foto NÃO gera — antes saía a
+      // peça com o quadro cinza vazio direto para o grupo do cliente.
+      let png: string;
       try {
-        png = await exportarCriativoPng(dados);
+        png = await exportarCriativoPng(dados, { exigirFoto: true });
       } catch (err) {
-        console.warn(`Criativo de "${item.nome}" falhou, tentando sem a foto:`, err);
+        if (err instanceof FotoIndisponivelError) {
+          console.warn(`Criativo de "${item.nome}" ficou de fora:`, err.message);
+          return `${item.nome} (sem foto)`;
+        }
+        // Falha que não é da foto: uma segunda tentativa costuma passar.
+        console.warn(`Criativo de "${item.nome}" falhou, tentando de novo:`, err);
         try {
-          png = await exportarCriativoPng({ ...dados, imagem: null });
+          png = await exportarCriativoPng(dados, { exigirFoto: true });
         } catch (err2) {
-          console.error(`Criativo de "${item.nome}" falhou mesmo sem a foto:`, err2);
-          return null;
+          console.error(`Criativo de "${item.nome}" falhou de novo:`, err2);
+          return err2 instanceof FotoIndisponivelError ? `${item.nome} (sem foto)` : item.nome;
         }
       }
       try {
@@ -483,14 +489,14 @@ export function EnviarGrupoWizard({
         };
       } catch (err) {
         console.error(`Não consegui comprimir o criativo de "${item.nome}":`, err);
-        return null;
+        return item.nome;
       }
     }
 
     // Alguns de cada vez: um por um, 42 produtos levavam minutos (a maior parte
     // é esperar a foto chegar). Mais que isso pesa no celular/PC fraco.
     // A ordem do resultado é a da lista — é a ordem do rodízio.
-    const resultados: (MidiaDisparo | null)[] = new Array(total).fill(null);
+    const resultados: (MidiaDisparo | string)[] = new Array(total).fill("");
     let proximo = 0;
     let feitos = 0;
     async function trabalhador() {
@@ -506,8 +512,8 @@ export function EnviarGrupoWizard({
     try {
       await Promise.all(Array.from({ length: Math.min(GERACAO_PARALELA, total) }, trabalhador));
       if (!valida()) return;
-      const geradas = resultados.filter((m): m is MidiaDisparo => m !== null);
-      const naoGerados = itensEscolhidos.filter((_, i) => resultados[i] === null).map((i) => i.nome);
+      const geradas = resultados.filter((m): m is MidiaDisparo => typeof m !== "string");
+      const naoGerados = resultados.filter((m): m is string => typeof m === "string");
       setMidias(geradas);
       setFalhas(naoGerados);
       if (naoGerados.length) {

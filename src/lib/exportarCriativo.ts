@@ -82,7 +82,11 @@ async function embutirImagem(src?: string | null): Promise<string | null | undef
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), TEMPO_FOTO_MS);
   try {
-    const res = await fetch(src, { mode: "cors", credentials: "omit", signal: ctrl.signal });
+    // "same-origin": as fotos (catálogo e produto do cliente) vêm de rotas da
+    // API que exigem o cookie de sessão. Com "omit" voltava 401 — só passava
+    // quando a miniatura já estava no cache do navegador, e a foto que o
+    // cliente mandou pelo link saía com o quadro vazio no grupo.
+    const res = await fetch(src, { mode: "cors", credentials: "same-origin", signal: ctrl.signal });
     if (!res.ok) {
       console.warn(`Foto do produto indisponível (${res.status}), criativo sai sem ela:`, src);
       return null;
@@ -127,12 +131,39 @@ function cssDasFontes(alvo: HTMLElement): Promise<string> {
   return fontesCss;
 }
 
-export async function exportarCriativoPng(dados: CriativoDados): Promise<string> {
+/**
+ * O criativo sairia sem a foto do produto.
+ *
+ * No disparo isso não pode passar: a peça ia para o grupo com o quadro cinza e
+ * o ícone de imagem no meio, e ninguém percebia até o cliente ver no WhatsApp.
+ */
+export class FotoIndisponivelError extends Error {
+  constructor(public readonly produto: string, motivo: string) {
+    super(`"${produto}": ${motivo}`);
+    this.name = "FotoIndisponivelError";
+  }
+}
+
+export interface OpcoesExportacao {
+  /** Sem a foto do produto, rejeita com FotoIndisponivelError em vez de gerar o quadro vazio. */
+  exigirFoto?: boolean;
+}
+
+export async function exportarCriativoPng(
+  dados: CriativoDados,
+  { exigirFoto = false }: OpcoesExportacao = {},
+): Promise<string> {
   const dim = DIMENSOES[dados.enquadramento] ?? DIMENSOES["4:5"];
   const largura = dim.w;
   const altura = dim.h;
 
+  if (exigirFoto && !dados.imagem) {
+    throw new FotoIndisponivelError(dados.nome, "produto sem foto no catálogo");
+  }
   const imagem = await embutirImagem(dados.imagem);
+  if (exigirFoto && !imagem) {
+    throw new FotoIndisponivelError(dados.nome, "a foto não carregou");
+  }
 
   // Container escondido, no tamanho final do criativo
   const host = document.createElement("div");
@@ -154,6 +185,11 @@ export async function exportarCriativoPng(dados: CriativoDados): Promise<string>
 
     await esperarFontes();
     await esperarImagens(host);
+    // O data URI pode vir corrompido (ou num formato que o navegador não abre):
+    // o fetch deu certo, mas o <img> não pinta nada e a peça sai vazia.
+    if (exigirFoto && Array.from(host.querySelectorAll("img")).some((i) => !i.naturalWidth)) {
+      throw new FotoIndisponivelError(dados.nome, "a foto não abriu");
+    }
     await proximoFrame();
     await proximoFrame();
 
