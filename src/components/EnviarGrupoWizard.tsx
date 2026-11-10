@@ -17,7 +17,8 @@ import { combinaComFarmacia } from "@/lib/nomeGrupo";
 import { ehFimDeSemana, nomeDoDia } from "@/lib/diaUtil";
 import { SeletorFimDeSemana } from "@/components/SeletorFimDeSemana";
 import { descreverRodizio } from "@/lib/rodizio";
-import { CriativoCard } from "@/components/CriativoCard";
+import { CriativoCard, type Paleta } from "@/components/CriativoCard";
+import { SeletorPaleta } from "@/components/SeletorPaleta";
 import { exportarCriativoPng, comprimirParaEnvio, orcamentoPorCriativo, FotoIndisponivelError } from "@/lib/exportarCriativo";
 import { formatarMoeda } from "@/lib/moeda";
 import type { CriativosConfig } from "@/components/CriativosModal";
@@ -135,6 +136,9 @@ export function EnviarGrupoWizard({
   const [dePor, setDePor] = useState<Set<string>>(new Set());
   const [precosDe, setPrecosDe] = useState<Record<string, string>>({});
   const [mensagem, setMensagem] = useState("");
+  // Cor da arte. Farmácia de marca vermelha reclamou de só sair azul; a cor é
+  // a mesma do /grupos e vale para a prévia e para o PNG da Revisão.
+  const [paleta, setPaleta] = useState<Paleta>("azul");
 
   // Etapa 4 — grupos
   const [grupos, setGrupos] = useState<GrupoWhatsApp[]>([]);
@@ -454,6 +458,7 @@ export function EnviarGrupoWizard({
         localizacao:   localizacaoCriativo,
         titulo:        criativosConfig.titulo,
         subtitulo:     criativosConfig.subtitulo,
+        paleta,
       };
       // Um produto com problema não pode derrubar os outros: ele fica de fora
       // e a tela diz quem foi e por quê. Sem a foto NÃO gera — antes saía a
@@ -1145,12 +1150,15 @@ export function EnviarGrupoWizard({
                   o gestor vê a peça antes de escolher os grupos. */}
               {itensEscolhidos.length > 0 && (
                 <div className="flex flex-col gap-2">
-                  <p className="text-sm font-medium text-zinc-700">
-                    Prévia{" "}
-                    <span className="font-normal text-zinc-400">
-                      — {itensEscolhidos.length} anúncio(s), como vão sair no grupo
-                    </span>
-                  </p>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-sm font-medium text-zinc-700">
+                      Prévia{" "}
+                      <span className="font-normal text-zinc-400">
+                        — {itensEscolhidos.length} anúncio(s), como vão sair no grupo
+                      </span>
+                    </p>
+                    <SeletorPaleta paleta={paleta} onEscolher={setPaleta} />
+                  </div>
                   <div className="flex gap-3 overflow-x-auto pb-1">
                     {itensEscolhidos.map((item) => (
                       <div key={item.chave} className="w-32 shrink-0">
@@ -1166,6 +1174,7 @@ export function EnviarGrupoWizard({
                           localizacao={localizacaoCriativo}
                           titulo={criativosConfig.titulo}
                           subtitulo={criativosConfig.subtitulo}
+                          paleta={paleta}
                         />
                       </div>
                     ))}
