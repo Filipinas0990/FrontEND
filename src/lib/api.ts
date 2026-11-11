@@ -1434,6 +1434,9 @@ export interface DisparoCriado {
 
 export interface DisparoResumo {
   id: number
+  /** Quem programou. O admin recebe os disparos de todos os gestores. */
+  gestor_id?: number
+  gestor?: string | null
   titulo: string
   mensagem: string
   total_midias: number
@@ -1479,6 +1482,9 @@ export function getDisparoLogs(id: number): Promise<DisparoLog[]> {
  */
 export interface DisparoDetalhe {
   id: number
+  /** Quem programou o disparo. */
+  gestor_id?: number
+  gestor?: string | null
   titulo: string
   mensagem: string
   farmacia_id: number | null
@@ -1681,6 +1687,9 @@ export interface SolicitacaoOferta {
   id: number
   farmacia_id: number
   farmacia: string
+  /** Gestor dono do link pelo qual a lista chegou (o admin vê de todos). */
+  gestor_id?: number
+  gestor?: string | null
   produtos: ProdutoOferta[]
   enviado_por: string
   status: StatusSolicitacao
@@ -1839,6 +1848,8 @@ export interface ClienteCarteira {
   respondeu: boolean
   solicitacao: {
     id: number
+    /** Gestor que recebeu a lista. */
+    gestor?: string | null
     produtos: ProdutoOferta[]
     enviado_por: string
     criado_em: string
@@ -1850,6 +1861,7 @@ export interface ClienteCarteira {
    */
   ultima_solicitacao: {
     id: number
+    gestor?: string | null
     produtos: ProdutoOferta[]
     enviado_por: string
     status: StatusSolicitacao
@@ -1860,6 +1872,8 @@ export interface ClienteCarteira {
   /** Campanha mais recente deste cliente. Cancelada não conta. */
   campanha: {
     id: number
+    /** Gestor que programou a campanha. */
+    gestor?: string | null
     status: string
     agendado_para: string | null
     /** Próxima ocorrência de uma campanha que repete. */

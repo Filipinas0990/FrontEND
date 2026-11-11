@@ -31,6 +31,7 @@ import { SeletorFimDeSemana } from "@/components/SeletorFimDeSemana";
 import { descreverRodizio, PRODUTOS_POR_ENVIO } from "@/lib/rodizio";
 import { SEM_CATEGORIA, categoriasDe, normalizarCategoria } from "@/lib/categorias";
 import { CampoCategoria } from "@/components/CampoCategoria";
+import { isAdmin } from "@/lib/auth";
 import {
   getFarmacias, getDisparos, cancelarDisparo, getConexoesDisparo, getMeusGrupos,
   getCarteiraOfertas, conectarMeuWhatsapp, getMeuWhatsappStatus, getUltimaEscolha,
@@ -2615,11 +2616,23 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
     onSettled: () => setConfirmando(null),
   });
 
+  // Admin recebe os disparos de TODOS os gestores e pode filtrar por um.
+  const admin = isAdmin();
+  const [gestorFiltro, setGestorFiltro] = useState<string>("todos");
+  const gestoresDosDisparos = useMemo(
+    () => [...new Set(disparos.map((d) => d.gestor).filter((g): g is string => !!g))]
+      .sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [disparos],
+  );
+
   // Agendados primeiro — é o que ainda dá para mexer; depois o histórico.
-  const { agendados, historico } = useMemo(() => ({
-    agendados: disparos.filter((d) => d.status === "agendado"),
-    historico: disparos.filter((d) => d.status !== "agendado"),
-  }), [disparos]);
+  const { agendados, historico } = useMemo(() => {
+    const visiveis = gestorFiltro === "todos" ? disparos : disparos.filter((d) => d.gestor === gestorFiltro);
+    return {
+      agendados: visiveis.filter((d) => d.status === "agendado"),
+      historico: visiveis.filter((d) => d.status !== "agendado"),
+    };
+  }, [disparos, gestorFiltro]);
 
   if (isLoading) {
     return (
@@ -2651,7 +2664,18 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        {admin && gestoresDosDisparos.length > 0 && (
+          <select
+            value={gestorFiltro}
+            onChange={(e) => setGestorFiltro(e.target.value)}
+            className="px-3 py-2 text-sm text-zinc-700 border border-zinc-200 rounded-lg bg-white"
+            aria-label="Filtrar por gestor"
+          >
+            <option value="todos">Todos os gestores</option>
+            {gestoresDosDisparos.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+        )}
         <button
           onClick={() => refetch()}
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition"
@@ -2666,6 +2690,7 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
             <LinhaDisparo
               key={d.id}
               disparo={d}
+              mostrarGestor={admin}
               onCancelar={() => setConfirmando(d)}
               cancelando={cancelar.isPending && cancelar.variables === d.id}
               onAbrir={() => setDetalheId(d.id)}
@@ -2677,7 +2702,7 @@ function AbaHistorico({ onNovo }: { onNovo: () => void }) {
       {historico.length > 0 && (
         <Secao titulo="Histórico" contagem={historico.length}>
           {historico.map((d) => (
-            <LinhaDisparo key={d.id} disparo={d} onAbrir={() => setDetalheId(d.id)} />
+            <LinhaDisparo key={d.id} disparo={d} mostrarGestor={admin} onAbrir={() => setDetalheId(d.id)} />
           ))}
         </Secao>
       )}
@@ -2884,6 +2909,12 @@ function ModalDisparo({ disparoId, onFechar }: { disparoId: number; onFechar: ()
               {/* ── Resumo ── */}
               {/* Na ordem em que a campanha acontece: nasceu, vai sair, acaba. */}
               <div className="grid sm:grid-cols-2 gap-4">
+                {d.gestor && (
+                  <Dado rotulo="Programada por">
+                    {d.gestor}
+                  </Dado>
+                )}
+
                 <Dado rotulo="Criada em">
                   {fmtData(d.criado_em)}
                 </Dado>
@@ -3078,9 +3109,11 @@ function ModalConfirmarCancelamento({
 }
 
 function LinhaDisparo({
-  disparo, onCancelar, cancelando, onAbrir,
+  disparo, onCancelar, cancelando, onAbrir, mostrarGestor,
 }: {
   disparo: DisparoResumo;
+  /** Admin: diz qual gestor programou. */
+  mostrarGestor?: boolean;
   onCancelar?: () => void;
   cancelando?: boolean;
   onAbrir: () => void;
@@ -3111,6 +3144,9 @@ function LinhaDisparo({
                 ? ` · próximo envio ${fmtData(disparo.proximo_envio ?? disparo.agendado_para)}`
                 : ` · ${fmtData(disparo.ultimo_envio ?? disparo.criado_em)}`}
               {repeticao && ` · repete ${repeticao}`}
+              {mostrarGestor && disparo.gestor && (
+                <> · por <strong className="font-semibold text-zinc-700">{disparo.gestor}</strong></>
+              )}
             </span>
           </span>
         </button>
@@ -3193,6 +3229,8 @@ function AbaClientes({
   onMontar: (c: ClienteCarteira) => void;
 }) {
   const queryClient = useQueryClient();
+  // Admin vê a carteira de todos os gestores: cada linha diz de quem é.
+  const admin = isAdmin();
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<FiltroCarteira>("geral");
   const [copiado, setCopiado] = useState<number | null>(null);
@@ -3369,11 +3407,14 @@ function AbaClientes({
                     {c.respondeu && c.solicitacao ? (
                       <p className="text-[11px] text-emerald-700 mt-0.5">
                         {c.solicitacao.enviado_por ? `Enviado por ${c.solicitacao.enviado_por}` : "Lista enviada"}
+                        {admin && c.solicitacao.gestor && ` · link de ${c.solicitacao.gestor}`}
                       </p>
                     ) : montado ? (
                       <p className="text-[11px] text-zinc-500 mt-0.5 flex items-center gap-1">
                         <CheckCircle2 className="size-3 text-zinc-400" />
                         {estadoDaCampanha(c)}
+                        {admin && (c.campanha?.gestor ?? c.ultima_solicitacao?.gestor) &&
+                          ` · ${c.campanha?.gestor ?? c.ultima_solicitacao?.gestor}`}
                       </p>
                     ) : (
                       <p className="text-[11px] text-zinc-400 mt-0.5 italic flex items-center gap-1">
