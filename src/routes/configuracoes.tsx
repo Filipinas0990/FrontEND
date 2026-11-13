@@ -89,7 +89,7 @@ function ConfigPage() {
       : { icon: Images, label: "Banco de Imagens", locked: true },
     { icon: Clock, label: "Horários de Disparo", to: "/horarios" },
     { icon: Tags, label: "Categorias", to: "/categorias" },
-    // O que os clientes mandaram pelo link de ofertas (foto + nome, até 30 cada).
+    // O que os clientes mandaram pelo link de ofertas (foto + nome, até 90 cada).
     { icon: PackagePlus, label: "Produtos enviados pelos clientes", to: "/produtos-clientes" },
     { icon: Puzzle, label: "Integrações de API", locked: true },
     { icon: BarChart3, label: "Power BI", locked: true },

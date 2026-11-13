@@ -527,7 +527,7 @@ function OfertasPublicaPage() {
 
 /**
  * Espaço de produtos do próprio cliente: ele manda foto + nome de um produto
- * por vez, até o limite (30). Cada envio já fica salvo para o gestor; para
+ * por vez, até o limite (90). Cada envio já fica salvo para o gestor; para
  * mandar outro com o espaço cheio, exclui um dos que estão lá.
  */
 function MeusProdutos({

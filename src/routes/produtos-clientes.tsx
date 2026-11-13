@@ -76,7 +76,7 @@ function ProdutosClientesPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível excluir."),
     onSettled: () => setExcluindo(null),
   });
-  const limite = data?.limite ?? 30;
+  const limite = data?.limite ?? 90;
 
   // A API já vem do mais recente para o mais antigo: o primeiro produto de
   // cada cliente é o último envio dele, e os grupos saem na mesma ordem.
